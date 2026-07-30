@@ -71,19 +71,29 @@ export async function fetchFourDayForecast(): Promise<FourDayForecast[]> {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+export type SlotForecast = {
+  forecast: string;
+  source: "2hr" | "24hr" | "4day" | "unavailable" | "error";
+  // 2hr nowcasts don't carry temperature/humidity — only 24hr and 4-day do.
+  temperature?: { low: number; high: number };
+  humidity?: { low: number; high: number };
+};
+
 /**
  * Given a slot's start time and coordinates, decides which API to use and
- * returns the most accurate forecast string available.
+ * returns the most accurate forecast available.
+ *
+ * `source: "unavailable"` means every tier was queried successfully but none
+ * had a matching entry. `source: "error"` means at least one tier's request
+ * itself failed (network/API error) — distinct so the UI can tell "we don't
+ * have this forecast" apart from "we couldn't reach NEA".
  */
 export async function getForecastForSlot(
   region: NeaRegion,
   latitude: number,
   longitude: number,
   slotStartTime: string,
-): Promise<{
-  forecast: string;
-  source: "2hr" | "24hr" | "4day" | "unavailable";
-}> {
+): Promise<SlotForecast> {
   const slotTime = new Date(slotStartTime);
   const now = new Date();
   const minutesUntilSlot = (slotTime.getTime() - now.getTime()) / 1000 / 60;
@@ -93,6 +103,8 @@ export async function getForecastForSlot(
   if (daysUntilSlot > 4) {
     return { forecast: "Forecast not yet available", source: "unavailable" };
   }
+
+  let hadFetchError = false;
 
   // Within 90 minutes — use 2hr nowcast (most accurate, area-level)
   if (minutesUntilSlot <= 90) {
@@ -110,7 +122,7 @@ export async function getForecastForSlot(
         return { forecast: areaForecast.forecast, source: "2hr" };
       }
     } catch {
-      // fall through
+      hadFetchError = true;
     }
   }
 
@@ -129,9 +141,16 @@ export async function getForecastForSlot(
         matchingPeriod?.regions[region]?.text ??
         record?.general.forecast?.text ??
         null;
-      if (forecast) return { forecast, source: "24hr" };
+      if (forecast) {
+        return {
+          forecast,
+          source: "24hr",
+          temperature: record.general.temperature,
+          humidity: record.general.relativeHumidity,
+        };
+      }
     } catch {
-      // fall through
+      hadFetchError = true;
     }
   }
 
@@ -143,11 +162,19 @@ export async function getForecastForSlot(
       f.timestamp.startsWith(slotDateStr),
     );
     if (dayForecast) {
-      return { forecast: dayForecast.forecast.text, source: "4day" };
+      return {
+        forecast: dayForecast.forecast.text,
+        source: "4day",
+        temperature: dayForecast.temperature,
+        humidity: dayForecast.relativeHumidity,
+      };
     }
   } catch {
-    // fall through
+    hadFetchError = true;
   }
 
+  if (hadFetchError) {
+    return { forecast: "Couldn't load forecast", source: "error" };
+  }
   return { forecast: "Forecast unavailable", source: "unavailable" };
 }

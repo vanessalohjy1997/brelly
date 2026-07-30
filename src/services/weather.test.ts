@@ -131,7 +131,12 @@ describe("getForecastForSlot", () => {
 
     const result = await getForecastForSlot("east", 1.3, 103.8, slotStartTime);
 
-    expect(result).toEqual({ forecast: "East Thundery Showers", source: "24hr" });
+    expect(result).toEqual({
+      forecast: "East Thundery Showers",
+      source: "24hr",
+      temperature: { low: 24, high: 33 },
+      humidity: { low: 60, high: 95 },
+    });
   });
 
   it("uses the 4-day outlook, matched by date, when the slot is more than a day out", async () => {
@@ -144,7 +149,12 @@ describe("getForecastForSlot", () => {
 
     const result = await getForecastForSlot("east", 1.3, 103.8, slotStartTime);
 
-    expect(result).toEqual({ forecast: "4-day Thundery Showers", source: "4day" });
+    expect(result).toEqual({
+      forecast: "4-day Thundery Showers",
+      source: "4day",
+      temperature: { low: 25, high: 34 },
+      humidity: { low: 60, high: 95 },
+    });
   });
 
   it("returns unavailable without calling any API when the slot is more than 4 days out", async () => {
@@ -192,6 +202,48 @@ describe("getForecastForSlot", () => {
 
     const result = await getForecastForSlot("west", 1.3, 103.8, slotStartTime);
 
-    expect(result).toEqual({ forecast: "West Thundery Showers", source: "24hr" });
+    expect(result).toEqual({
+      forecast: "West Thundery Showers",
+      source: "24hr",
+      temperature: { low: 24, high: 33 },
+      humidity: { low: 60, high: 95 },
+    });
+  });
+
+  it("returns source 'error' (not 'unavailable') when every tier's request fails", async () => {
+    const slotStartTime = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+
+    globalThis.fetch = jest.fn(() =>
+      Promise.resolve({ ok: false, status: 503 } as Response),
+    ) as unknown as typeof fetch;
+
+    const result = await getForecastForSlot("east", 1.3, 103.8, slotStartTime);
+
+    expect(result).toEqual({
+      forecast: "Couldn't load forecast",
+      source: "error",
+    });
+  });
+
+  it("returns 'unavailable', not 'error', when tiers succeed but have no matching entry for the date", async () => {
+    // Slot is 2 days out, so only the 4-day tier is queried. It responds
+    // successfully but has no forecast for the slot's date.
+    const slotStartTime = new Date(
+      Date.now() + 2 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    globalThis.fetch = mockFetchByUrl({
+      "four-day-outlook": () => ({
+        code: 0,
+        data: { records: [{ date: "2026-07-30", forecasts: [] }] },
+      }),
+    }) as unknown as typeof fetch;
+
+    const result = await getForecastForSlot("east", 1.3, 103.8, slotStartTime);
+
+    expect(result).toEqual({
+      forecast: "Forecast unavailable",
+      source: "unavailable",
+    });
   });
 });

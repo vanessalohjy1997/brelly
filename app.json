@@ -34,6 +34,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Brelly uses your location to prefill the location field when adding a plan."
+        }
       ]
     ],
     "experiments": {

@@ -1,20 +1,8 @@
 import { getRegionFromCoordinates } from "@/constants/neaRegions";
+import { mmkvStorage } from "@/store/mmkvStorage";
 import { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-
-// ─── MMKV storage adapter for Zustand persist ─────────────────────────────────
-// Zustand's persist middleware expects a localStorage-like interface.
-// MMKV doesn't match that interface out of the box, so we adapt it.
-
-const mmkv = createMMKV({ id: "brelly-storage" });
-
-const mmkvStorage = {
-  getItem: (key: string) => mmkv.getString(key) ?? null,
-  setItem: (key: string, value: string) => mmkv.set(key, value),
-  removeItem: (key: string) => mmkv.remove(key),
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

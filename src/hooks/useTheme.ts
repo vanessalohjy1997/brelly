@@ -4,11 +4,24 @@
  */
 
 import { Colors } from "@/constants/theme";
+import { useSettingsStore } from "@/store/settingsStore";
+import { resolveColorScheme } from "@/utils/resolveColorScheme";
 import { useColorScheme } from "react-native";
 
-export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === "unspecified" ? "light" : scheme;
+/**
+ * The app's effective color scheme: the user's `themePreference` (Settings)
+ * when explicit, otherwise the device's system scheme. Use this instead of
+ * React Native's `useColorScheme` directly anywhere the result feeds into
+ * theming, so a manual light/dark override applies consistently everywhere.
+ */
+export function useAppColorScheme(): "light" | "dark" {
+  const systemScheme = useColorScheme();
+  const themePreference = useSettingsStore((state) => state.themePreference);
 
-  return Colors[theme];
+  return resolveColorScheme(themePreference, systemScheme);
+}
+
+export function useTheme() {
+  const scheme = useAppColorScheme();
+  return Colors[scheme];
 }

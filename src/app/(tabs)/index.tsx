@@ -1,22 +1,23 @@
 import { router } from "expo-router";
-import { FlatList, Pressable, StyleSheet, useColorScheme } from "react-native";
+import { Pressable, ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
+import { SortableItineraryList } from "@/components/itinerary/SortableItineraryList";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import {
   BottomTabInset,
-  Colors,
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
 import { useItineraryStore } from "@/store/itineraryStore";
 
 export default function TodayScreen() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "unspecified" ? "light" : scheme];
+  const colors = useTheme();
   const getTodaysPlan = useItineraryStore((state) => state.getTodaysPlan);
+  const reorderSlots = useItineraryStore((state) => state.reorderSlots);
+  const deleteSlot = useItineraryStore((state) => state.deleteSlot);
   const todaysPlan = getTodaysPlan();
 
   const today = new Date().toLocaleDateString("en-SG", {
@@ -58,15 +59,29 @@ export default function TodayScreen() {
               Add your plans for today and Brelly will show you the weather for
               each stop.
             </ThemedText>
+            <Pressable
+              style={[
+                styles.emptyStateCta,
+                { backgroundColor: colors.backgroundElement },
+              ]}
+              onPress={() => router.push("/plan/new")}
+            >
+              <ThemedText style={styles.addButtonText}>
+                + Add a plan
+              </ThemedText>
+            </Pressable>
           </ThemedView>
         ) : (
-          <FlatList
-            data={todaysPlan.slots}
-            keyExtractor={(slot) => slot.id}
-            renderItem={({ item }) => <ItineraryCard slot={item} />}
+          <ScrollView
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
-          />
+          >
+            <SortableItineraryList
+              slots={todaysPlan.slots}
+              onReorder={(slots) => reorderSlots(todaysPlan.date, slots)}
+              onDeleteSlot={(slotId) => deleteSlot(todaysPlan.date, slotId)}
+            />
+          </ScrollView>
         )}
       </SafeAreaView>
     </ThemedView>
@@ -108,6 +123,12 @@ const styles = StyleSheet.create({
   emptyEmoji: {
     fontSize: 48,
     marginBottom: Spacing.two,
+  },
+  emptyStateCta: {
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.two,
+    marginTop: Spacing.two,
   },
   list: {
     gap: Spacing.three,

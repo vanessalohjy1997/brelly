@@ -1,5 +1,5 @@
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -11,6 +11,7 @@ import {
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { Spacing } from "@/constants/theme";
+import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceSearch } from "@/hooks/usePlaceSearch";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -28,6 +29,8 @@ type Props = {
   onSubmit: (values: SlotFormValues) => void;
   onDelete?: () => void;
   submitLabel: string;
+  /** Extra actions rendered between the submit button and delete button. */
+  children?: ReactNode;
 };
 
 export function SlotForm({
@@ -35,10 +38,16 @@ export function SlotForm({
   onSubmit,
   onDelete,
   submitLabel,
+  children,
 }: Props) {
   const theme = useTheme();
   const { suggestions, isSearching, error, search, selectPlace } =
     usePlaceSearch();
+  const {
+    getCurrentLocation,
+    isLocating,
+    error: locationError,
+  } = useCurrentLocation();
 
   const [label, setLabel] = useState(initialValues?.label ?? "");
   const [locationQuery, setLocationQuery] = useState(
@@ -80,6 +89,13 @@ export function SlotForm({
       latitude: details.latitude,
       longitude: details.longitude,
     });
+  };
+
+  const handleUseCurrentLocation = async () => {
+    const current = await getCurrentLocation();
+    if (!current) return;
+    setLocationQuery(current.location);
+    setSelectedPlace(current);
   };
 
   const handleSubmit = () => {
@@ -141,14 +157,22 @@ export function SlotForm({
             { color: theme.text, backgroundColor: theme.backgroundElement },
           ]}
         />
+        <Pressable onPress={handleUseCurrentLocation} disabled={isLocating}>
+          <ThemedText
+            themeColor="textSecondary"
+            style={[styles.hint, styles.useLocationLink]}
+          >
+            {isLocating ? "Finding you…" : "📍 Use my location"}
+          </ThemedText>
+        </Pressable>
         {isSearching && (
           <ThemedText themeColor="textSecondary" style={styles.hint}>
             Searching…
           </ThemedText>
         )}
-        {error && (
+        {(error || locationError) && (
           <ThemedText themeColor="textSecondary" style={styles.hint}>
-            {error}
+            {error ?? locationError}
           </ThemedText>
         )}
         {suggestions.length > 0 && (
@@ -221,6 +245,8 @@ export function SlotForm({
         </ThemedText>
       </Pressable>
 
+      {children}
+
       {onDelete && (
         <Pressable onPress={onDelete} style={styles.deleteButton}>
           <ThemedText style={{ color: "#D64545" }}>Delete plan</ThemedText>
@@ -262,6 +288,9 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 12,
+  },
+  useLocationLink: {
+    fontWeight: "600",
   },
   suggestionsList: {
     borderRadius: Spacing.two,
