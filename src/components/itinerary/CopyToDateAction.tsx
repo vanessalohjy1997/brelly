@@ -6,10 +6,10 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { DatePickerWidth } from "@/utils/shouldStackDateTimeFields";
 
 type Props = {
   onDuplicate: (targetDate: Date) => void;
-  onMove: (targetDate: Date) => void;
 };
 
 function tomorrow(): Date {
@@ -18,18 +18,22 @@ function tomorrow(): Date {
   return date;
 }
 
-export function CopyToDateAction({ onDuplicate, onMove }: Props) {
+export function CopyToDateAction({ onDuplicate }: Props) {
   const theme = useTheme();
   const [targetDate, setTargetDate] = useState(tomorrow());
 
   return (
     <ThemedView style={styles.container}>
+      {/* Moving a plan is just editing its start date — the slot re-files
+          itself under the new day on save. Copying it has no such equivalent,
+          so duplicating is the only action that needs to live here. */}
       <ThemedText style={styles.label} themeColor="textSecondary">
-        Duplicate or move to another day
+        Duplicate to another day
       </ThemedText>
       <DateTimePicker
         value={targetDate}
         mode="date"
+        style={styles.picker}
         onValueChange={(_, date) => setTargetDate(date)}
       />
       <View style={styles.row}>
@@ -38,12 +42,6 @@ export function CopyToDateAction({ onDuplicate, onMove }: Props) {
           onPress={() => onDuplicate(targetDate)}
         >
           <ThemedText style={styles.buttonText}>Duplicate</ThemedText>
-        </Pressable>
-        <Pressable
-          style={[styles.button, { backgroundColor: theme.backgroundElement }]}
-          onPress={() => onMove(targetDate)}
-        >
-          <ThemedText style={styles.buttonText}>Move</ThemedText>
         </Pressable>
       </View>
     </ThemedView>
@@ -58,6 +56,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     textTransform: "uppercase",
+  },
+  // See `DatePickerWidth` — a content-sized box is what puts the picker flush
+  // left rather than centred.
+  picker: {
+    width: DatePickerWidth,
   },
   row: {
     flexDirection: "row",

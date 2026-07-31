@@ -1,21 +1,33 @@
-import { router, Stack, useLocalSearchParams } from "expo-router";
-import { Alert, Pressable, StyleSheet } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useMemo } from "react";
+import { Alert, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { HeaderDismissButton } from "@/components/headerDismissButton";
 import { CopyToDateAction } from "@/components/itinerary/CopyToDateAction";
 import { SlotForm } from "@/components/itinerary/SlotForm";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { getRegionFromCoordinates } from "@/constants/neaRegions";
 import { Spacing } from "@/constants/theme";
+import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
+import { cancelAndDeleteSlot, cancelNotification } from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { toDateKey } from "@/utils/dateKeys";
+import { findSlotById } from "@/utils/planSelectors";
 import { retargetSlotDate } from "@/utils/retargetSlotDate";
 
 export default function EditSlotScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const found = useItineraryStore((state) => state.findSlotById(id));
+  // Select the (stable) plans array and do the lookup here — selecting the
+  // result of a lookup instead returns a new object every render, which
+  // zustand reads as an endless stream of store changes.
+  const plans = useItineraryStore((state) => state.plans);
+  const found = useMemo(() => findSlotById(plans, id), [plans, id]);
   const updateSlot = useItineraryStore((state) => state.updateSlot);
   const deleteSlot = useItineraryStore((state) => state.deleteSlot);
   const addSlot = useItineraryStore((state) => state.addSlot);
+  const scheduleRainNotificationForSlot = useRainNotificationScheduler();
 
   if (!found) {
     return (
@@ -28,8 +40,8 @@ export default function EditSlotScreen() {
   const { date, slot } = found;
 
   const handleDuplicate = (targetDate: Date) => {
-    const targetDateString = targetDate.toISOString().split("T")[0];
-    addSlot(targetDateString, {
+    const targetDateString = toDateKey(targetDate);
+    const newSlot = addSlot(targetDateString, {
       label: slot.label,
       location: slot.location,
       latitude: slot.latitude,
@@ -37,12 +49,7 @@ export default function EditSlotScreen() {
       startTime: retargetSlotDate(slot.startTime, targetDateString),
       endTime: retargetSlotDate(slot.endTime, targetDateString),
     });
-  };
-
-  const handleMove = (targetDate: Date) => {
-    handleDuplicate(targetDate);
-    deleteSlot(date, slot.id);
-    router.back();
+    scheduleRainNotificationForSlot(targetDateString, newSlot);
   };
 
   const handleDelete = () => {
@@ -55,7 +62,7 @@ export default function EditSlotScreen() {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            deleteSlot(date, slot.id);
+            cancelAndDeleteSlot(deleteSlot, date, slot);
             router.back();
           },
         },
@@ -65,15 +72,7 @@ export default function EditSlotScreen() {
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <Pressable onPress={() => router.back()} hitSlop={8}>
-              <ThemedText type="linkPrimary">Cancel</ThemedText>
-            </Pressable>
-          ),
-        }}
-      />
+      <HeaderDismissButton label="Cancel" onPress={() => router.back()} />
       <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <SlotForm
           submitLabel="Save changes"
@@ -84,17 +83,33 @@ export default function EditSlotScreen() {
             longitude: slot.longitude,
             startTime: slot.startTime,
             endTime: slot.endTime,
+            notificationsMuted: slot.notificationsMuted,
           }}
           onSubmit={(values) => {
-            updateSlot(date, slot.id, values);
+            if (slot.notificationId) {
+              cancelNotification(slot.notificationId);
+            }
+            updateSlot(date, slot.id, { ...values, notificationId: undefined });
+            // Editing the start date re-files the slot under that day, so the
+            // notification has to be scheduled against the new day, not the
+            // one this screen was opened from.
+            scheduleRainNotificationForSlot(
+              toDateKey(new Date(values.startTime)),
+              {
+                ...slot,
+                ...values,
+                neaRegion: getRegionFromCoordinates(
+                  values.latitude,
+                  values.longitude,
+                ),
+                notificationId: undefined,
+              },
+            );
             router.back();
           }}
           onDelete={handleDelete}
         >
-          <CopyToDateAction
-            onDuplicate={handleDuplicate}
-            onMove={handleMove}
-          />
+          <CopyToDateAction onDuplicate={handleDuplicate} />
         </SlotForm>
       </SafeAreaView>
     </ThemedView>

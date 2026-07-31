@@ -52,6 +52,34 @@ export function getRegionFromCoordinates(lat: number, lng: number): NeaRegion {
   return match?.region ?? "central";
 }
 
+export type Located = { latitude: number; longitude: number };
+
+/**
+ * The item whose coordinates are closest to the given lat/lng.
+ * Works for anything NEA labels with a position — 2hr forecast areas and
+ * real-time sensor stations alike — so both use the same proximity rule.
+ */
+export function findNearest<T extends Located>(
+  latitude: number,
+  longitude: number,
+  items: T[],
+): T | null {
+  if (items.length === 0) return null;
+
+  let nearest = items[0];
+  let nearestDistance = squaredDistance(latitude, longitude, nearest);
+
+  for (const item of items.slice(1)) {
+    const distance = squaredDistance(latitude, longitude, item);
+    if (distance < nearestDistance) {
+      nearest = item;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
+}
+
 /**
  * Finds the NEA area whose label coordinates are closest to the given
  * lat/lng. areaMetadata comes from the live twoHrForecast response — never
@@ -63,30 +91,13 @@ export function findNearestArea(
   longitude: number,
   areaMetadata: NeaAreaMetadata[],
 ): string | null {
-  if (areaMetadata.length === 0) return null;
-
-  let nearest = areaMetadata[0];
-  let nearestDistance = squaredDistance(latitude, longitude, nearest);
-
-  for (const area of areaMetadata.slice(1)) {
-    const distance = squaredDistance(latitude, longitude, area);
-    if (distance < nearestDistance) {
-      nearest = area;
-      nearestDistance = distance;
-    }
-  }
-
-  return nearest.name;
+  return findNearest(latitude, longitude, areaMetadata)?.name ?? null;
 }
 
 // Singapore spans under 50km, so a flat-earth squared-distance comparison
-// (no need for true haversine) is accurate enough to rank areas by proximity.
-function squaredDistance(
-  lat: number,
-  lng: number,
-  area: NeaAreaMetadata,
-): number {
-  const dLat = lat - area.latitude;
-  const dLng = lng - area.longitude;
+// (no need for true haversine) is accurate enough to rank by proximity.
+function squaredDistance(lat: number, lng: number, item: Located): number {
+  const dLat = lat - item.latitude;
+  const dLng = lng - item.longitude;
   return dLat * dLat + dLng * dLng;
 }

@@ -6,7 +6,9 @@ import { WeatherIcon } from "@/components/weather/WeatherIcon";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { SlotForecast } from "@/services/weather";
+import { formatRelativeTimestamp } from "@/utils/formatRelativeTimestamp";
 import { formatTempRange } from "@/utils/formatTempRange";
+import { formatWind } from "@/utils/formatWind";
 
 type Props = {
   weather: SlotForecast | undefined;
@@ -18,6 +20,7 @@ const SOURCE_LABEL: Record<string, string> = {
   "2hr": "Live",
   "24hr": "Today",
   "4day": "4-day",
+  cached: "Offline",
 };
 
 export function WeatherBadge({ weather, isLoading, onRetry }: Props) {
@@ -48,11 +51,17 @@ export function WeatherBadge({ weather, isLoading, onRetry }: Props) {
     );
   }
 
+  const wind = formatWind(weather.wind);
+  // A cached reading's age is measured from when it was stored, not from
+  // NEA's issue time — that's the number that tells you how stale the app's
+  // view of the world is.
+  const age = formatRelativeTimestamp(weather.cachedAt ?? weather.updatedAt);
+
   return (
     <ThemedView
       style={[styles.badge, { backgroundColor: colors.backgroundSelected }]}
     >
-      <WeatherIcon forecast={weather.forecast} size={22} tintColor={colors.text} />
+      <WeatherIcon forecast={weather.forecast} size={34} tintColor={colors.text} />
       <ThemedView style={styles.textContainer}>
         <ThemedText style={styles.forecast} numberOfLines={2}>
           {weather.forecast}
@@ -66,7 +75,19 @@ export function WeatherBadge({ weather, isLoading, onRetry }: Props) {
               {formatTempRange(weather.temperature)}
             </ThemedText>
           )}
+          {wind && (
+            <ThemedText style={[styles.source, { color: colors.textSecondary }]}>
+              {wind}
+            </ThemedText>
+          )}
         </ThemedView>
+        {age && (
+          <ThemedText style={[styles.age, { color: colors.textSecondary }]}>
+            {/* The tiers age very differently — a 2hr nowcast is minutes old,
+                the 4-day outlook is issued once each morning. */}
+            Updated {age}
+          </ThemedText>
+        )}
       </ThemedView>
     </ThemedView>
   );
@@ -74,28 +95,38 @@ export function WeatherBadge({ weather, isLoading, onRetry }: Props) {
 
 const styles = StyleSheet.create({
   badge: {
+    // Stretch to whatever width the parent gives it — the forecast is the
+    // headline of every card, so it takes the space rather than hugging text.
+    alignSelf: "stretch",
     flexDirection: "row",
     alignItems: "center",
     borderRadius: Spacing.two,
     padding: Spacing.two,
-    gap: Spacing.one,
-    maxWidth: 140,
+    gap: Spacing.two,
   },
   textContainer: {
     backgroundColor: "transparent",
     flexShrink: 1,
+    gap: 2,
   },
   forecast: {
-    fontSize: 11,
-    fontWeight: "500",
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: "600",
     flexWrap: "wrap",
   },
   metaRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.one,
     backgroundColor: "transparent",
   },
   source: {
-    fontSize: 10,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  age: {
+    fontSize: 11,
+    lineHeight: 15,
   },
 });

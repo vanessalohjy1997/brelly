@@ -1,34 +1,32 @@
-import { router, Stack, useLocalSearchParams } from "expo-router";
-import { Pressable } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { HeaderDismissButton } from "@/components/headerDismissButton";
 import { SlotForm } from "@/components/itinerary/SlotForm";
-import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { toDateKey } from "@/utils/dateKeys";
 
 export default function NewSlotScreen() {
   const { date } = useLocalSearchParams<{ date?: string }>();
   const addSlot = useItineraryStore((state) => state.addSlot);
-
-  const planDate = date ?? new Date().toISOString().split("T")[0];
+  const scheduleRainNotificationForSlot = useRainNotificationScheduler();
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <Pressable onPress={() => router.back()} hitSlop={8}>
-              <ThemedText type="linkPrimary">Cancel</ThemedText>
-            </Pressable>
-          ),
-        }}
-      />
+      <HeaderDismissButton label="Cancel" onPress={() => router.back()} />
       <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <SlotForm
           submitLabel="Add plan"
+          initialDate={date}
           onSubmit={(values) => {
-            addSlot(planDate, values);
+            // The day the form ended up on, not the one this screen was opened
+            // from — changing the start date in the form has to land the plan
+            // on that day.
+            const planDate = toDateKey(new Date(values.startTime));
+            const newSlot = addSlot(planDate, values);
+            scheduleRainNotificationForSlot(planDate, newSlot);
             router.back();
           }}
         />

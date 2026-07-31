@@ -1,4 +1,5 @@
 const PLACES_BASE_URL = "https://places.googleapis.com/v1";
+const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY!;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -105,4 +106,63 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     latitude: json.location.latitude,
     longitude: json.location.longitude,
   };
+}
+
+// ─── Reverse geocoding ────────────────────────────────────────────────────────
+// This is the Geocoding API, not Places — a separate SKU on the same key. It's
+// used instead of `expo-location`'s reverse geocode (Apple's CLGeocoder on iOS)
+// because Apple's Singapore placemarks routinely come back with nothing but
+// `city: "Singapore"`, which is useless as a plan's location.
+
+/**
+ * Result types worth showing, best first. A result carrying any of these names
+ * a real address; anything else is either too coarse to be useful ("Singapore")
+ * or not an address at all — `plus_code` results like "9VH4+C9 Singapore" are
+ * valid but mean nothing to a person reading their itinerary.
+ */
+const AddressTypesByPreference = [
+  "street_address",
+  "premise",
+  "subpremise",
+  "route",
+  "establishment",
+];
+
+type GeocodeResult = { formatted_address?: string; types?: string[] };
+
+function pickBestAddress(results: GeocodeResult[]): string | null {
+  const usable = results.filter(
+    (r) => r.formatted_address?.trim() && !r.types?.includes("plus_code"),
+  );
+
+  const preferred =
+    AddressTypesByPreference.map((type) =>
+      usable.find((r) => r.types?.includes(type)),
+    ).find(Boolean) ?? usable[0];
+
+  return preferred?.formatted_address?.trim() ?? null;
+}
+
+/**
+ * Turns coordinates into a display address, or `null` when Google has nothing
+ * usable for them — callers are expected to fall back rather than show an empty
+ * location. Throws only when the request itself fails.
+ */
+export async function reverseGeocode(
+  latitude: number,
+  longitude: number,
+): Promise<string | null> {
+  const res = await fetch(
+    `${GEOCODE_URL}?latlng=${latitude},${longitude}&key=${API_KEY}`,
+  );
+
+  if (!res.ok) throw new Error(`Reverse geocode error: ${res.status}`);
+
+  const json = await res.json();
+  // The API reports its own failures in the body with a 200 — `ZERO_RESULTS` is
+  // a legitimate "nowhere near anything", while `REQUEST_DENIED` and
+  // `OVER_QUERY_LIMIT` mean the key or quota needs attention.
+  if (json.status !== "OK") return null;
+
+  return pickBestAddress(json.results ?? []);
 }

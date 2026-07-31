@@ -9,8 +9,8 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
+import { Icon } from "@/components/icon";
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
-import { ThemedText } from "@/components/themedText";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { ItinerarySlot } from "@/types/itinerary";
@@ -19,7 +19,7 @@ import { moveItem } from "@/utils/reorder";
 type Props = {
   slots: ItinerarySlot[];
   onReorder: (slots: ItinerarySlot[]) => void;
-  onDeleteSlot: (slotId: string) => void;
+  onDeleteSlot: (slot: ItinerarySlot) => void;
 };
 
 // Slot cards render a single line of text per field, so real-world row
@@ -65,7 +65,7 @@ export function SortableItineraryList({ slots, onReorder, onDeleteSlot }: Props)
           rowHeight={rowHeight}
           onRowLayout={handleRowLayout}
           onDragEnd={handleDragEnd}
-          onDelete={() => onDeleteSlot(slot.id)}
+          onDelete={() => onDeleteSlot(slot)}
         />
       ))}
     </View>
@@ -131,10 +131,13 @@ function SortableRow({
         <Animated.View
           style={[styles.handle, { backgroundColor: colors.backgroundElement }]}
           hitSlop={8}
+          accessibilityLabel="Drag to reorder"
         >
-          <ThemedText themeColor="textSecondary" style={styles.handleGlyph}>
-            ⠿
-          </ThemedText>
+          <Icon
+            name={{ ios: "line.3.horizontal", android: "drag_handle" }}
+            size={18}
+            tintColor={colors.textSecondary}
+          />
         </Animated.View>
       </GestureDetector>
     </Animated.View>
@@ -158,8 +161,5 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     alignItems: "center",
     justifyContent: "center",
-  },
-  handleGlyph: {
-    fontSize: 18,
   },
 });

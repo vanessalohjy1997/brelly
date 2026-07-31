@@ -38,9 +38,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Brelly uses your location to prefill the location field when adding a plan."
+          "locationWhenInUsePermission": "Brelly uses your location to prefill the location field when adding a plan and to show the weather nearby when you have no plans."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

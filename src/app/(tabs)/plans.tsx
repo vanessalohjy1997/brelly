@@ -1,19 +1,26 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, SectionList, StyleSheet } from "react-native";
+import { Pressable, RefreshControl, SectionList, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Icon } from "@/components/icon";
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
 import {
   BottomTabInset,
+  HeaderHeight,
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
+import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
+import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
+import { cancelAndDeleteSlot } from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
 import type { ItinerarySlot } from "@/types/itinerary";
+import { toDateKey, todayKey } from "@/utils/dateKeys";
 import { splitPlansByDate } from "@/utils/splitPlansByDate";
 
 function toSections(plans: { date: string; slots: ItinerarySlot[] }[]) {
@@ -29,8 +36,9 @@ export default function PlansScreen() {
   const plans = useItineraryStore((state) => state.plans);
   const deleteSlot = useItineraryStore((state) => state.deleteSlot);
   const [showPast, setShowPast] = useState(false);
+  const { isRefreshing, refresh } = useWeatherRefresh();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayKey();
   const { upcoming, past } = splitPlansByDate(plans, today);
 
   const sections = showPast
@@ -38,6 +46,8 @@ export default function PlansScreen() {
     : toSections(upcoming);
 
   const hasAnyPlans = upcoming.length > 0 || past.length > 0;
+  const { isAvailable: hasWeatherNearby, forecasts: nearbyForecasts } =
+    useNearbyForecast(!hasAnyPlans);
 
   return (
     <ThemedView style={styles.container}>
@@ -52,8 +62,13 @@ export default function PlansScreen() {
               ]}
               onPress={() => router.push("/settings")}
               hitSlop={8}
+              accessibilityLabel="Settings"
             >
-              <ThemedText style={styles.addButtonText}>⚙︎</ThemedText>
+              <Icon
+                name={{ ios: "gearshape.fill", android: "settings" }}
+                size={18}
+                tintColor={theme.text}
+              />
             </Pressable>
             <Pressable
               style={[
@@ -68,26 +83,40 @@ export default function PlansScreen() {
         </ThemedView>
 
         {!hasAnyPlans ? (
-          <ThemedView style={styles.emptyState}>
-            <ThemedText style={styles.emptyEmoji}>🗓️</ThemedText>
-            <ThemedText type="subtitle">Nothing planned</ThemedText>
-            <ThemedText
-              style={{ color: theme.textSecondary, textAlign: "center" }}
-            >
-              Add a plan for today or a future day to see it here.
-            </ThemedText>
-            <Pressable
-              style={[
-                styles.emptyStateCta,
-                { backgroundColor: theme.backgroundElement },
-              ]}
-              onPress={() => router.push("/plan/new")}
-            >
-              <ThemedText style={styles.addButtonText}>
-                + Add a plan
+          <>
+            {hasWeatherNearby && (
+              <NearbyForecastPreview forecasts={nearbyForecasts} />
+            )}
+            <ThemedView style={styles.emptyState}>
+              {/* Without a forecast card above, the empty state needs its own
+                  visual anchor; with one, this icon is just repetition. */}
+              {!hasWeatherNearby && (
+                <Icon
+                  name={{ ios: "calendar", android: "calendar_month" }}
+                  size={48}
+                  tintColor={theme.textSecondary}
+                  style={styles.emptyIcon}
+                />
+              )}
+              <ThemedText type="subtitle">Nothing planned</ThemedText>
+              <ThemedText
+                style={{ color: theme.textSecondary, textAlign: "center" }}
+              >
+                Add a plan for today or a future day to see it here.
               </ThemedText>
-            </Pressable>
-          </ThemedView>
+              <Pressable
+                style={[
+                  styles.emptyStateCta,
+                  { backgroundColor: theme.backgroundElement },
+                ]}
+                onPress={() => router.push("/plan/new")}
+              >
+                <ThemedText style={styles.addButtonText}>
+                  + Add a plan
+                </ThemedText>
+              </Pressable>
+            </ThemedView>
+          </>
         ) : (
           <SectionList
             sections={sections}
@@ -95,7 +124,7 @@ export default function PlansScreen() {
             renderItem={({ item, section }) => (
               <ItineraryCard
                 slot={item}
-                onDelete={() => deleteSlot(section.date, item.id)}
+                onDelete={() => cancelAndDeleteSlot(deleteSlot, section.date, item)}
               />
             )}
             renderSectionHeader={({ section }) => (
@@ -129,6 +158,13 @@ export default function PlansScreen() {
             contentContainerStyle={styles.list}
             stickySectionHeadersEnabled={false}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={refresh}
+                tintColor={theme.textSecondary}
+              />
+            }
           />
         )}
       </SafeAreaView>
@@ -137,10 +173,8 @@ export default function PlansScreen() {
 }
 
 function formatSectionDate(date: string): string {
-  const today = new Date().toISOString().split("T")[0];
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0];
+  const today = todayKey();
+  const tomorrow = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
 
   if (date === today) return "Today";
   if (date === tomorrow) return "Tomorrow";
@@ -167,7 +201,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: Spacing.three,
+    height: HeaderHeight,
   },
   headerActions: {
     flexDirection: "row",
@@ -178,6 +212,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderRadius: Spacing.two,
+    alignItems: "center",
+    justifyContent: "center",
   },
   addButtonText: {
     fontWeight: "600",
@@ -189,8 +225,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingHorizontal: Spacing.four,
   },
-  emptyEmoji: {
-    fontSize: 48,
+  emptyIcon: {
     marginBottom: Spacing.two,
   },
   emptyStateCta: {

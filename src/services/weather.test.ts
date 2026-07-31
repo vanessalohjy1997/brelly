@@ -1,4 +1,4 @@
-import { getForecastForSlot } from "@/services/weather";
+import { getForecastForSlot, getUpcomingForecast } from "@/services/weather";
 
 // Fixtures mirror the *actual* data.gov.sg response shapes (verified via live
 // curl — see PLAN.md), not the shapes originally assumed by the types. In
@@ -15,6 +15,9 @@ const TWO_HR_FIXTURE = {
     ],
     items: [
       {
+        // The 2hr endpoint snake-cases this field where the others camel-case
+        // it, and it differs from `timestamp` (the start of the valid period).
+        update_timestamp: "2026-07-30T11:12:33+08:00",
         timestamp: "2026-07-30T11:10:00+08:00",
         valid_period: {
           start: "2026-07-30T11:00:00+08:00",
@@ -58,6 +61,41 @@ function twentyFourHrFixture(periodStart: Date, periodEnd: Date) {
               },
             },
           ],
+        },
+      ],
+    },
+  };
+}
+
+function twentyFourHrFixtureWithPeriods(
+  periods: { start: Date; end: Date; text: string }[],
+) {
+  return {
+    code: 0,
+    data: {
+      records: [
+        {
+          date: "2026-07-30",
+          updatedTimestamp: "2026-07-30T11:00:52+08:00",
+          general: {
+            forecast: { code: "TL", text: "General Thundery Showers" },
+            relativeHumidity: { low: 60, high: 95 },
+            temperature: { low: 24, high: 33 },
+            wind: { speed: { low: 10, high: 25 }, direction: "SSE" },
+          },
+          periods: periods.map((p) => ({
+            timePeriod: {
+              start: p.start.toISOString(),
+              end: p.end.toISOString(),
+            },
+            regions: {
+              north: { code: "TL", text: p.text },
+              south: { code: "TL", text: p.text },
+              east: { code: "TL", text: p.text },
+              west: { code: "TL", text: p.text },
+              central: { code: "TL", text: p.text },
+            },
+          })),
         },
       ],
     },
@@ -117,7 +155,22 @@ describe("getForecastForSlot", () => {
     // Coordinates close to Bedok's label_location, not Ang Mo Kio's.
     const result = await getForecastForSlot("east", 1.322, 103.925, slotStartTime);
 
-    expect(result).toEqual({ forecast: "Light Rain", source: "2hr" });
+    expect(result).toEqual({
+      forecast: "Light Rain",
+      source: "2hr",
+      updatedAt: "2026-07-30T11:12:33+08:00",
+    });
+  });
+
+  it("carries the 2hr issue time, not the start of its valid period", async () => {
+    globalThis.fetch = mockFetchByUrl({
+      "two-hr-forecast": () => TWO_HR_FIXTURE,
+    }) as unknown as typeof fetch;
+
+    const slotStartTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    const result = await getForecastForSlot("east", 1.322, 103.925, slotStartTime);
+
+    expect(result.updatedAt).toBe("2026-07-30T11:12:33+08:00");
   });
 
   it("uses the 24hr forecast, matched by time period and region, when the slot is later today", async () => {
@@ -136,6 +189,8 @@ describe("getForecastForSlot", () => {
       source: "24hr",
       temperature: { low: 24, high: 33 },
       humidity: { low: 60, high: 95 },
+      wind: { speed: { low: 10, high: 25 }, direction: "SSE" },
+      updatedAt: "2026-07-30T11:00:52+08:00",
     });
   });
 
@@ -154,6 +209,10 @@ describe("getForecastForSlot", () => {
       source: "4day",
       temperature: { low: 25, high: 34 },
       humidity: { low: 60, high: 95 },
+      wind: { speed: { low: 10, high: 20 }, direction: "SE" },
+      // The 4-day outlook stamps its issue time on the enclosing record, not
+      // on each day's forecast (whose `timestamp` is the day it describes).
+      updatedAt: "2026-07-30T11:00:52+08:00",
     });
   });
 
@@ -207,6 +266,8 @@ describe("getForecastForSlot", () => {
       source: "24hr",
       temperature: { low: 24, high: 33 },
       humidity: { low: 60, high: 95 },
+      wind: { speed: { low: 10, high: 25 }, direction: "SSE" },
+      updatedAt: "2026-07-30T11:00:52+08:00",
     });
   });
 
@@ -245,5 +306,71 @@ describe("getForecastForSlot", () => {
       forecast: "Forecast unavailable",
       source: "unavailable",
     });
+  });
+});
+
+describe("getUpcomingForecast", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("returns only the periods overlapping the next `hours` window", async () => {
+    const now = Date.now();
+    const currentPeriod = {
+      start: new Date(now - 60 * 60 * 1000),
+      end: new Date(now + 2 * 60 * 60 * 1000),
+      text: "Cloudy",
+    };
+    const withinWindowPeriod = {
+      start: new Date(now + 2 * 60 * 60 * 1000),
+      end: new Date(now + 5 * 60 * 60 * 1000),
+      text: "Light Rain",
+    };
+    const beyondWindowPeriod = {
+      start: new Date(now + 8 * 60 * 60 * 1000),
+      end: new Date(now + 11 * 60 * 60 * 1000),
+      text: "Fair",
+    };
+
+    globalThis.fetch = mockFetchByUrl({
+      "twenty-four-hr-forecast": () =>
+        twentyFourHrFixtureWithPeriods([
+          currentPeriod,
+          withinWindowPeriod,
+          beyondWindowPeriod,
+        ]),
+    }) as unknown as typeof fetch;
+
+    const result = await getUpcomingForecast("east", 6);
+
+    expect(result).toEqual([
+      {
+        start: currentPeriod.start.toISOString(),
+        end: currentPeriod.end.toISOString(),
+        forecast: "Cloudy",
+        temperature: { low: 24, high: 33 },
+        humidity: { low: 60, high: 95 },
+      },
+      {
+        start: withinWindowPeriod.start.toISOString(),
+        end: withinWindowPeriod.end.toISOString(),
+        forecast: "Light Rain",
+        temperature: { low: 24, high: 33 },
+        humidity: { low: 60, high: 95 },
+      },
+    ]);
+  });
+
+  it("returns an empty array when there is no record for today", async () => {
+    globalThis.fetch = mockFetchByUrl({
+      "twenty-four-hr-forecast": () => ({
+        code: 0,
+        data: { records: [] },
+      }),
+    }) as unknown as typeof fetch;
+
+    const result = await getUpcomingForecast("east", 6);
+
+    expect(result).toEqual([]);
   });
 });

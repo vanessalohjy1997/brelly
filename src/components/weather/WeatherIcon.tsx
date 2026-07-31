@@ -1,4 +1,4 @@
-import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
+import { Icon, type IconName } from "@/components/icon";
 
 type Props = {
   forecast: string;
@@ -6,22 +6,17 @@ type Props = {
   tintColor?: string;
 };
 
-type WeatherSymbol = {
-  ios: SFSymbol;
-  android: AndroidSymbol;
-};
-
-const THUNDER: WeatherSymbol = { ios: "cloud.bolt.rain.fill", android: "thunderstorm" };
-const RAIN: WeatherSymbol = { ios: "cloud.rain.fill", android: "rainy" };
-const CLOUDY: WeatherSymbol = { ios: "cloud.fill", android: "cloud" };
-const PARTLY_CLOUDY: WeatherSymbol = { ios: "cloud.sun.fill", android: "partly_cloudy_day" };
-const SUNNY: WeatherSymbol = { ios: "sun.max.fill", android: "sunny" };
-const WINDY: WeatherSymbol = { ios: "wind", android: "air" };
-const HAZY: WeatherSymbol = { ios: "cloud.fog.fill", android: "foggy" };
-const DEFAULT: WeatherSymbol = PARTLY_CLOUDY;
+const THUNDER: IconName = { ios: "cloud.bolt.rain.fill", android: "thunderstorm" };
+const RAIN: IconName = { ios: "cloud.rain.fill", android: "rainy" };
+const CLOUDY: IconName = { ios: "cloud.fill", android: "cloud" };
+const PARTLY_CLOUDY: IconName = { ios: "cloud.sun.fill", android: "partly_cloudy_day" };
+const SUNNY: IconName = { ios: "sun.max.fill", android: "sunny" };
+const WINDY: IconName = { ios: "wind", android: "air" };
+const HAZY: IconName = { ios: "cloud.fog.fill", android: "foggy" };
+const DEFAULT: IconName = PARTLY_CLOUDY;
 
 // Maps NEA forecast text (e.g. "Afternoon Thundery Showers") to a symbol.
-function forecastToSymbol(forecast: string): WeatherSymbol {
+function forecastToSymbol(forecast: string): IconName {
   const f = forecast.toLowerCase();
   if (f.includes("thunder")) return THUNDER;
   if (f.includes("rain") || f.includes("shower")) return RAIN;
@@ -36,14 +31,5 @@ function forecastToSymbol(forecast: string): WeatherSymbol {
 }
 
 export function WeatherIcon({ forecast, size = 24, tintColor }: Props) {
-  const symbol = forecastToSymbol(forecast);
-
-  return (
-    <SymbolView
-      name={{ ios: symbol.ios, android: symbol.android, web: symbol.android }}
-      size={size}
-      tintColor={tintColor}
-      type="hierarchical"
-    />
-  );
+  return <Icon name={forecastToSymbol(forecast)} size={size} tintColor={tintColor} />;
 }

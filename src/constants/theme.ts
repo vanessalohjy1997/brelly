@@ -9,18 +9,20 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#332F44',
+    background: '#F8F6FB',
+    backgroundElement: '#ECE7F5',
+    backgroundSelected: '#DCD3EE',
+    textSecondary: '#7A7591',
+    danger: '#E0645C',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#F3F1F8',
+    background: '#201C2B',
+    backgroundElement: '#2B2638',
+    backgroundSelected: '#382F4A',
+    textSecondary: '#A79FBF',
+    danger: '#E8938D',
   },
 } as const;
 
@@ -63,3 +65,8 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+// Fixed so the Today/Plans tab headers are the same height regardless of
+// their content (Today's title + date subtitle vs. Plans' title-only row) —
+// otherwise switching tabs visually shifts the content below the header.
+export const HeaderHeight = 108;

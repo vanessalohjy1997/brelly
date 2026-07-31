@@ -28,13 +28,17 @@ function DeleteAction({
   translation: SharedValue<number>;
   onDelete: () => void;
 }) {
+  const colors = useTheme();
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: translation.value + DELETE_ACTION_WIDTH }],
   }));
 
   return (
     <Animated.View style={[styles.deleteAction, style]}>
-      <Pressable onPress={onDelete} style={styles.deleteButton}>
+      <Pressable
+        onPress={onDelete}
+        style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+      >
         <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
       </Pressable>
     </Animated.View>
@@ -83,22 +87,30 @@ export function ItineraryCard({ slot, onDelete }: Props) {
           {startTime} – {endTime}
         </ThemedText>
 
-        {/* Location + weather row */}
+        {/* Location + weather row. The weather is the reason the app exists,
+            so it gets the larger share of the row; the plan itself only needs
+            enough room to be recognisable. */}
         <ThemedView style={styles.row}>
           <ThemedView style={styles.locationContainer}>
-            <ThemedText type="subtitle" numberOfLines={1}>
+            <ThemedText type="default" style={styles.label} numberOfLines={2}>
               {slot.label}
             </ThemedText>
-            <ThemedText style={{ color: colors.textSecondary }} numberOfLines={1}>
+            <ThemedText
+              type="small"
+              style={{ color: colors.textSecondary }}
+              numberOfLines={1}
+            >
               {slot.location}
             </ThemedText>
           </ThemedView>
 
-          <WeatherBadge
-            weather={weather}
-            isLoading={isLoading}
-            onRetry={() => refetch()}
-          />
+          <ThemedView style={styles.weatherContainer}>
+            <WeatherBadge
+              weather={weather}
+              isLoading={isLoading}
+              onRetry={() => refetch()}
+            />
+          </ThemedView>
         </ThemedView>
       </Pressable>
     </Swipeable>
@@ -108,7 +120,7 @@ export function ItineraryCard({ slot, onDelete }: Props) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Spacing.two,
-    padding: Spacing.three,
+    padding: Spacing.two,
     gap: Spacing.one,
   },
   time: {
@@ -123,9 +135,17 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   locationContainer: {
-    flex: 1,
+    flex: 2,
     backgroundColor: "transparent",
     gap: 2,
+  },
+  label: {
+    fontWeight: "600",
+  },
+  weatherContainer: {
+    flex: 3,
+    backgroundColor: "transparent",
+    alignItems: "flex-end",
   },
   deleteAction: {
     width: DELETE_ACTION_WIDTH,
@@ -133,7 +153,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   deleteButton: {
-    backgroundColor: "#D64545",
     borderRadius: Spacing.two,
     paddingVertical: Spacing.three,
     alignItems: "center",

@@ -1,0 +1,87 @@
+import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+
+export type FoundSlot = { date: string; slot: ItinerarySlot };
+
+/**
+ * Pure lookups over the plans array.
+ *
+ * These deliberately do *not* live on the Zustand store. A store method that
+ * builds a fresh object (`{ date, slot }`) can't be used as a selector:
+ * `useItineraryStore((s) => s.findSlotById(id))` re-runs on every render and
+ * returns a new reference each time, which zustand's `useSyncExternalStore`
+ * reads as "the store changed" — forever. That's the "Maximum update depth
+ * exceeded" crash on opening a plan. Selecting `state.plans` (a stable
+ * reference) and calling these against it is safe.
+ *
+ * The mirror-image trap is a selector that returns something *too* stable:
+ * `useItineraryStore((s) => s.getTodaysPlan)` selects the function, whose
+ * identity never changes, so the component never re-renders when plans do.
+ */
+export function findSlotById(
+  plans: DayPlan[],
+  slotId: string,
+): FoundSlot | undefined {
+  for (const plan of plans) {
+    const slot = plan.slots.find((s) => s.id === slotId);
+    if (slot) return { date: plan.date, slot };
+  }
+  return undefined;
+}
+
+export function findPlanByDate(
+  plans: DayPlan[],
+  date: string,
+): DayPlan | undefined {
+  return plans.find((plan) => plan.date === date);
+}
+
+/** Every slot across every plan, each paired with the date it belongs to. */
+export function allSlotsWithDates(plans: DayPlan[]): FoundSlot[] {
+  return plans.flatMap((plan) =>
+    plan.slots.map((slot) => ({ date: plan.date, slot })),
+  );
+}
+
+/**
+ * The slot happening now, or failing that the next one to start.
+ *
+ * "Happening now" wins over "starts soonest" so that a live reading is
+ * attributed to where the user actually is. Falls back to the last slot of
+ * the day once they've all ended, so the caller always has somewhere to
+ * anchor to when the list isn't empty.
+ */
+export function findCurrentOrNextSlot(
+  slots: ItinerarySlot[],
+  now: Date,
+): ItinerarySlot | undefined {
+  if (slots.length === 0) return undefined;
+
+  const time = now.getTime();
+  const byStart = [...slots].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+  );
+
+  const current = byStart.find(
+    (slot) =>
+      new Date(slot.startTime).getTime() <= time &&
+      new Date(slot.endTime).getTime() > time,
+  );
+  if (current) return current;
+
+  const next = byStart.find((slot) => new Date(slot.startTime).getTime() > time);
+  return next ?? byStart[byStart.length - 1];
+}
+
+/**
+ * Slots that start after `now`, soonest first — the only ones whose
+ * notifications are still worth scheduling or re-checking.
+ */
+export function upcomingSlots(plans: DayPlan[], now: Date): FoundSlot[] {
+  return allSlotsWithDates(plans)
+    .filter(({ slot }) => new Date(slot.startTime).getTime() > now.getTime())
+    .sort(
+      (a, b) =>
+        new Date(a.slot.startTime).getTime() -
+        new Date(b.slot.startTime).getTime(),
+    );
+}
