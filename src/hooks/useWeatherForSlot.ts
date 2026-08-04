@@ -14,6 +14,13 @@ type Params = {
   latitude: number;
   longitude: number;
   slotStartTime: string; // ISO string
+  /**
+   * Off for a stop that has already finished. NEA publishes forecasts, not
+   * history, so the request can only come back as "unavailable" — and an
+   * archive of a hundred past stops would fire a hundred of them to render a
+   * hundred "No forecast" lines.
+   */
+  enabled?: boolean;
 };
 
 export function useWeatherForSlot({
@@ -21,6 +28,7 @@ export function useWeatherForSlot({
   latitude,
   longitude,
   slotStartTime,
+  enabled = true,
 }: Params) {
   return useQuery({
     queryKey: ["weather", region, latitude, longitude, slotStartTime],
@@ -46,7 +54,7 @@ export function useWeatherForSlot({
       return forecast;
     },
     staleTime: 1000 * 60 * 10,
-    enabled: !!region && !!slotStartTime,
+    enabled: enabled && !!region && !!slotStartTime,
     // Refetch automatically when the app comes back to the foreground
     // so forecasts update if the user left the app open for a while
     refetchOnWindowFocus: true,

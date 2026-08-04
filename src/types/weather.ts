@@ -121,14 +121,7 @@ export type LiveConditions = {
   windSpeedKn?: number;
 };
 
-// ─── Air quality ──────────────────────────────────────────────────────────────
-
-export type PsiReading = {
-  updatedTimestamp: string;
-  /** 24-hourly PSI per region — the headline number NEA publishes. */
-  psi: Record<NeaRegion, number>;
-  pm25: Record<NeaRegion, number>;
-};
+// ─── UV index ─────────────────────────────────────────────────────────────────
 
 export type UvIndexReading = {
   updatedTimestamp: string;

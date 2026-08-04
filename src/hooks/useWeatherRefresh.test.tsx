@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
+import { useToastStore } from "@/store/toastStore";
 
 function setup() {
   const queryClient = new QueryClient({
@@ -137,5 +138,72 @@ describe("useWeatherRefresh", () => {
     });
 
     expect(result.current.isRefreshing).toBe(false);
+  });
+});
+
+describe("useWeatherRefresh — what the screen is told", () => {
+  beforeEach(() => {
+    useToastStore.setState({ toast: null, modalHosts: [] });
+  });
+
+  it("confirms the whole screen refreshed, not just each badge", async () => {
+    // Staleness was shown per badge, so eight cards still saying "2h ago"
+    // because every request failed looked exactly like a successful refresh.
+    const { wrapper } = setup();
+    const { result } = await renderHook(
+      () => {
+        useQuery({
+          queryKey: ["weather", "east"],
+          queryFn: jest.fn().mockResolvedValue("Cloudy"),
+        });
+        return useWeatherRefresh();
+      },
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Weather updated",
+      variant: "success",
+    });
+  });
+
+  it("says so when the refresh didn't reach anything", async () => {
+    const { wrapper } = setup();
+    const { result } = await renderHook(
+      () => {
+        useQuery({
+          queryKey: ["weather", "boom"],
+          queryFn: jest.fn().mockRejectedValue(new Error("offline")),
+        });
+        return useWeatherRefresh();
+      },
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Couldn't reach the weather service",
+      variant: "error",
+    });
+  });
+
+  it("stays quiet when there was nothing on screen to refresh", async () => {
+    // The empty state has no forecast queries mounted; "Weather updated"
+    // there would be a claim about nothing.
+    const { wrapper } = setup();
+    const { result } = await renderHook(() => useWeatherRefresh(), { wrapper });
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(useToastStore.getState().toast).toBeNull();
   });
 });

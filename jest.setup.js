@@ -41,7 +41,28 @@ jest.mock("expo-notifications", () => ({
   AndroidImportance: { DEFAULT: 3 },
 }));
 
+// The calendar is a real second store of the user's data, so the default here
+// is "permission granted, one writable calendar, nothing in it" — enough for
+// any screen that merely mounts the sync hook, and a test that cares supplies
+// its own events.
+jest.mock("expo-calendar", () => ({
+  getCalendarPermissions: jest
+    .fn()
+    .mockResolvedValue({ granted: true, canAskAgain: false }),
+  requestCalendarPermissions: jest
+    .fn()
+    .mockResolvedValue({ granted: true, canAskAgain: false }),
+  getCalendars: jest.fn().mockResolvedValue([]),
+  listEvents: jest.fn().mockResolvedValue([]),
+  EntityTypes: { EVENT: "event", REMINDER: "reminder" },
+}));
+
 jest.mock("expo-location", () => ({
+  // `useNearbyForecast` reads the status without prompting on mount and only
+  // calls `request…` from an explicit affordance — so both have to exist.
+  getForegroundPermissionsAsync: jest
+    .fn()
+    .mockResolvedValue({ status: "granted" }),
   requestForegroundPermissionsAsync: jest
     .fn()
     .mockResolvedValue({ status: "granted" }),
@@ -54,11 +75,52 @@ jest.mock("expo-location", () => ({
 
 // The native date/time picker renders nothing useful under test; a stub keeps
 // SlotForm mountable while leaving its own fields interactive.
-jest.mock("@expo/ui/community/datetime-picker", () => ({
-  DateTimePicker: () => null,
-}));
+//
+// It does forward `themeVariant`, though. That prop is the only thing keeping
+// the picker in the app's theme rather than the device's — SwiftUI reads the
+// `colorScheme` environment, not our `Colors` — and it is exactly the kind of
+// prop that gets dropped in a refactor without anything looking broken until
+// someone opens the form on the dark theme over a light system.
+//
+// `mode` and `onValueChange` are forwarded too, so a test can tell the Day
+// picker from the Starts and Ends ones and drive each of them — which is the
+// only way to check that changing the day carries both times along.
+jest.mock("@expo/ui/community/datetime-picker", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    DateTimePicker: ({ themeVariant, mode, value, onValueChange }) =>
+      React.createElement(View, {
+        testID: `datetime-picker-${mode ?? "date"}`,
+        themeVariant,
+        mode,
+        value,
+        // The real picker's first argument is a native change event nobody
+        // reads; the date is the second.
+        onValueChange: (date) =>
+          onValueChange?.({ nativeEvent: { timestamp: date.getTime(), utcOffset: 0 } }, date),
+      }),
+  };
+});
 
-jest.mock("expo-symbols", () => ({ SymbolView: () => null }));
+// SymbolView has no JS implementation under Jest. A stand-in that renders a
+// View tagged with the symbol's name is what makes icon-only information
+// testable — the umbrella verdict is carried by *which* glyphs are on screen,
+// so a mock returning null would leave that unverifiable.
+jest.mock("expo-symbols", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    // `size` is folded into the style the way the real SymbolView sizes
+    // itself, so a test can tell a raindrop from the umbrella it falls on.
+    SymbolView: ({ name, accessibilityLabel, style, size }) =>
+      React.createElement(View, {
+        testID: `symbol-${typeof name === "string" ? name : name?.android}`,
+        accessibilityLabel,
+        style: [style, size === undefined ? null : { width: size, height: size }],
+      }),
+  };
+});
 
 jest.mock("expo-router", () => {
   const router = {
@@ -73,9 +135,19 @@ jest.mock("expo-router", () => {
   Stack.Screen = () => null;
   Stack.Toolbar = Object.assign(() => null, { Button: () => null });
 
+  // Shared across the mock so a test can assert on what a screen set — the
+  // unsaved-changes guard turns the modal's swipe-to-dismiss off through
+  // `setOptions({ gestureEnabled })`, and that is the only trace it leaves.
+  const navigation = {
+    setOptions: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
+    goBack: jest.fn(),
+  };
+
   return {
     router,
     useRouter: () => router,
+    useNavigation: () => navigation,
     useLocalSearchParams: jest.fn(() => ({})),
     useSegments: () => [],
     usePathname: () => "/",

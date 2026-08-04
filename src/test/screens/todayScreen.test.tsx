@@ -3,6 +3,7 @@ import { router } from "expo-router";
 
 import TodayScreen from "@/app/(tabs)/index";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
 import { todayKey } from "@/utils/dateKeys";
@@ -36,10 +37,15 @@ jest.mock("@/services/airQuality", () => ({
   }),
 }));
 
-function slot(id: string, label: string, hour: number): ItinerarySlot {
-  const start = new Date();
-  start.setHours(hour, 0, 0, 0);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+/**
+ * Positioned relative to *now*, not at a fixed hour of the day. The screen
+ * drops a stop the minute it ends, so a fixture pinned to 07:00 would be an
+ * upcoming stop before breakfast and an archived one after it — the test would
+ * pass or fail depending on when it ran.
+ */
+function slot(id: string, label: string, minutesFromNow: number): ItinerarySlot {
+  const start = new Date(Date.now() + minutesFromNow * 60 * 1000);
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
 
   return {
     id,
@@ -60,6 +66,7 @@ function todaysPlan(slots: ItinerarySlot[]): DayPlan {
 beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
+  useToastStore.setState({ toast: null, modalHosts: [] });
 });
 
 describe("TodayScreen", () => {
@@ -87,7 +94,7 @@ describe("TodayScreen", () => {
 
   it("lists today's slots instead of the empty state", async () => {
     useItineraryStore.setState({
-      plans: [todaysPlan([slot("s1", "Morning run", 7)])],
+      plans: [todaysPlan([slot("s1", "Morning run", 30)])],
     });
 
     const view = await renderWithProviders(<TodayScreen />);
@@ -105,7 +112,7 @@ describe("TodayScreen", () => {
         {
           id: "tmr",
           date: todayKey(tomorrow),
-          slots: [slot("s1", "Tomorrow's picnic", 12)],
+          slots: [slot("s1", "Tomorrow's picnic", 30)],
         },
       ],
     });
@@ -115,9 +122,36 @@ describe("TodayScreen", () => {
     expect(view.getByText("No plans yet")).toBeTruthy();
   });
 
+  it("drops a stop from the list the moment it has ended", async () => {
+    useItineraryStore.setState({
+      plans: [
+        todaysPlan([slot("done", "Shopping", -120), slot("next", "Dinner", 60)]),
+      ],
+    });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.queryByText("Shopping")).toBeNull();
+    expect(view.getByText("Dinner")).toBeTruthy();
+  });
+
+  it("says the day is done rather than that nothing was planned", async () => {
+    // The distinction matters: "No plans yet" after a full day of stops reads
+    // as data loss, when in fact they have all just moved to Past plans.
+    useItineraryStore.setState({
+      plans: [todaysPlan([slot("done", "Shopping", -120)])],
+    });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.getByText("Nothing left today")).toBeTruthy();
+    expect(view.queryByText("No plans yet")).toBeNull();
+    expect(view.queryByText("Shopping")).toBeNull();
+  });
+
   it("navigates to a slot when its card is tapped", async () => {
     useItineraryStore.setState({
-      plans: [todaysPlan([slot("s1", "Morning run", 7)])],
+      plans: [todaysPlan([slot("s1", "Morning run", 30)])],
     });
     const view = await renderWithProviders(<TodayScreen />);
 
@@ -128,12 +162,89 @@ describe("TodayScreen", () => {
 
   it("shows live conditions for the day's stop", async () => {
     useItineraryStore.setState({
-      plans: [todaysPlan([slot("s1", "Morning run", 7)])],
+      plans: [todaysPlan([slot("s1", "Morning run", 30)])],
     });
     const view = await renderWithProviders(<TodayScreen />);
 
     expect(await view.findByText("Right now")).toBeTruthy();
     expect(await view.findByText("30°C")).toBeTruthy();
+  });
+
+  it("lists the day in chronological order, whatever order it is stored in", async () => {
+    useItineraryStore.setState({
+      plans: [
+        todaysPlan([
+          slot("s3", "Dinner", 180),
+          slot("s1", "Morning run", 30),
+          slot("s2", "Lunch", 90),
+        ]),
+      ],
+    });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    // `getAllByText` returns matches in tree order, so this is the order the
+    // cards actually appear in — not just that all three are present.
+    expect(
+      view
+        .getAllByText(/^(Morning run|Lunch|Dinner)$/)
+        .map((node) => node.props.children),
+    ).toEqual(["Morning run", "Lunch", "Dinner"]);
+  });
+
+  it("offers no way to rearrange the day", async () => {
+    // Drag-to-reorder produced an order that contradicted the clock and the
+    // Plans tab; the list is a timeline now and the handle is gone with it.
+    useItineraryStore.setState({
+      plans: [todaysPlan([slot("s1", "Morning run", 30)])],
+    });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.queryByLabelText("Drag to reorder")).toBeNull();
+  });
+
+  it("confirms a deleted plan", async () => {
+    useItineraryStore.setState({
+      plans: [todaysPlan([slot("s1", "Morning run", 30)])],
+    });
+    const view = await renderWithProviders(<TodayScreen />);
+
+    await fireEvent.press(view.getByLabelText("Delete plan"));
+
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Deleted Morning run",
+      variant: "success",
+    });
+  });
+
+  it("reaches settings without going via the Plans tab", async () => {
+    // The app opens here, so this is where a settings button is discoverable.
+    const view = await renderWithProviders(<TodayScreen />);
+
+    await fireEvent.press(view.getByLabelText("Settings"));
+
+    expect(router.push).toHaveBeenCalledWith("/settings");
+  });
+
+  it("says how soon the next stop is, not only when it is", async () => {
+    useItineraryStore.setState({
+      plans: [todaysPlan([slot("s1", "Morning run", 40.5)])],
+    });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.getByText("in 40 min")).toBeTruthy();
+  });
+
+  it("marks a stop in progress as happening now", async () => {
+    useItineraryStore.setState({
+      plans: [todaysPlan([slot("s1", "Morning run", -10)])],
+    });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.getByText("Now")).toBeTruthy();
   });
 
   it("re-renders when a plan is added to the store", async () => {
@@ -143,7 +254,7 @@ describe("TodayScreen", () => {
     expect(view.getByText("No plans yet")).toBeTruthy();
 
     useItineraryStore.setState({
-      plans: [todaysPlan([slot("s1", "Added later", 15)])],
+      plans: [todaysPlan([slot("s1", "Added later", 45)])],
     });
 
     expect(await view.findByText("Added later")).toBeTruthy();

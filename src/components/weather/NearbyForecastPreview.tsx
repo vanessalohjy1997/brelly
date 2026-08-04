@@ -2,15 +2,20 @@ import { StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
 import { WeatherIcon } from "@/components/weather/WeatherIcon";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { UpcomingPeriodForecast } from "@/services/weather";
+import { describeUmbrella } from "@/utils/describeUmbrella";
 import { formatPeriodLabel } from "@/utils/formatPeriodLabel";
 import { formatTempRange } from "@/utils/formatTempRange";
 
 type Props = {
   forecasts: UpcomingPeriodForecast[];
+  /** Island-wide UV, the sun half of the verdict. Only the soonest period
+   *  claims it — a UV reading taken now says nothing about this evening. */
+  uvIndex?: number | null;
 };
 
 /**
@@ -20,12 +25,14 @@ type Props = {
  * Temperature is only shown on the hero because NEA reports one range for
  * the whole day, so repeating it per period would be noise.
  */
-export function NearbyForecastPreview({ forecasts }: Props) {
+export function NearbyForecastPreview({ forecasts, uvIndex }: Props) {
   const theme = useTheme();
 
   if (forecasts.length === 0) return null;
 
   const [current, ...later] = forecasts;
+  const verdict = describeUmbrella(current.forecast, uvIndex);
+  const heroTint = verdict.themeColor ? theme[verdict.themeColor] : theme.text;
 
   return (
     <ThemedView
@@ -36,12 +43,27 @@ export function NearbyForecastPreview({ forecasts }: Props) {
       </ThemedText>
 
       <ThemedView style={styles.hero}>
-        <WeatherIcon
-          forecast={current.forecast}
-          size={44}
-          tintColor={theme.text}
-        />
+        {verdict.reason === "none" ? (
+          <WeatherIcon
+            forecast={current.forecast}
+            size={44}
+            tintColor={theme.text}
+          />
+        ) : (
+          <UmbrellaVerdictIcon
+            reason={verdict.reason}
+            size={50}
+            color={heroTint}
+            haloColor={theme.backgroundElement}
+            // Nothing beside it repeats the verdict here — the hero line is
+            // NEA's wording, not the answer — so this icon has to speak.
+            accessibilityLabel={verdict.label}
+          />
+        )}
         <ThemedView style={styles.heroText}>
+          {/* The tint stays on the icon and never moves to this line: at
+              20px it would need 4.5:1, and umbrellaSun is 3.62:1 on this
+              surface — fine for a graphic, short of it for text. */}
           <ThemedText style={styles.heroForecast} numberOfLines={2}>
             {current.forecast}
           </ThemedText>
@@ -54,31 +76,47 @@ export function NearbyForecastPreview({ forecasts }: Props) {
 
       {later.length > 0 && (
         <ThemedView style={styles.later}>
+          {/* The `border` token, not a surface colour standing in for one.
+              This faked a divider out of `backgroundSelected` back when
+              `border` was an alias for the same value and there was nothing to
+              gain; both themes now give it a real hairline. */}
           <ThemedView
-            style={[
-              styles.divider,
-              { backgroundColor: theme.backgroundSelected },
-            ]}
+            style={[styles.divider, { backgroundColor: theme.border }]}
           />
-          {later.map((period) => (
-            <ThemedView key={period.start} style={styles.laterRow}>
-              <ThemedText
-                style={[styles.laterLabel, { color: theme.textSecondary }]}
-              >
-                {formatPeriodLabel(period.start)}
-              </ThemedText>
-              <ThemedView style={styles.laterForecast}>
-                <WeatherIcon
-                  forecast={period.forecast}
-                  size={18}
-                  tintColor={theme.text}
-                />
-                <ThemedText style={styles.laterForecastText} numberOfLines={1}>
-                  {period.forecast}
+          {later.map((period) => {
+            // No UV here on purpose: the sun half of the verdict is a reading
+            // taken now, which says nothing about a period later today.
+            const wet = describeUmbrella(period.forecast, null).reason === "rain";
+            return (
+              <ThemedView key={period.start} style={styles.laterRow}>
+                <ThemedText
+                  style={[styles.laterLabel, { color: theme.textSecondary }]}
+                >
+                  {formatPeriodLabel(period.start)}
                 </ThemedText>
+                <ThemedView style={styles.laterForecast}>
+                  {wet ? (
+                    <UmbrellaVerdictIcon
+                      reason="rain"
+                      size={22}
+                      color={theme.umbrellaRain}
+                      haloColor={theme.backgroundElement}
+                      accessibilityLabel="Umbrella — rain"
+                    />
+                  ) : (
+                    <WeatherIcon
+                      forecast={period.forecast}
+                      size={18}
+                      tintColor={theme.text}
+                    />
+                  )}
+                  <ThemedText style={styles.laterForecastText} numberOfLines={1}>
+                    {period.forecast}
+                  </ThemedText>
+                </ThemedView>
               </ThemedView>
-            </ThemedView>
-          ))}
+            );
+          })}
         </ThemedView>
       )}
     </ThemedView>

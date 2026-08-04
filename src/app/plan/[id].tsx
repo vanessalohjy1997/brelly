@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo } from "react";
-import { Alert, StyleSheet } from "react-native";
+import { useMemo, useState } from "react";
+import { StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { HeaderDismissButton } from "@/components/headerDismissButton";
@@ -8,14 +8,24 @@ import { CopyToDateAction } from "@/components/itinerary/CopyToDateAction";
 import { SlotForm } from "@/components/itinerary/SlotForm";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { ToastHost } from "@/components/toast";
 import { getRegionFromCoordinates } from "@/constants/neaRegions";
 import { Spacing } from "@/constants/theme";
+import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
-import { cancelAndDeleteSlot, cancelNotification } from "@/services/notifications";
+import { useRoutineMaterializer } from "@/hooks/useRoutineMaterializer";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { cancelNotification } from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { useRoutineStore } from "@/store/routineStore";
+import { askEditScope } from "@/utils/askEditScope";
 import { toDateKey } from "@/utils/dateKeys";
+import { describeRoutine } from "@/utils/describeRoutine";
 import { findSlotById } from "@/utils/planSelectors";
 import { retargetSlotDate } from "@/utils/retargetSlotDate";
+import { routineUpdatesFromSlot } from "@/utils/routineOccurrences";
+import { routineForSlot } from "@/utils/routineSelectors";
+import { saveWithFeedback } from "@/utils/saveWithFeedback";
 
 export default function EditSlotScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,9 +35,19 @@ export default function EditSlotScreen() {
   const plans = useItineraryStore((state) => state.plans);
   const found = useMemo(() => findSlotById(plans, id), [plans, id]);
   const updateSlot = useItineraryStore((state) => state.updateSlot);
-  const deleteSlot = useItineraryStore((state) => state.deleteSlot);
   const addSlot = useItineraryStore((state) => state.addSlot);
+  const routines = useRoutineStore((state) => state.routines);
+  const routine = routineForSlot(routines, found?.slot.routineId);
+  const updateRoutine = useRoutineStore((state) => state.updateRoutine);
+  const deleteRoutine = useRoutineStore((state) => state.deleteRoutine);
+  const addException = useRoutineStore((state) => state.addException);
+  const materializeRoutines = useRoutineMaterializer();
   const scheduleRainNotificationForSlot = useRainNotificationScheduler();
+  const deleteWithUndo = useDeleteSlotWithUndo();
+  // Declared above the `!found` bail-out — an early return that skips hooks
+  // would change the hook order between the two branches.
+  const [dirty, setDirty] = useState(false);
+  const confirmDiscard = useUnsavedChangesGuard(dirty);
 
   if (!found) {
     return (
@@ -41,41 +61,84 @@ export default function EditSlotScreen() {
 
   const handleDuplicate = (targetDate: Date) => {
     const targetDateString = toDateKey(targetDate);
-    const newSlot = addSlot(targetDateString, {
-      label: slot.label,
-      location: slot.location,
-      latitude: slot.latitude,
-      longitude: slot.longitude,
-      startTime: retargetSlotDate(slot.startTime, targetDateString),
-      endTime: retargetSlotDate(slot.endTime, targetDateString),
-    });
-    scheduleRainNotificationForSlot(targetDateString, newSlot);
+    // This is the one action on the form that commits immediately, so it's
+    // also the one that most needs to say it landed — nothing else on screen
+    // changes when a copy is filed under another day.
+    const saved = saveWithFeedback(
+      () =>
+        addSlot(targetDateString, {
+          label: slot.label,
+          location: slot.location,
+          latitude: slot.latitude,
+          longitude: slot.longitude,
+          startTime: retargetSlotDate(slot.startTime, targetDateString),
+          endTime: retargetSlotDate(slot.endTime, targetDateString),
+          // Named rather than spread, so this literal has to be kept in step
+          // with the slot shape by hand — the same stop on another day is
+          // still indoors.
+          kind: slot.kind,
+        }),
+      {
+        success: `Copied to ${formatTargetDate(targetDate)}`,
+        failure: "Couldn't copy that plan. Try again.",
+      },
+    );
+    if (!saved.ok) return;
+
+    scheduleRainNotificationForSlot(targetDateString, saved.value);
   };
 
-  const handleDelete = () => {
-    Alert.alert(
-      "Delete plan",
-      `Remove "${slot.label}" from your itinerary?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            cancelAndDeleteSlot(deleteSlot, date, slot);
-            router.back();
-          },
-        },
-      ],
-    );
+  // No confirmation dialog. It used to `Alert` here while the swipe action on
+  // the lists deleted outright, which put the friction on the deliberate path
+  // and left the accidental one unprotected. Both now delete immediately and
+  // offer "Undo" on the toast — and because the toast lives in the store
+  // rather than in this modal's host, the one raised here survives the
+  // `router.back()` below and finishes on the tab underneath, still undoable.
+  //
+  // A routine's stop is the one exception, and not for confirmation's sake:
+  // "delete this" is genuinely two different deletes, and no undo can guess
+  // which was meant. `deleteWithUndo` already handles the single day — it
+  // records the exception so the top-up can't resurrect it — so all this adds
+  // is the whole-routine reading.
+  const handleDelete = async () => {
+    if (routine) {
+      const scope = await askEditScope({
+        title: `Delete ${slot.label}?`,
+        message: `${describeRoutine(routine)}.`,
+        dayLabel: "Delete this day",
+        seriesLabel: "Delete all future days",
+        destructive: true,
+      });
+      if (!scope) return;
+
+      if (scope === "series") {
+        // Only the *rule* is deleted. The days it already produced and that
+        // have been and gone stay in the archive, because they happened.
+        const removed = saveWithFeedback(() => deleteRoutine(routine.id), {
+          success: `Deleted ${slot.label} and its repeats`,
+          failure: "Couldn't delete that routine. Try again.",
+        });
+        if (!removed.ok) return;
+        materializeRoutines();
+        router.back();
+        return;
+      }
+    }
+
+    const removed = deleteWithUndo(date, slot);
+    if (removed.ok) router.back();
   };
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <HeaderDismissButton label="Cancel" onPress={() => router.back()} />
+      <HeaderDismissButton
+        label="Cancel"
+        onPress={() => confirmDiscard(() => router.back())}
+      />
       <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <SlotForm
           submitLabel="Save changes"
+          onDirtyChange={setDirty}
           initialValues={{
             label: slot.label,
             location: slot.location,
@@ -84,12 +147,73 @@ export default function EditSlotScreen() {
             startTime: slot.startTime,
             endTime: slot.endTime,
             notificationsMuted: slot.notificationsMuted,
+            kind: slot.kind,
           }}
-          onSubmit={(values) => {
+          onSubmit={async (values) => {
+            const movedToAnotherDay =
+              toDateKey(new Date(values.startTime)) !== date;
+
+            if (routine) {
+              const scope = await askEditScope({
+                title: `Save changes to ${slot.label}?`,
+                message: movedToAnotherDay
+                  ? `${describeRoutine(routine)}. Moving this stop to another day can only apply to this one — the rest of the routine stays where it is.`
+                  : `${describeRoutine(routine)}.`,
+                dayLabel: "This day only",
+                // Withheld when the day changed: a routine has no single date,
+                // so there is no rule-level reading of "this now happens on
+                // Thursday instead".
+                seriesLabel: movedToAnotherDay
+                  ? undefined
+                  : "This and future days",
+              });
+              if (!scope) return;
+
+              if (scope === "series") {
+                const saved = saveWithFeedback(
+                  () => {
+                    updateRoutine(routine.id, routineUpdatesFromSlot(values));
+                  },
+                  {
+                    success: `Updated ${values.label} and its repeats`,
+                    failure: "Couldn't save your changes. Try again.",
+                  },
+                );
+                if (!saved.ok) return;
+                // The stop on screen is rewritten by this too: the materialiser
+                // sees it disagree with its own rule and replaces it, along
+                // with every other day still ahead.
+                materializeRoutines();
+                router.back();
+                return;
+              }
+
+              // "This day only" cuts the stop loose. The exception is what
+              // stops the next top-up from filling the day back in beside it.
+              addException(routine.id, date);
+            }
+
             if (slot.notificationId) {
               cancelNotification(slot.notificationId);
             }
-            updateSlot(date, slot.id, { ...values, notificationId: undefined });
+            const saved = saveWithFeedback(
+              () =>
+                updateSlot(date, slot.id, {
+                  ...values,
+                  notificationId: undefined,
+                  // Detached: an edited day is the user's, not the rule's, and
+                  // nothing may rewrite or sweep it afterwards.
+                  routineId: undefined,
+                }),
+              {
+                success: `Updated ${values.label}`,
+                failure: "Couldn't save your changes. Try again.",
+              },
+            );
+            // Dismissing on a failed save would look like it worked, and the
+            // edits would be gone.
+            if (!saved.ok) return;
+
             // Editing the start date re-files the slot under that day, so the
             // notification has to be scheduled against the new day, not the
             // one this screen was opened from.
@@ -109,14 +233,38 @@ export default function EditSlotScreen() {
           }}
           onDelete={handleDelete}
         >
+          {routine && (
+            // There is no repeat control on this screen — the scope prompts on
+            // Save and Delete are how a routine is edited — so this line is the
+            // only thing that says the stop is one of many.
+            <ThemedText themeColor="textSecondary" style={styles.repeatNote}>
+              {describeRoutine(routine)}
+            </ThemedText>
+          )}
           <CopyToDateAction onDuplicate={handleDuplicate} />
         </SlotForm>
       </SafeAreaView>
+      {/* Duplicate commits without leaving this screen, so its confirmation
+          has to be visible from inside the modal. */}
+      <ToastHost />
     </ThemedView>
   );
 }
 
+/** "Sat, 2 Aug" — enough to recognise the day the copy landed on. */
+function formatTargetDate(date: Date): string {
+  return date.toLocaleDateString("en-SG", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 const styles = StyleSheet.create({
+  repeatNote: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
   missing: {
     flex: 1,
     alignItems: "center",

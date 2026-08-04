@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!-- Android adaptive icon foreground. Scaled to 0.82 about the canvas centre:
+     only the middle 66% of an adaptive layer is guaranteed visible once the
+     launcher applies its own mask, and the mark at full size sits right on
+     that edge. -->
+<g transform="translate(512,512) scale(0.82) translate(-512,-512)">
+  <g fill="none" stroke="#4A3D7C" stroke-width="42" stroke-linecap="round"><path d="M 512,500 L 512,796 A 78,78 0 0 1 668,796"/></g>
+  <rect x="493" y="196" width="38" height="80" rx="19" fill="#4A3D7C"/>
+  <path d="M 196,540 C 196,363.632 336.62,248 512,248 C 687.38,248 828,363.632 828,540 Q 749,485.98 670,540 Q 591,485.98 512,540 Q 433,485.98 354,540 Q 275,485.98 196,540 Z" fill="#4A3D7C"/>
+</g>
+</svg>

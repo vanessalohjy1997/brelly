@@ -54,6 +54,7 @@ function context(
     now: NOW,
     settings: {
       rainAlertsEnabled: true,
+    rainLeadMinutes: 45,
       quietHours: { enabled: false, start: "22:00", end: "07:00" },
       digest: { enabled: false, time: "07:30" },
     },
@@ -84,8 +85,11 @@ describe("runNotificationSync — rain alerts", () => {
     await runNotificationSync(ctx);
 
     expect(mockScheduleRain).toHaveBeenCalledTimes(1);
+    // The lead time is stamped alongside the id so a later change to the
+    // setting can tell this alert is stale.
     expect(ctx.updateSlot).toHaveBeenCalledWith("2026-07-31", "s1", {
       notificationId: "notif-new",
+      notificationLeadMinutes: 45,
     });
   });
 
@@ -140,6 +144,7 @@ describe("runNotificationSync — rain alerts", () => {
       context({
         settings: {
           rainAlertsEnabled: true,
+          rainLeadMinutes: 45,
           quietHours,
           digest: { enabled: false, time: "07:30" },
         },
@@ -149,7 +154,7 @@ describe("runNotificationSync — rain alerts", () => {
     expect(mockScheduleRain).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      { quietHours },
+      { quietHours, leadMinutes: 45 },
     );
   });
 
@@ -169,6 +174,7 @@ describe("runNotificationSync — rain alerts", () => {
       plans: plans([slot({ notificationId: "notif-old" })]),
       settings: {
         rainAlertsEnabled: false,
+    rainLeadMinutes: 45,
         quietHours: { enabled: false, start: "22:00", end: "07:00" },
         digest: { enabled: false, time: "07:30" },
       },
@@ -184,6 +190,7 @@ describe("runNotificationSync — rain alerts", () => {
 describe("runNotificationSync — daily digest", () => {
   const digestOn = (time = "07:30") => ({
     rainAlertsEnabled: true,
+    rainLeadMinutes: 45,
     quietHours: { enabled: false, start: "22:00", end: "07:00" },
     digest: { enabled: true, time },
   });

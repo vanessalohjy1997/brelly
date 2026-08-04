@@ -2,6 +2,7 @@ import { getRegionFromCoordinates } from "@/constants/neaRegions";
 import { mmkvStorage } from "@/store/mmkvStorage";
 import { DayPlan, ItinerarySlot } from "@/types/itinerary";
 import { toDateKey } from "@/utils/dateKeys";
+import { sortSlotsByStart } from "@/utils/planSelectors";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -9,12 +10,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 9);
-}
-
-function sortByStartTime(slots: ItinerarySlot[]): ItinerarySlot[] {
-  return [...slots].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-  );
 }
 
 function applyUpdates(
@@ -44,7 +39,7 @@ function fileSlot(
   return plans.some((p) => p.date === date)
     ? plans.map((p) =>
         p.date === date
-          ? { ...p, slots: sortByStartTime([...p.slots, slot]) }
+          ? { ...p, slots: sortSlotsByStart([...p.slots, slot]) }
           : p,
       )
     : [...plans, { id: generateId(), date, slots: [slot] }];
@@ -86,7 +81,16 @@ type ItineraryState = {
     updates: Partial<Omit<ItinerarySlot, "id" | "neaRegion">>,
   ) => void;
   deleteSlot: (date: string, slotId: string) => void;
-  reorderSlots: (date: string, slots: ItinerarySlot[]) => void;
+  /**
+   * Puts a deleted slot back exactly as it was — same id, same derived region.
+   *
+   * `addSlot` cannot do this: it mints a new id and re-derives `neaRegion`,
+   * which would make an undo produce a *different* plan that merely looks the
+   * same. The id in particular has to survive, or anything holding a reference
+   * to the old one (an open `plan/[id]` route, a scheduled notification's
+   * bookkeeping) points at nothing.
+   */
+  restoreSlot: (date: string, slot: ItinerarySlot) => ItinerarySlot;
   deletePlan: (date: string) => void;
 };
 
@@ -137,7 +141,7 @@ export const useItineraryStore = create<ItineraryState>()(
                 p.date === date
                   ? {
                       ...p,
-                      slots: sortByStartTime(
+                      slots: sortSlotsByStart(
                         p.slots.map((s) => (s.id === slotId ? updated : s)),
                       ),
                     }
@@ -160,14 +164,22 @@ export const useItineraryStore = create<ItineraryState>()(
         set((state) => ({ plans: removeSlot(state.plans, date, slotId) }));
       },
 
-      reorderSlots: (date, slots) => {
+      restoreSlot: (date, slot) => {
         set((state) => ({
-          plans: state.plans.map((p) =>
-            p.date === date ? { ...p, slots } : p,
+          // Deleting the last slot of a day removes the day too, so an undo
+          // often has to recreate the plan as well as the stop — which is
+          // exactly what `fileSlot` does when the date isn't there.
+          plans: fileSlot(
+            removeSlot(state.plans, date, slot.id),
+            date,
+            slot,
           ),
         }));
+        return slot;
       },
 
+      // There is deliberately no `reorderSlots`. Slots are ordered by start
+      // time and nothing else — see `sortSlotsByStart`.
       deletePlan: (date) => {
         set((state) => ({
           plans: state.plans.filter((p) => p.date !== date),

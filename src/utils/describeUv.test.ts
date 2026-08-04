@@ -1,4 +1,4 @@
-import { describeUv, shouldNotifyForUv } from "@/utils/describeUv";
+import { describeUv, needsUmbrellaForSun } from "@/utils/describeUv";
 
 describe("describeUv", () => {
   it.each([
@@ -13,32 +13,30 @@ describe("describeUv", () => {
     [11, "extreme", "Extreme"],
     [14, "extreme", "Extreme"],
   ])("puts %i in the %s band", (uv, band, label) => {
-    expect(describeUv(uv)).toMatchObject({ band, label });
+    expect(describeUv(uv)).toEqual({ band, label });
   });
 
-  it("does not alert at 'high', which Singapore reaches most clear days", () => {
-    expect(describeUv(7).shouldAlert).toBe(false);
-  });
-
-  it("alerts from 'very high' upward", () => {
-    expect(describeUv(8).shouldAlert).toBe(true);
+  it("carries no alerting decision — sun never notifies", () => {
+    expect(describeUv(11)).not.toHaveProperty("shouldAlert");
   });
 });
 
-describe("shouldNotifyForUv", () => {
-  it("is false for a low index", () => {
-    expect(shouldNotifyForUv(1)).toBe(false);
+describe("needsUmbrellaForSun", () => {
+  it("is false at 'high', which Singapore reaches most clear days", () => {
+    expect(needsUmbrellaForSun(7)).toBe(false);
   });
 
-  it("is true for an extreme index", () => {
-    expect(shouldNotifyForUv(11)).toBe(true);
+  it("is true from 'very high' upward", () => {
+    expect(needsUmbrellaForSun(8)).toBe(true);
+    expect(needsUmbrellaForSun(11)).toBe(true);
   });
 
   it("is false when no reading is available", () => {
-    expect(shouldNotifyForUv(undefined)).toBe(false);
+    expect(needsUmbrellaForSun(undefined)).toBe(false);
+    expect(needsUmbrellaForSun(null)).toBe(false);
   });
 
   it("is false for a NaN reading rather than throwing", () => {
-    expect(shouldNotifyForUv(Number.NaN)).toBe(false);
+    expect(needsUmbrellaForSun(Number.NaN)).toBe(false);
   });
 });

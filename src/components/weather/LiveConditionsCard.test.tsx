@@ -18,19 +18,11 @@ const CONDITIONS: LiveConditions = {
 describe("buildReadings", () => {
   it("includes every reading that came back", () => {
     const labels = buildReadings(CONDITIONS, {
-      psi: 57,
-      uvIndex: 8,
+      value: 8,
       updatedAt: null,
     }).map((r) => r.label);
 
-    expect(labels).toEqual([
-      "Rain",
-      "Temp",
-      "Humidity",
-      "Wind",
-      "PSI 57",
-      "UV 8",
-    ]);
+    expect(labels).toEqual(["Rain", "Temp", "Humidity", "Wind", "UV 8"]);
   });
 
   it("reports dry weather as 'None' rather than '0 mm'", () => {
@@ -54,17 +46,18 @@ describe("buildReadings", () => {
     expect(readings.find((r) => r.label === "Humidity")?.value).toBe("79%");
   });
 
-  it("bands the PSI and UV values", () => {
-    const readings = buildReadings(undefined, {
-      psi: 150,
-      uvIndex: 11,
-      updatedAt: null,
-    });
+  it("bands the UV value", () => {
+    const readings = buildReadings(undefined, { value: 11, updatedAt: null });
 
-    expect(readings).toEqual([
-      { label: "PSI 150", value: "Unhealthy" },
-      { label: "UV 11", value: "Extreme" },
-    ]);
+    expect(readings).toEqual([{ label: "UV 11", value: "Extreme" }]);
+  });
+
+  it("no longer reports PSI — it answers a different question than the umbrella", () => {
+    const labels = buildReadings(CONDITIONS, { value: 8, updatedAt: null }).map(
+      (r) => r.label,
+    );
+
+    expect(labels.some((label) => label.startsWith("PSI"))).toBe(false);
   });
 
   it("omits sensors that didn't report", () => {
@@ -81,7 +74,7 @@ describe("buildReadings", () => {
   });
 
   it("keeps a zero UV index, which is a real overnight reading", () => {
-    const readings = buildReadings(null, { psi: null, uvIndex: 0, updatedAt: null });
+    const readings = buildReadings(null, { value: 0, updatedAt: null });
     expect(readings).toEqual([{ label: "UV 0", value: "Low" }]);
   });
 });
@@ -91,21 +84,22 @@ describe("LiveConditionsCard", () => {
     const view = await render(
       <LiveConditionsCard
         conditions={CONDITIONS}
-        airQuality={{ psi: 57, uvIndex: 8, updatedAt: null }}
+        uvIndex={{ value: 8, updatedAt: null }}
       />,
     );
 
     expect(view.getByText("Right now")).toBeTruthy();
     expect(view.getByText("Tanjong Rhu · 6m ago")).toBeTruthy();
     expect(view.getByText("30°C")).toBeTruthy();
-    // PSI 57 bands as Moderate; UV 8 as Very high.
-    expect(view.getByText("Moderate")).toBeTruthy();
+    // The band label always rides alongside the number — the WHO UV palette
+    // runs green→red, which red-green colour blindness collapses.
+    expect(view.getByText("UV 8")).toBeTruthy();
     expect(view.getByText("Very high")).toBeTruthy();
   });
 
   it("renders nothing rather than an empty card when no reading came back", async () => {
     const view = await render(
-      <LiveConditionsCard conditions={null} airQuality={undefined} />,
+      <LiveConditionsCard conditions={null} uvIndex={undefined} />,
     );
 
     expect(view.toJSON()).toBeNull();

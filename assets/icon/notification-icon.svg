@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!-- Android status-bar notification icon: the hook mark in white on a
+     transparent canvas. Android masks this to its own accent colour and keeps
+     only the alpha channel, so anything but a flat silhouette is discarded —
+     which is why this is the one icon in here with no colour of its own.
+
+     Unlike android-monochrome.svg there is no 0.82 inset: that inset exists for
+     the adaptive-launcher safe zone, and at 24dp in a status bar it would only
+     shrink an already tiny mark. The geometry below spans 196–828 of 1024, so
+     it carries ~19% padding on its own.
+
+     The committed PNG is 96x96, which is what expo-notifications asks for. It
+     was rasterised from this file by rendering a black-on-white copy through
+     macOS `qlmanage -t -s 96` (QuickLook flattens transparency onto white, so
+     white-on-transparent renders as a blank sheet) and then rebuilding the
+     alpha channel from the luminance — every pixel becomes white, with alpha
+     255 minus its grey level, which preserves the antialiased edges. -->
+<g fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round"><path d="M 512,500 L 512,796 A 78,78 0 0 1 668,796"/></g>
+<rect x="493" y="196" width="38" height="80" rx="19" fill="#FFFFFF"/>
+<path d="M 196,540 C 196,363.632 336.62,248 512,248 C 687.38,248 828,363.632 828,540 Q 749,485.98 670,540 Q 591,485.98 512,540 Q 433,485.98 354,540 Q 275,485.98 196,540 Z" fill="#FFFFFF"/>
+</svg>

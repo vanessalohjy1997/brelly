@@ -1,20 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import * as Location from "expo-location";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getRegionFromCoordinates } from "@/constants/neaRegions";
 import { getUpcomingForecast } from "@/services/weather";
 import type { NeaRegion } from "@/types/weather";
 
-type PermissionState = "checking" | "granted" | "denied";
+export type PermissionState =
+  | "checking"
+  | "unprompted"
+  | "granted"
+  | "denied"
+  | "unavailable";
 
 /**
- * Weather for whatever's coming up nearby, used for the "no plans yet"
- * empty state. Only requests location permission when `enabled` — callers
- * pass the same condition that shows the empty state, so a screen with
- * plans never triggers a permission prompt. Denial (or an undetermined
- * permission the user doesn't grant) is silent by design: no error is
- * surfaced, the caller just falls back to the plain empty state.
+ * Weather for whatever's coming up nearby, used for the "no plans yet" empty
+ * state.
+ *
+ * The permission is **not** requested on mount. It used to be, which meant the
+ * OS dialog appeared before the user had any idea what it was for, and a
+ * denial silently removed the whole feature with no way back — one tap in the
+ * first five seconds. Instead this reports `unprompted` and waits for
+ * `requestPermission()`, so the caller can explain first and offer a way to
+ * recover afterwards.
  */
 export function useNearbyForecast(enabled: boolean, hours: number = 6) {
   const [permission, setPermission] = useState<PermissionState>("checking");
@@ -27,41 +35,58 @@ export function useNearbyForecast(enabled: boolean, hours: number = 6) {
     longitude: number;
   } | null>(null);
 
+  const locate = useCallback(async () => {
+    try {
+      const position = await Location.getCurrentPositionAsync({});
+      setCoords({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      setRegion(
+        getRegionFromCoordinates(
+          position.coords.latitude,
+          position.coords.longitude,
+        ),
+      );
+      setPermission("granted");
+    } catch {
+      // Permission is held but no fix came back — a different failure from a
+      // refusal, and not one re-prompting would fix.
+      setPermission("unavailable");
+    }
+  }, []);
+
+  // Read the existing status without prompting. Someone who already granted
+  // it on a previous run shouldn't have to press a button again.
   useEffect(() => {
     if (!enabled) return;
 
     let cancelled = false;
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.getForegroundPermissionsAsync();
       if (cancelled) return;
-      if (status !== "granted") {
-        setPermission("denied");
+      if (status === "granted") {
+        await locate();
         return;
       }
-
-      try {
-        const position = await Location.getCurrentPositionAsync({});
-        if (cancelled) return;
-        setCoords({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        setRegion(
-          getRegionFromCoordinates(
-            position.coords.latitude,
-            position.coords.longitude,
-          ),
-        );
-        setPermission("granted");
-      } catch {
-        if (!cancelled) setPermission("denied");
-      }
+      setPermission(status === "denied" ? "denied" : "unprompted");
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, locate]);
+
+  /** Prompts for permission. Call this from an affordance that says why. */
+  const requestPermission = useCallback(async () => {
+    setPermission("checking");
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      setPermission("denied");
+      return;
+    }
+    await locate();
+  }, [locate]);
 
   const query = useQuery({
     queryKey: ["nearbyForecast", region, hours],
@@ -73,6 +98,8 @@ export function useNearbyForecast(enabled: boolean, hours: number = 6) {
   return {
     isAvailable: permission === "granted",
     isLoading: enabled && (permission === "checking" || query.isLoading),
+    permission,
+    requestPermission,
     forecasts: query.data ?? [],
     region,
     coords,

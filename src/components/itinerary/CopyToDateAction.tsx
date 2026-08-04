@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { Spacing } from "@/constants/theme";
-import { useTheme } from "@/hooks/useTheme";
+import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
 import { DatePickerWidth } from "@/utils/shouldStackDateTimeFields";
 
 type Props = {
@@ -20,6 +20,9 @@ function tomorrow(): Date {
 
 export function CopyToDateAction({ onDuplicate }: Props) {
   const theme = useTheme();
+  // The native picker follows the device appearance unless told otherwise —
+  // see the note on `picker` below.
+  const colorScheme = useAppColorScheme();
   const [targetDate, setTargetDate] = useState(tomorrow());
 
   return (
@@ -34,6 +37,8 @@ export function CopyToDateAction({ onDuplicate }: Props) {
         value={targetDate}
         mode="date"
         style={styles.picker}
+        themeVariant={colorScheme}
+        accentColor={theme.primary}
         onValueChange={(_, date) => setTargetDate(date)}
       />
       <View style={styles.row}>
@@ -59,6 +64,10 @@ const styles = StyleSheet.create({
   },
   // See `DatePickerWidth` — a content-sized box is what puts the picker flush
   // left rather than centred.
+  //
+  // `themeVariant` is what stops the chip rendering in the device's appearance
+  // while the modal around it renders in the app's — the same fix `SlotForm`
+  // carries, and this picker sits on the same screen as those two.
   picker: {
     width: DatePickerWidth,
   },

@@ -22,6 +22,7 @@ export function useNotificationSync(): void {
   const updateSlot = useItineraryStore((state) => state.updateSlot);
   const rainAlertsEnabled = useSettingsStore((state) => state.rainAlertsEnabled);
   const quietHours = useSettingsStore((state) => state.quietHours);
+  const rainLeadMinutes = useSettingsStore((state) => state.rainLeadMinutes);
   const digest = useSettingsStore((state) => state.digest);
   const digestNotificationId = useSettingsStore(
     (state) => state.digestNotificationId,
@@ -33,7 +34,7 @@ export function useNotificationSync(): void {
   const latest = useRef<NotificationSyncContext>({
     plans,
     now: new Date(),
-    settings: { rainAlertsEnabled, quietHours, digest },
+    settings: { rainAlertsEnabled, rainLeadMinutes, quietHours, digest },
     digestNotificationId,
     updateSlot,
     setDigestNotificationId,
@@ -43,7 +44,7 @@ export function useNotificationSync(): void {
     latest.current = {
       plans,
       now: new Date(),
-      settings: { rainAlertsEnabled, quietHours, digest },
+      settings: { rainAlertsEnabled, rainLeadMinutes, quietHours, digest },
       digestNotificationId,
       updateSlot,
       setDigestNotificationId,
@@ -51,6 +52,7 @@ export function useNotificationSync(): void {
   }, [
     plans,
     rainAlertsEnabled,
+    rainLeadMinutes,
     quietHours,
     digest,
     digestNotificationId,

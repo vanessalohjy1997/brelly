@@ -15,7 +15,7 @@ function slot(overrides: Partial<ItinerarySlot> = {}): ItinerarySlot {
   };
 }
 
-const ENABLED = { rainAlertsEnabled: true };
+const ENABLED = { rainAlertsEnabled: true, rainLeadMinutes: 45 };
 
 describe("planNotificationResync", () => {
   it("schedules when rain appeared in a forecast that had no alert", () => {
@@ -107,7 +107,7 @@ describe("planNotificationResync", () => {
     const target = slot({ notificationId: "notif-1" });
     const actions = planNotificationResync(
       [{ date: "2026-07-31", slot: target, forecastText: "Thundery Showers" }],
-      { rainAlertsEnabled: false },
+      { rainAlertsEnabled: false, rainLeadMinutes: 45 },
     );
 
     expect(actions.map((a) => a.type)).toEqual(["cancel"]);
@@ -183,5 +183,98 @@ describe("planNotificationResync", () => {
 
   it("returns nothing for an empty list", () => {
     expect(planNotificationResync([], ENABLED)).toEqual([]);
+  });
+});
+
+describe("planNotificationResync — lead time changes", () => {
+  const RAINY = { date: "2026-07-31", forecastText: "Thundery Showers" };
+
+  it("leaves a matching alert alone", () => {
+    const target = slot({
+      notificationId: "notif-1",
+      notificationLeadMinutes: 45,
+    });
+
+    expect(planNotificationResync([{ ...RAINY, slot: target }], ENABLED)).toEqual(
+      [],
+    );
+  });
+
+  it("reschedules an alert whose lead time no longer matches the setting", () => {
+    // Without this the setting would silently only apply to plans created
+    // after it changed: the forecast is unchanged, so the old logic saw
+    // "has an alert, still rainy" and did nothing.
+    const target = slot({
+      notificationId: "notif-1",
+      notificationLeadMinutes: 45,
+    });
+
+    const actions = planNotificationResync([{ ...RAINY, slot: target }], {
+      rainAlertsEnabled: true,
+      rainLeadMinutes: 15,
+    });
+
+    expect(actions).toEqual([
+      {
+        type: "cancel",
+        date: "2026-07-31",
+        slot: target,
+        notificationId: "notif-1",
+      },
+      { type: "schedule", date: "2026-07-31", slot: target },
+    ]);
+  });
+
+  it("treats a slot with no stamp as the old 45-minute default", () => {
+    // Slots created before the setting existed carry no lead time. Reading
+    // that as "unknown" would cancel and reschedule every alert on the first
+    // sync after this shipped.
+    const legacy = slot({ notificationId: "notif-1" });
+
+    expect(planNotificationResync([{ ...RAINY, slot: legacy }], ENABLED)).toEqual(
+      [],
+    );
+  });
+
+  it("does reschedule a legacy slot once the setting moves off 45", () => {
+    const legacy = slot({ notificationId: "notif-1" });
+
+    const actions = planNotificationResync([{ ...RAINY, slot: legacy }], {
+      rainAlertsEnabled: true,
+      rainLeadMinutes: 60,
+    });
+
+    expect(actions.map((a) => a.type)).toEqual(["cancel", "schedule"]);
+  });
+
+  it("still just cancels a muted slot, whatever its lead time", () => {
+    const muted = slot({
+      notificationId: "notif-1",
+      notificationLeadMinutes: 45,
+      notificationsMuted: true,
+    });
+
+    const actions = planNotificationResync([{ ...RAINY, slot: muted }], {
+      rainAlertsEnabled: true,
+      rainLeadMinutes: 15,
+    });
+
+    expect(actions.map((a) => a.type)).toEqual(["cancel"]);
+  });
+
+  it("does not reschedule on a lead change when the forecast is unusable", () => {
+    // A failed fetch is not evidence about the weather; touching the alert
+    // here would let a network blip drop one the user is relying on.
+    const target = slot({
+      notificationId: "notif-1",
+      notificationLeadMinutes: 45,
+    });
+
+    const actions = planNotificationResync(
+      [{ date: "2026-07-31", slot: target, forecastText: null }],
+      { rainAlertsEnabled: true, rainLeadMinutes: 15 },
+    );
+
+    expect(actions).toEqual([]);
   });
 });

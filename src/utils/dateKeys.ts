@@ -17,3 +17,27 @@ export function toDateKey(date: Date): string {
 export function todayKey(now: Date = new Date()): string {
   return toDateKey(now);
 }
+
+/**
+ * Parses a "YYYY-MM-DD" key back into a *local* date, at midnight.
+ *
+ * `new Date("2026-08-01")` is not this: the string form is parsed as UTC
+ * midnight, so west of Greenwich it formats as the previous day. The
+ * component form is local by definition — the same reason `toDateKey` exists.
+ */
+export function parseDateKey(key: string): Date {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * The key `days` calendar days after `key` — negative to go back.
+ *
+ * Day arithmetic goes through `Date` rather than the string, so month ends,
+ * leap years and DST shifts are the platform's problem rather than ours.
+ */
+export function shiftDays(key: string, days: number): string {
+  const date = parseDateKey(key);
+  date.setDate(date.getDate() + days);
+  return toDateKey(date);
+}

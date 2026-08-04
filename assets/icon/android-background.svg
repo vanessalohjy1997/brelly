@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!-- Android adaptive icon background: the light-hook gradient on its own, so
+     the Android icon reads as the same artwork as the iOS light icon. -->
+<defs><linearGradient id="bg-android" x1="0" y1="0" x2="0.55" y2="1">
+  <stop offset="0" stop-color="#F6F2FD"/><stop offset="1" stop-color="#E3DAF4"/>
+</linearGradient></defs>
+<rect width="1024" height="1024" fill="url(#bg-android)"/>
+</svg>

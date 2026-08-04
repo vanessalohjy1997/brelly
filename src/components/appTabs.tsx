@@ -6,10 +6,20 @@ export default function AppTabs() {
   const colors = useTheme();
 
   return (
+    // The selected tab is the app's `primary` violet on both platforms — the
+    // same colour every other action in the app uses. Unselected tabs sit on
+    // `textSecondary` rather than a faded `text`, so the pair reads as a
+    // deliberate contrast and both clear AA on `background`.
     <NativeTabs
       backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}
+      tintColor={colors.primary}
+      iconColor={{ default: colors.textSecondary, selected: colors.primary }}
+      labelStyle={{
+        default: { color: colors.textSecondary },
+        selected: { color: colors.primary },
+      }}
+      indicatorColor={colors.backgroundSelected}
+      rippleColor={colors.backgroundSelected}
     >
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Today</NativeTabs.Trigger.Label>

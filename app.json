@@ -4,35 +4,43 @@
     "slug": "brelly",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon/light-hook.png",
     "scheme": "brelly",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": {
+        "light": "./assets/icon/light-hook.png",
+        "dark": "./assets/icon/dusk-hook.png",
+        "tinted": "./assets/icon/tinted-hook.png"
+      },
       "bundleIdentifier": "com.anonymous.brelly"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#ECE6F8",
+        "foregroundImage": "./assets/icon/android-foreground.png",
+        "backgroundImage": "./assets/icon/android-background.png",
+        "monochromeImage": "./assets/icon/android-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.brelly"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/icon/favicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#F8F6FB",
+          "image": "./assets/icon/splash-hook.png",
+          "imageWidth": 180,
+          "dark": {
+            "backgroundColor": "#120F1A",
+            "image": "./assets/icon/splash-hook-dark.png"
+          }
         }
       ],
       [
@@ -41,7 +49,19 @@
           "locationWhenInUsePermission": "Brelly uses your location to prefill the location field when adding a plan and to show the weather nearby when you have no plans."
         }
       ],
-      "expo-notifications"
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Brelly reads your calendar so you can turn events into plans, and writes to it so your plans show up alongside everything else."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon/notification-icon.png",
+          "color": "#5B44C4"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

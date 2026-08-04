@@ -3,41 +3,58 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
-import { SortableItineraryList } from "@/components/itinerary/SortableItineraryList";
+import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { LiveConditionsCard } from "@/components/weather/LiveConditionsCard";
 import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
+import { NearbyWeatherPrompt } from "@/components/weather/NearbyWeatherPrompt";
 import {
   BottomTabInset,
   HeaderHeight,
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
-import { useAirQuality } from "@/hooks/useAirQuality";
+import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useLiveConditions } from "@/hooks/useLiveConditions";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
+import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
-import { cancelAndDeleteSlot } from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { todayKey } from "@/utils/dateKeys";
-import { findCurrentOrNextSlot, findPlanByDate } from "@/utils/planSelectors";
+import {
+  findCurrentOrNextSlot,
+  findPlanByDate,
+  sortSlotsByStart,
+} from "@/utils/planSelectors";
+import { splitPlansByTime } from "@/utils/splitPlansByTime";
 
 export default function TodayScreen() {
   const colors = useTheme();
   // Subscribing to `plans` (not to a getter, whose identity never changes) is
   // what makes this screen re-render when a plan is added or edited.
   const plans = useItineraryStore((state) => state.plans);
-  const reorderSlots = useItineraryStore((state) => state.reorderSlots);
-  const deleteSlot = useItineraryStore((state) => state.deleteSlot);
-  const todaysPlan = findPlanByDate(plans, todayKey());
-  const hasSlotsToday = !!todaysPlan && todaysPlan.slots.length > 0;
+  const deleteWithUndo = useDeleteSlotWithUndo();
+
+  const now = new Date();
+  const todaysDate = todayKey(now);
+  // Today, but only the part of it that hasn't happened yet. A stop drops off
+  // this list the minute it ends and turns up in Past plans — the screen is
+  // for what's ahead, and a finished stop's forecast is no longer a question.
+  const { upcoming, past } = splitPlansByTime(plans, now);
+  const todaysPlan = findPlanByDate(upcoming, todaysDate);
+  const hasSlotsToday = !!todaysPlan;
+  // Told apart from "nothing planned" in the empty state below: a day whose
+  // stops have all finished is a different situation from an empty one, and
+  // saying so is what stops the archive from looking like data loss.
+  const dayIsDone = !hasSlotsToday && !!findPlanByDate(past, todaysDate);
   const {
     isAvailable: hasWeatherNearby,
     forecasts: nearbyForecasts,
-    region: nearbyRegion,
     coords: nearbyCoords,
+    permission: locationPermission,
+    requestPermission: requestLocation,
   } = useNearbyForecast(!hasSlotsToday);
 
   // With plans, the live readings are anchored to the stop the user is at (or
@@ -45,18 +62,19 @@ export default function TodayScreen() {
   // own coordinates. Without plans, they follow the device, reusing the
   // permission the empty state already asks for.
   const focusSlot = todaysPlan
-    ? findCurrentOrNextSlot(todaysPlan.slots, new Date())
+    ? findCurrentOrNextSlot(todaysPlan.slots, now)
     : undefined;
   const conditionsPoint = focusSlot
     ? { latitude: focusSlot.latitude, longitude: focusSlot.longitude }
     : nearbyCoords;
-  const conditionsRegion = focusSlot ? focusSlot.neaRegion : nearbyRegion;
 
   const { data: liveConditions } = useLiveConditions(
     conditionsPoint?.latitude ?? null,
     conditionsPoint?.longitude ?? null,
   );
-  const { data: airQuality } = useAirQuality(conditionsRegion);
+  // No region, no permission gate — NEA publishes one island-wide UV
+  // figure, so this resolves even with no plans and no location.
+  const { data: uvIndex } = useUvIndex();
   const { isRefreshing, refresh } = useWeatherRefresh();
 
   const today = new Date().toLocaleDateString("en-SG", {
@@ -76,15 +94,36 @@ export default function TodayScreen() {
               {today}
             </ThemedText>
           </ThemedView>
-          <Pressable
-            style={[
-              styles.addButton,
-              { backgroundColor: colors.backgroundElement },
-            ]}
-            onPress={() => router.push("/plan/new")}
-          >
-            <ThemedText style={styles.addButtonText}>+ Add</ThemedText>
-          </Pressable>
+          <ThemedView style={styles.headerActions}>
+            {/* Settings used to be reachable only from the Plans header, which
+                is not where anyone spends their time — the app opens here. */}
+            <Pressable
+              style={[
+                styles.addButton,
+                { backgroundColor: colors.backgroundElement },
+              ]}
+              onPress={() => router.push("/settings")}
+              hitSlop={8}
+              accessibilityLabel="Settings"
+            >
+              <Icon
+                name={{ ios: "gearshape.fill", android: "settings" }}
+                size={18}
+                tintColor={colors.text}
+              />
+            </Pressable>
+            <Pressable
+              style={[styles.addButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/plan/new")}
+              accessibilityRole="button"
+            >
+              <ThemedText
+                style={[styles.addButtonText, { color: colors.onPrimary }]}
+              >
+                + Add
+              </ThemedText>
+            </Pressable>
+          </ThemedView>
         </ThemedView>
 
         {/* Slot list or empty state */}
@@ -100,13 +139,25 @@ export default function TodayScreen() {
               />
             }
           >
-            {hasWeatherNearby && (
+            {hasWeatherNearby ? (
               <>
-                <NearbyForecastPreview forecasts={nearbyForecasts} />
+                <NearbyForecastPreview
+                  forecasts={nearbyForecasts}
+                  uvIndex={uvIndex?.value}
+                />
                 <LiveConditionsCard
                   conditions={liveConditions}
-                  airQuality={airQuality}
+                  uvIndex={uvIndex}
                 />
+              </>
+            ) : (
+              <>
+                <NearbyWeatherPrompt
+                  permission={locationPermission}
+                  onRequest={requestLocation}
+                />
+                {/* UV needs no location, so it stands on its own here. */}
+                <LiveConditionsCard conditions={null} uvIndex={uvIndex} />
               </>
             )}
             <ThemedView style={styles.emptyState}>
@@ -120,20 +171,27 @@ export default function TodayScreen() {
                   style={styles.emptyIcon}
                 />
               )}
-              <ThemedText type="subtitle">No plans yet</ThemedText>
+              <ThemedText type="subtitle">
+                {dayIsDone ? "Nothing left today" : "No plans yet"}
+              </ThemedText>
               <ThemedText
                 style={{ color: colors.textSecondary, textAlign: "center" }}
               >
-                Add a stop and Brelly will show the weather for it.
+                {dayIsDone
+                  ? "Every stop today has finished. You'll find them in Past plans."
+                  : "Add a stop and Brelly will show the weather for it."}
               </ThemedText>
               <Pressable
                 style={[
                   styles.emptyStateCta,
-                  { backgroundColor: colors.backgroundElement },
+                  { backgroundColor: colors.primary },
                 ]}
                 onPress={() => router.push("/plan/new")}
+                accessibilityRole="button"
               >
-                <ThemedText style={styles.addButtonText}>
+                <ThemedText
+                  style={[styles.addButtonText, { color: colors.onPrimary }]}
+                >
                   + Add a plan
                 </ThemedText>
               </Pressable>
@@ -153,15 +211,22 @@ export default function TodayScreen() {
           >
             <LiveConditionsCard
               conditions={liveConditions}
-              airQuality={airQuality}
+              uvIndex={uvIndex}
             />
-            <SortableItineraryList
-              slots={todaysPlan.slots}
-              onReorder={(slots) => reorderSlots(todaysPlan.date, slots)}
-              onDeleteSlot={(slot) =>
-                cancelAndDeleteSlot(deleteSlot, todaysPlan.date, slot)
-              }
-            />
+            {/* Start time first, always — a day is read as a timeline, and
+                the drag-to-reorder this replaces produced an order that
+                contradicted the clock and the Plans tab both. */}
+            {sortSlotsByStart(todaysPlan.slots).map((slot) => (
+              <ItineraryCard
+                key={slot.id}
+                slot={slot}
+                // The same slot the live readings above are anchored to, so
+                // the outlined card and the "Right now" figures are talking
+                // about one place rather than two.
+                emphasis={slot.id === focusSlot?.id}
+                onDelete={() => deleteWithUndo(todaysPlan.date, slot)}
+              />
+            ))}
           </ScrollView>
         )}
       </SafeAreaView>
@@ -185,6 +250,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     height: HeaderHeight,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: Spacing.two,
+    backgroundColor: "transparent",
   },
   addButton: {
     paddingHorizontal: Spacing.three,

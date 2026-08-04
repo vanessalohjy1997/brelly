@@ -17,6 +17,7 @@ export function useRainNotificationScheduler() {
   const updateSlot = useItineraryStore((state) => state.updateSlot);
   const rainAlertsEnabled = useSettingsStore((state) => state.rainAlertsEnabled);
   const quietHours = useSettingsStore((state) => state.quietHours);
+  const rainLeadMinutes = useSettingsStore((state) => state.rainLeadMinutes);
 
   return useCallback(
     async (date: string, slot: ItinerarySlot) => {
@@ -30,11 +31,18 @@ export function useRainNotificationScheduler() {
       );
       const notificationId = await scheduleRainNotification(slot, forecast, {
         quietHours,
+        leadMinutes: rainLeadMinutes,
       });
       if (notificationId) {
-        updateSlot(date, slot.id, { notificationId });
+        updateSlot(date, slot.id, {
+          notificationId,
+          // Stamped so a later lead-time change can tell which alerts are
+          // stale — the resync otherwise sees "has an alert, still rainy" and
+          // leaves an alert scheduled against the old lead time forever.
+          notificationLeadMinutes: rainLeadMinutes,
+        });
       }
     },
-    [updateSlot, rainAlertsEnabled, quietHours],
+    [updateSlot, rainAlertsEnabled, quietHours, rainLeadMinutes],
   );
 }

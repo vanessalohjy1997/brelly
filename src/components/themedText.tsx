@@ -27,7 +27,10 @@ export function ThemedText({
   return (
     <Text
       style={[
-        { color: theme[themeColor ?? "text"] },
+        // `linkPrimary` has no colour of its own in `styles` — it takes the
+        // theme's primary, so it adapts per theme instead of being one
+        // hardcoded violet that was marginal for contrast in both.
+        { color: theme[themeColor ?? (type === "linkPrimary" ? "primary" : "text")] },
         type === "default" && styles.default,
         type === "title" && styles.title,
         type === "small" && styles.small,
@@ -59,14 +62,19 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: 500,
   },
+  // Screen headers ("Today", "Plans") and empty-state headlines. Both were a
+  // step larger (48/52 and 32/44) and read as oversized on a phone — 48pt is
+  // wider than the platform's own large title, and the empty state's headline
+  // was competing with it. These sit at roughly one step down each; the floor
+  // for any size in this file is 11 (see the Dynamic Type note in UX.md).
   title: {
-    fontSize: 48,
+    fontSize: 34,
     fontWeight: 600,
-    lineHeight: 52,
+    lineHeight: 40,
   },
   subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: 600,
   },
   link: {
@@ -76,7 +84,7 @@ const styles = StyleSheet.create({
   linkPrimary: {
     lineHeight: 30,
     fontSize: 14,
-    color: "#7C6FD0",
+    fontWeight: 600,
   },
   code: {
     fontFamily: Fonts.mono,

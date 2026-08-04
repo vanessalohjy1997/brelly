@@ -3,8 +3,11 @@ import * as Notifications from "expo-notifications";
 import {
   cancelAndDeleteSlot,
   cancelNotification,
+  countScheduledNotifications,
   scheduleDigestNotification,
   scheduleRainNotification,
+  sendTestNotification,
+  TEST_NOTIFICATION_DELAY_SECONDS,
 } from "@/services/notifications";
 
 jest.mock("expo-notifications", () => ({
@@ -12,8 +15,9 @@ jest.mock("expo-notifications", () => ({
   requestPermissionsAsync: jest.fn(),
   scheduleNotificationAsync: jest.fn(),
   cancelScheduledNotificationAsync: jest.fn(),
+  getAllScheduledNotificationsAsync: jest.fn(),
   setNotificationChannelAsync: jest.fn(),
-  SchedulableTriggerInputTypes: { DATE: "date" },
+  SchedulableTriggerInputTypes: { DATE: "date", TIME_INTERVAL: "timeInterval" },
   AndroidImportance: { DEFAULT: 3 },
 }));
 
@@ -21,6 +25,8 @@ const mockGetPermissions = Notifications.getPermissionsAsync as jest.Mock;
 const mockRequestPermissions = Notifications.requestPermissionsAsync as jest.Mock;
 const mockSchedule = Notifications.scheduleNotificationAsync as jest.Mock;
 const mockCancel = Notifications.cancelScheduledNotificationAsync as jest.Mock;
+const mockGetAllScheduled =
+  Notifications.getAllScheduledNotificationsAsync as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -252,5 +258,53 @@ describe("cancelAndDeleteSlot", () => {
 
     expect(deleteSlot).toHaveBeenCalledWith("2026-07-30", "slot-1");
     expect(mockCancel).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendTestNotification", () => {
+  it("schedules one alert a few seconds out", async () => {
+    // Not immediately: a notification fired while the app is in the
+    // foreground may not present a banner at all, so an alert that works
+    // would look broken.
+    mockGetPermissions.mockResolvedValue({ granted: true });
+
+    const sent = await sendTestNotification();
+
+    expect(sent).toBe(true);
+    expect(mockSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: expect.objectContaining({
+          type: "timeInterval",
+          seconds: TEST_NOTIFICATION_DELAY_SECONDS,
+          repeats: false,
+        }),
+      }),
+    );
+  });
+
+  it("reports failure rather than claiming a send when permission is refused", async () => {
+    mockGetPermissions.mockResolvedValue({ granted: false });
+    mockRequestPermissions.mockResolvedValue({ granted: false });
+
+    const sent = await sendTestNotification();
+
+    expect(sent).toBe(false);
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+});
+
+describe("countScheduledNotifications", () => {
+  it("counts what the OS actually has queued", () => {
+    // "Rain alerts: on" says what the app intends; this says what is really
+    // waiting to be delivered, and the two come apart routinely.
+    mockGetAllScheduled.mockResolvedValue([{ identifier: "a" }, { identifier: "b" }]);
+
+    return expect(countScheduledNotifications()).resolves.toBe(2);
+  });
+
+  it("is zero when nothing is queued", () => {
+    mockGetAllScheduled.mockResolvedValue([]);
+
+    return expect(countScheduledNotifications()).resolves.toBe(0);
   });
 });

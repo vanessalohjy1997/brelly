@@ -30,9 +30,16 @@ export type ResyncAction =
  * Slots that are already correct produce no action, so an app launch with
  * nothing to change issues no notification calls at all.
  */
+/**
+ * The lead time slots created before it became a setting were scheduled
+ * against. Treating those as 45 rather than "unknown" is what stops the first
+ * sync after this shipped from cancelling and rescheduling every alert.
+ */
+const LEGACY_LEAD_MINUTES = 45;
+
 export function planNotificationResync(
   entries: ResyncEntry[],
-  options: { rainAlertsEnabled: boolean },
+  options: { rainAlertsEnabled: boolean; rainLeadMinutes: number },
 ): ResyncAction[] {
   const actions: ResyncAction[] = [];
 
@@ -62,7 +69,19 @@ export function planNotificationResync(
     if (forecastText === null) continue;
 
     if (shouldNotifyForRain(forecastText)) {
-      if (!hasAlert) actions.push({ type: "schedule", date, slot });
+      if (!hasAlert) {
+        actions.push({ type: "schedule", date, slot });
+        continue;
+      }
+
+      // An alert scheduled against a different lead time is wrong even though
+      // the forecast hasn't changed — cancel it and schedule a fresh one, or
+      // the setting silently only applies to plans created after it changed.
+      const scheduledLead = slot.notificationLeadMinutes ?? LEGACY_LEAD_MINUTES;
+      if (scheduledLead !== options.rainLeadMinutes) {
+        cancel();
+        actions.push({ type: "schedule", date, slot });
+      }
     } else {
       cancel();
     }

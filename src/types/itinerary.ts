@@ -1,3 +1,5 @@
+import type { SlotKind } from "@/utils/slotKind";
+
 import { NeaRegion } from "./weather";
 
 export type ItinerarySlot = {
@@ -12,9 +14,27 @@ export type ItinerarySlot = {
   // Set after a rain notification is scheduled for this slot, so it can be
   // cancelled later (on delete, or before rescheduling on edit).
   notificationId?: string;
+  // The lead time the scheduled alert was created against. Without this the
+  // resync sees "has an alert, still rainy" and leaves an alert scheduled at
+  // the old lead time forever, so changing the setting would only ever apply
+  // to plans created afterwards. Absent on slots predating the setting, which
+  // reads as "the old 45-minute default" — no store migration needed.
+  notificationLeadMinutes?: number;
   // Per-slot opt-out. Absent on slots created before this existed, which
   // reads as "not muted" — no store migration needed.
   notificationsMuted?: boolean;
+  // Whether this stop is under a roof. Absent on slots created before this
+  // existed, and on calendar imports, which reads as "outdoor" — the answer
+  // that leaves rain alerts behaving exactly as they did. Read it through
+  // `resolveSlotKind` rather than comparing directly. No store migration
+  // needed.
+  kind?: SlotKind;
+  // The routine that filled this day in. Absent on hand-made stops, on
+  // calendar imports, and on a stop the user edited or deleted with "this day
+  // only" — detaching clears it, which is what makes that choice permanent.
+  // Absent reads as "belongs to nobody", the behaviour every slot had before
+  // routines existed, so no store migration is needed.
+  routineId?: string;
 };
 
 export type DayPlan = {

@@ -5,49 +5,75 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
+import {
+  PlanSearchField,
+  SearchThreshold,
+} from "@/components/itinerary/PlanSearchField";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
+import { NearbyWeatherPrompt } from "@/components/weather/NearbyWeatherPrompt";
 import {
   BottomTabInset,
   HeaderHeight,
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
+import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
-import { cancelAndDeleteSlot } from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
 import type { ItinerarySlot } from "@/types/itinerary";
-import { toDateKey, todayKey } from "@/utils/dateKeys";
-import { splitPlansByDate } from "@/utils/splitPlansByDate";
+import { todayKey } from "@/utils/dateKeys";
+import { countSlots, filterPlans } from "@/utils/filterPlans";
+import { formatPlanDate } from "@/utils/formatPlanDate";
+import { sortSlotsByStart } from "@/utils/planSelectors";
+import { splitPlansByTime } from "@/utils/splitPlansByTime";
 
-function toSections(plans: { date: string; slots: ItinerarySlot[] }[]) {
+function toSections(
+  plans: { date: string; slots: ItinerarySlot[] }[],
+  today: string,
+) {
   return plans.map((plan) => ({
-    title: formatSectionDate(plan.date),
+    title: formatPlanDate(plan.date, today),
     date: plan.date,
-    data: plan.slots,
+    // Chronological, like everywhere else. Installs that predate the removal
+    // of drag-to-reorder still have a hand-dragged order persisted.
+    data: sortSlotsByStart(plan.slots),
   }));
 }
 
 export default function PlansScreen() {
   const theme = useTheme();
   const plans = useItineraryStore((state) => state.plans);
-  const deleteSlot = useItineraryStore((state) => state.deleteSlot);
-  const [showPast, setShowPast] = useState(false);
+  const deleteWithUndo = useDeleteSlotWithUndo();
   const { isRefreshing, refresh } = useWeatherRefresh();
+  const [query, setQuery] = useState("");
 
   const today = todayKey();
-  const { upcoming, past } = splitPlansByDate(plans, today);
+  // Only what's still ahead renders here. Finished stops are not deleted —
+  // they move to the Past plans screen behind the header's archive button, so
+  // this list stops growing forever and reads as "what's coming".
+  const { upcoming, past } = splitPlansByTime(plans, new Date());
 
-  const sections = showPast
-    ? [...toSections(upcoming), ...toSections(past)]
-    : toSections(upcoming);
+  const matching = filterPlans(upcoming, query);
+  const sections = toSections(matching, today);
 
-  const hasAnyPlans = upcoming.length > 0 || past.length > 0;
-  const { isAvailable: hasWeatherNearby, forecasts: nearbyForecasts } =
-    useNearbyForecast(!hasAnyPlans);
+  const hasUpcoming = upcoming.length > 0;
+  const hasPast = past.length > 0;
+  // The field earns its space once the list is past a screen or two — and then
+  // stays while a query is live, so narrowing the list to two results can't
+  // pull out from under the control that narrowed it.
+  const showSearch =
+    countSlots(upcoming) >= SearchThreshold || query.length > 0;
+  const hasMatches = sections.length > 0;
+  const {
+    isAvailable: hasWeatherNearby,
+    forecasts: nearbyForecasts,
+    permission: locationPermission,
+    requestPermission: requestLocation,
+  } = useNearbyForecast(!hasUpcoming);
 
   return (
     <ThemedView style={styles.container}>
@@ -55,6 +81,26 @@ export default function PlansScreen() {
         <ThemedView style={styles.header}>
           <ThemedText type="title">Plans</ThemedText>
           <ThemedView style={styles.headerActions}>
+            {/* Only once there is an archive to open. A button that leads to
+                an empty screen is chrome, and the header already carries
+                two. */}
+            {hasPast && (
+              <Pressable
+                style={[
+                  styles.addButton,
+                  { backgroundColor: theme.backgroundElement },
+                ]}
+                onPress={() => router.push("/past")}
+                hitSlop={8}
+                accessibilityLabel="Past plans"
+              >
+                <Icon
+                  name={{ ios: "clock.arrow.circlepath", android: "history" }}
+                  size={18}
+                  tintColor={theme.text}
+                />
+              </Pressable>
+            )}
             <Pressable
               style={[
                 styles.addButton,
@@ -71,21 +117,38 @@ export default function PlansScreen() {
               />
             </Pressable>
             <Pressable
-              style={[
-                styles.addButton,
-                { backgroundColor: theme.backgroundElement },
-              ]}
+              style={[styles.addButton, { backgroundColor: theme.primary }]}
               onPress={() => router.push("/plan/new")}
+              accessibilityRole="button"
             >
-              <ThemedText style={styles.addButtonText}>+ Add</ThemedText>
+              <ThemedText
+                style={[styles.addButtonText, { color: theme.onPrimary }]}
+              >
+                + Add
+              </ThemedText>
             </Pressable>
           </ThemedView>
         </ThemedView>
 
-        {!hasAnyPlans ? (
+        {hasUpcoming && showSearch && (
+          <ThemedView style={styles.searchRow}>
+            <PlanSearchField
+              value={query}
+              onChange={setQuery}
+              placeholder="Search plans"
+            />
+          </ThemedView>
+        )}
+
+        {!hasUpcoming ? (
           <>
-            {hasWeatherNearby && (
+            {hasWeatherNearby ? (
               <NearbyForecastPreview forecasts={nearbyForecasts} />
+            ) : (
+              <NearbyWeatherPrompt
+                permission={locationPermission}
+                onRequest={requestLocation}
+              />
             )}
             <ThemedView style={styles.emptyState}>
               {/* Without a forecast card above, the empty state needs its own
@@ -98,25 +161,65 @@ export default function PlansScreen() {
                   style={styles.emptyIcon}
                 />
               )}
-              <ThemedText type="subtitle">Nothing planned</ThemedText>
+              {/* "Nothing planned" would be untrue for someone whose plans
+                  have all simply happened — they're in the archive, one tap
+                  away in the header. */}
+              <ThemedText type="subtitle">
+                {hasPast ? "Nothing upcoming" : "Nothing planned"}
+              </ThemedText>
               <ThemedText
                 style={{ color: theme.textSecondary, textAlign: "center" }}
               >
-                Add a plan for today or a future day to see it here.
+                {hasPast
+                  ? "Everything you planned has been and gone. Add another, or look back through Past plans."
+                  : "Add a plan for today or a future day to see it here."}
               </ThemedText>
               <Pressable
                 style={[
                   styles.emptyStateCta,
-                  { backgroundColor: theme.backgroundElement },
+                  { backgroundColor: theme.primary },
                 ]}
                 onPress={() => router.push("/plan/new")}
+                accessibilityRole="button"
               >
-                <ThemedText style={styles.addButtonText}>
+                <ThemedText
+                  style={[styles.addButtonText, { color: theme.onPrimary }]}
+                >
                   + Add a plan
                 </ThemedText>
               </Pressable>
             </ThemedView>
           </>
+        ) : !hasMatches ? (
+          // Distinct from the empty states above on purpose: the user has
+          // plans, they just aren't these. Saying "Nothing planned" here would
+          // read as data loss for the length of a mistyped query.
+          <ThemedView style={styles.emptyState}>
+            <Icon
+              name={{ ios: "magnifyingglass", android: "search" }}
+              size={48}
+              tintColor={theme.textSecondary}
+              style={styles.emptyIcon}
+            />
+            <ThemedText type="subtitle">No matches</ThemedText>
+            <ThemedText
+              style={{ color: theme.textSecondary, textAlign: "center" }}
+            >
+              Nothing upcoming matches “{query.trim()}”. Finished stops are in
+              Past plans.
+            </ThemedText>
+            <Pressable
+              style={[styles.emptyStateCta, { backgroundColor: theme.primary }]}
+              onPress={() => setQuery("")}
+              accessibilityRole="button"
+            >
+              <ThemedText
+                style={[styles.addButtonText, { color: theme.onPrimary }]}
+              >
+                Clear search
+              </ThemedText>
+            </Pressable>
+          </ThemedView>
         ) : (
           <SectionList
             sections={sections}
@@ -124,37 +227,35 @@ export default function PlansScreen() {
             renderItem={({ item, section }) => (
               <ItineraryCard
                 slot={item}
-                onDelete={() => cancelAndDeleteSlot(deleteSlot, section.date, item)}
+                onDelete={() => deleteWithUndo(section.date, item)}
               />
             )}
             renderSectionHeader={({ section }) => (
               <ThemedView style={styles.sectionHeader}>
                 <ThemedText type="smallBold">{section.title}</ThemedText>
+                {/* `/plan/new?date=` has been wired up since the form was
+                    written and nothing ever passed it, so adding to next
+                    Saturday meant opening the form and hand-scrolling a
+                    datetime picker to a day already named on this screen. */}
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/plan/new",
+                      params: { date: section.date },
+                    })
+                  }
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add a plan on ${section.title}`}
+                >
+                  <Icon
+                    name={{ ios: "plus", android: "add" }}
+                    size={16}
+                    tintColor={theme.textSecondary}
+                  />
+                </Pressable>
               </ThemedView>
             )}
-            ListHeaderComponent={
-              upcoming.length === 0 ? (
-                <ThemedText
-                  style={{ color: theme.textSecondary, paddingBottom: Spacing.two }}
-                >
-                  Nothing upcoming.
-                </ThemedText>
-              ) : null
-            }
-            ListFooterComponent={
-              past.length > 0 ? (
-                <Pressable
-                  onPress={() => setShowPast((current) => !current)}
-                  style={styles.pastToggle}
-                >
-                  <ThemedText themeColor="textSecondary">
-                    {showPast
-                      ? "Hide past plans"
-                      : `Show ${past.length} past plan${past.length === 1 ? "" : "s"}`}
-                  </ThemedText>
-                </Pressable>
-              ) : null
-            }
             contentContainerStyle={styles.list}
             stickySectionHeadersEnabled={false}
             showsVerticalScrollIndicator={false}
@@ -170,20 +271,6 @@ export default function PlansScreen() {
       </SafeAreaView>
     </ThemedView>
   );
-}
-
-function formatSectionDate(date: string): string {
-  const today = todayKey();
-  const tomorrow = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
-
-  if (date === today) return "Today";
-  if (date === tomorrow) return "Tomorrow";
-
-  return new Date(date).toLocaleDateString("en-SG", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
 }
 
 const styles = StyleSheet.create({
@@ -234,13 +321,15 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     marginTop: Spacing.two,
   },
+  searchRow: {
+    paddingBottom: Spacing.two,
+  },
   sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingBottom: Spacing.two,
     paddingTop: Spacing.three,
-  },
-  pastToggle: {
-    alignItems: "center",
-    paddingVertical: Spacing.three,
   },
   list: {
     gap: Spacing.three,

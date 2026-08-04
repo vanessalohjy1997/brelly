@@ -16,6 +16,7 @@ export type NotificationSyncContext = {
   now: Date;
   settings: {
     rainAlertsEnabled: boolean;
+    rainLeadMinutes: number;
     quietHours: { enabled: boolean; start: string; end: string };
     digest: { enabled: boolean; time: string };
   };
@@ -92,6 +93,7 @@ async function applyRainActions(
 ): Promise<void> {
   const actions = planNotificationResync(entries, {
     rainAlertsEnabled: context.settings.rainAlertsEnabled,
+    rainLeadMinutes: context.settings.rainLeadMinutes,
   });
 
   for (const action of actions) {
@@ -102,6 +104,7 @@ async function applyRainActions(
       });
       context.updateSlot(action.date, action.slot.id, {
         notificationId: undefined,
+        notificationLeadMinutes: undefined,
       });
       continue;
     }
@@ -112,10 +115,16 @@ async function applyRainActions(
     const notificationId = await scheduleRainNotification(
       action.slot,
       entry.forecast,
-      { quietHours: context.settings.quietHours },
+      {
+        quietHours: context.settings.quietHours,
+        leadMinutes: context.settings.rainLeadMinutes,
+      },
     );
     if (notificationId) {
-      context.updateSlot(action.date, action.slot.id, { notificationId });
+      context.updateSlot(action.date, action.slot.id, {
+        notificationId,
+        notificationLeadMinutes: context.settings.rainLeadMinutes,
+      });
     }
   }
 }

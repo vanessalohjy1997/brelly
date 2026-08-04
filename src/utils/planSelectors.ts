@@ -17,6 +17,24 @@ export type FoundSlot = { date: string; slot: ItinerarySlot };
  * `useItineraryStore((s) => s.getTodaysPlan)` selects the function, whose
  * identity never changes, so the component never re-renders when plans do.
  */
+/**
+ * A day's slots in the order they happen.
+ *
+ * This is the app's *only* ordering. Manual drag-to-reorder used to sit
+ * alongside it and the two silently disagreed — Today rendered whatever order
+ * you dragged rows into while Plans rendered the same slots by start time, so
+ * the same day read two different ways. An itinerary is a timeline; an
+ * arrangement that contradicts the clock can only mislead.
+ *
+ * Applied at render as well as on write, because installs that predate the
+ * removal still have a hand-dragged order sitting in MMKV.
+ */
+export function sortSlotsByStart(slots: ItinerarySlot[]): ItinerarySlot[] {
+  return [...slots].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+  );
+}
+
 export function findSlotById(
   plans: DayPlan[],
   slotId: string,
@@ -57,9 +75,7 @@ export function findCurrentOrNextSlot(
   if (slots.length === 0) return undefined;
 
   const time = now.getTime();
-  const byStart = [...slots].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-  );
+  const byStart = sortSlotsByStart(slots);
 
   const current = byStart.find(
     (slot) =>

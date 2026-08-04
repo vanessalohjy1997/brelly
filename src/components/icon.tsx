@@ -14,9 +14,21 @@ type Props = {
   size?: number;
   tintColor?: string;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Set when the icon is the only thing carrying a piece of information (a
+   * muted-alerts bell, say). Left unset the icon stays decorative, which is
+   * right when adjacent text already says the same thing.
+   */
+  accessibilityLabel?: string;
 };
 
-export function Icon({ name, size = 24, tintColor, style }: Props) {
+export function Icon({
+  name,
+  size = 24,
+  tintColor,
+  style,
+  accessibilityLabel,
+}: Props) {
   return (
     <SymbolView
       name={{ ios: name.ios, android: name.android, web: name.android }}
@@ -24,6 +36,8 @@ export function Icon({ name, size = 24, tintColor, style }: Props) {
       tintColor={tintColor}
       type="hierarchical"
       style={style}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityLabel ? "image" : "none"}
     />
   );
 }

@@ -4,16 +4,15 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import type { AirQuality } from "@/hooks/useAirQuality";
+import type { UvIndex } from "@/hooks/useUvIndex";
 import type { LiveConditions } from "@/types/weather";
-import { describePsi } from "@/utils/describePsi";
 import { describeUv } from "@/utils/describeUv";
 import { formatRelativeTimestamp } from "@/utils/formatRelativeTimestamp";
 import { formatWindSpeedKnots } from "@/utils/formatWind";
 
 type Props = {
   conditions: LiveConditions | null | undefined;
-  airQuality: AirQuality | undefined;
+  uvIndex: UvIndex | undefined;
 };
 
 /**
@@ -22,10 +21,10 @@ type Props = {
  * on you". Renders nothing at all when no reading came back, rather than a
  * card full of dashes.
  */
-export function LiveConditionsCard({ conditions, airQuality }: Props) {
+export function LiveConditionsCard({ conditions, uvIndex }: Props) {
   const theme = useTheme();
 
-  const readings = buildReadings(conditions, airQuality);
+  const readings = buildReadings(conditions, uvIndex);
   if (readings.length === 0) return null;
 
   const observedAgo = formatRelativeTimestamp(conditions?.observedAt);
@@ -73,7 +72,7 @@ type Reading = { label: string; value: string };
  */
 export function buildReadings(
   conditions: LiveConditions | null | undefined,
-  airQuality: AirQuality | undefined,
+  uvIndex: UvIndex | undefined,
 ): Reading[] {
   const readings: Reading[] = [];
 
@@ -101,16 +100,14 @@ export function buildReadings(
   const wind = formatWindSpeedKnots(conditions?.windSpeedKn);
   if (wind) readings.push({ label: "Wind", value: wind });
 
-  if (airQuality?.psi != null) {
+  // The five-band WHO scale is a readout, not a verdict — the umbrella
+  // decision on a stop card is binary (see `describeUmbrella`). Colour never
+  // carries the band on its own: the label rides alongside, because the WHO
+  // palette runs green→red, the axis red-green colour blindness collapses.
+  if (uvIndex?.value != null) {
     readings.push({
-      label: `PSI ${airQuality.psi}`,
-      value: describePsi(airQuality.psi).label,
-    });
-  }
-  if (airQuality?.uvIndex != null) {
-    readings.push({
-      label: `UV ${airQuality.uvIndex}`,
-      value: describeUv(airQuality.uvIndex).label,
+      label: `UV ${uvIndex.value}`,
+      value: describeUv(uvIndex.value).label,
     });
   }
 

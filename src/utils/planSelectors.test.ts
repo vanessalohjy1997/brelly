@@ -4,6 +4,7 @@ import {
   findCurrentOrNextSlot,
   findPlanByDate,
   findSlotById,
+  sortSlotsByStart,
   upcomingSlots,
 } from "@/utils/planSelectors";
 
@@ -31,6 +32,50 @@ const PLANS: DayPlan[] = [
   },
   { id: "p2", date: "2026-08-01", slots: [slot("c", "2026-08-01T10:00:00+08:00")] },
 ];
+
+describe("sortSlotsByStart", () => {
+  it("puts an earlier stop before a later one", () => {
+    const evening = slot("evening", "2026-07-31T18:00:00+08:00");
+    const morning = slot("morning", "2026-07-31T09:00:00+08:00");
+
+    expect(sortSlotsByStart([evening, morning])).toEqual([morning, evening]);
+  });
+
+  it("undoes a hand-dragged order left behind in storage", () => {
+    // Installs that predate the removal of drag-to-reorder still have one
+    // persisted, which is why this runs at render and not only on write.
+    const nine = slot("a", "2026-07-31T09:00:00+08:00");
+    const noon = slot("b", "2026-07-31T12:00:00+08:00");
+    const six = slot("c", "2026-07-31T18:00:00+08:00");
+
+    expect(sortSlotsByStart([six, nine, noon])).toEqual([nine, noon, six]);
+  });
+
+  it("orders across midnight by instant, not by wall-clock hour", () => {
+    const lateNight = slot("late", "2026-07-31T23:30:00+08:00");
+    const nextMorning = slot("early", "2026-08-01T07:00:00+08:00");
+
+    expect(sortSlotsByStart([nextMorning, lateNight])).toEqual([
+      lateNight,
+      nextMorning,
+    ]);
+  });
+
+  it("leaves the caller's array alone", () => {
+    const input = [
+      slot("b", "2026-07-31T18:00:00+08:00"),
+      slot("a", "2026-07-31T09:00:00+08:00"),
+    ];
+
+    sortSlotsByStart(input);
+
+    expect(input.map((s) => s.id)).toEqual(["b", "a"]);
+  });
+
+  it("handles a day with nothing on it", () => {
+    expect(sortSlotsByStart([])).toEqual([]);
+  });
+});
 
 describe("findSlotById", () => {
   it("returns the slot with the date of the plan containing it", () => {

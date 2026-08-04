@@ -134,6 +134,60 @@ export async function cancelNotification(notificationId: string): Promise<void> 
 }
 
 /**
+ * How long a test alert waits before firing.
+ *
+ * Long enough to close Settings and put the phone down, short enough that
+ * nobody wonders whether it worked. Firing immediately would show the alert
+ * while the app is in the foreground, which is the one case where the OS may
+ * not present a banner at all — so an alert that works would look broken.
+ */
+export const TEST_NOTIFICATION_DELAY_SECONDS = 5;
+
+/**
+ * Sends one alert now-ish, so a user can find out whether alerts reach them
+ * without waiting for weather.
+ *
+ * The whole value of this feature is firing at the right moment, days after it
+ * was set up, and until now there was no way to build any confidence in that
+ * short of planning something and waiting for rain. Returns false when
+ * permission isn't granted, so the caller can say why nothing happened rather
+ * than claiming a send.
+ */
+export async function sendTestNotification(): Promise<boolean> {
+  const hasPermission = await ensurePermission();
+  if (!hasPermission) return false;
+
+  await ensureAndroidChannel(RAIN_CHANNEL_ID);
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "Brelly alerts are working",
+      body: "This is what a rain alert will look like.",
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: TEST_NOTIFICATION_DELAY_SECONDS,
+      repeats: false,
+      channelId: RAIN_CHANNEL_ID,
+    },
+  });
+  return true;
+}
+
+/**
+ * How many alerts are currently scheduled, excluding the test one above.
+ *
+ * "Rain alerts: on" says what the app intends; this says what is actually
+ * queued with the OS. They come apart routinely and for good reasons — no
+ * upcoming stop looks wet, every stop is muted, the lead time has passed on
+ * the near ones — and the difference is invisible without a number.
+ */
+export async function countScheduledNotifications(): Promise<number> {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  return scheduled.length;
+}
+
+/**
  * Deletes a slot and best-effort cancels its scheduled notification (if
  * any). The delete happens synchronously so the UI feels instant; a failed
  * cancellation just means a stray notification fires once for a plan that
