@@ -33,6 +33,10 @@ yarn-error.*
 # local env files
 .env
 
+# firebase project config (real project identifiers, per-developer/per-project)
+GoogleService-Info.plist
+google-services.json
+
 # typescript
 *.tsbuildinfo
 

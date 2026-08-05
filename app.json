@@ -13,7 +13,8 @@
         "dark": "./assets/icon/dusk-hook.png",
         "tinted": "./assets/icon/tinted-hook.png"
       },
-      "bundleIdentifier": "com.anonymous.brelly"
+      "bundleIdentifier": "com.brelly.app",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +24,8 @@
         "monochromeImage": "./assets/icon/android-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.brelly"
+      "package": "com.brelly.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -66,7 +68,18 @@
       "expo-font",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-firebase/app",
+      "@react-native-google-signin/google-signin",
+      "expo-apple-authentication",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

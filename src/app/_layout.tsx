@@ -9,8 +9,10 @@ import { BottomTabInset } from "@/constants/theme";
 import { useNotificationSync } from "@/hooks/useNotificationSync";
 import { useRoutineSync } from "@/hooks/useRoutineMaterializer";
 import { useAppColorScheme } from "@/hooks/useTheme";
+import { configureGoogleSignIn } from "@/services/auth";
 
 SplashScreen.preventAutoHideAsync();
+configureGoogleSignIn();
 
 const queryClient = new QueryClient({
   defaultOptions: {
