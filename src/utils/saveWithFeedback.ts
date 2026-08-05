@@ -1,4 +1,5 @@
 import { showToast, type ToastAction } from "@/store/toastStore";
+import { hapticError, hapticSuccess } from "@/utils/haptics";
 
 export type SaveResult<T> =
   | { ok: true; value: T }
@@ -40,9 +41,11 @@ export function saveWithFeedback<T>(
 ): SaveResult<T> {
   try {
     const value = action();
+    hapticSuccess();
     showToast(messages.success, "success", messages.successAction);
     return { ok: true, value };
   } catch (error) {
+    hapticError();
     showToast(messages.failure, "error");
     return { ok: false, error };
   }

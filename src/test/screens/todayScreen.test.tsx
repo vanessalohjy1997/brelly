@@ -3,6 +3,7 @@ import { router } from "expo-router";
 
 import TodayScreen from "@/app/(tabs)/index";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
@@ -66,6 +67,7 @@ function todaysPlan(slots: ItinerarySlot[]): DayPlan {
 beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
+  useSettingsStore.setState({ hasSeenOnboarding: true });
   useToastStore.setState({ toast: null, modalHosts: [] });
 });
 

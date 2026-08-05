@@ -1,7 +1,7 @@
 import { fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 
-import PastPlansScreen from "@/app/past";
+import HistoryScreen from "@/app/(tabs)/history";
 import { getForecastForSlot } from "@/services/weather";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useToastStore } from "@/store/toastStore";
@@ -68,10 +68,11 @@ beforeEach(() => {
   useToastStore.setState({ toast: null, modalHosts: [] });
 });
 
-describe("PastPlansScreen", () => {
-  it("explains itself when nothing has passed yet", async () => {
-    const view = await renderWithProviders(<PastPlansScreen />);
+describe("HistoryScreen", () => {
+  it("titles itself and explains when nothing has passed yet", async () => {
+    const view = await renderWithProviders(<HistoryScreen />);
 
+    expect(view.getByText("History")).toBeTruthy();
     expect(view.getByText("Nothing here yet")).toBeTruthy();
   });
 
@@ -80,7 +81,7 @@ describe("PastPlansScreen", () => {
       plans: [dayPlan(-2, [slot("old", "Last week's lunch", -2)])],
     });
 
-    const view = await renderWithProviders(<PastPlansScreen />);
+    const view = await renderWithProviders(<HistoryScreen />);
 
     expect(view.getByText("Last week's lunch")).toBeTruthy();
   });
@@ -90,7 +91,7 @@ describe("PastPlansScreen", () => {
       plans: [dayPlan(1, [slot("soon", "Picnic", 1)])],
     });
 
-    const view = await renderWithProviders(<PastPlansScreen />);
+    const view = await renderWithProviders(<HistoryScreen />);
 
     expect(view.queryByText("Picnic")).toBeNull();
     expect(view.getByText("Nothing here yet")).toBeTruthy();
@@ -106,7 +107,7 @@ describe("PastPlansScreen", () => {
       ],
     });
 
-    const view = await renderWithProviders(<PastPlansScreen />);
+    const view = await renderWithProviders(<HistoryScreen />);
 
     expect(view.getByText("Shopping")).toBeTruthy();
     expect(view.queryByText("Dinner")).toBeNull();
@@ -122,7 +123,7 @@ describe("PastPlansScreen", () => {
       ],
     });
 
-    const view = await renderWithProviders(<PastPlansScreen />);
+    const view = await renderWithProviders(<HistoryScreen />);
 
     expect(
       view.getAllByText(/^(Yesterday|Museum|Market)$/).map((n) => n.props.children),
@@ -134,7 +135,7 @@ describe("PastPlansScreen", () => {
       plans: [dayPlan(-2, [slot("old", "Last week's lunch", -2)])],
     });
 
-    const view = await renderWithProviders(<PastPlansScreen />);
+    const view = await renderWithProviders(<HistoryScreen />);
 
     expect(view.getByText("Last week's lunch")).toBeTruthy();
     expect(getForecastForSlot).not.toHaveBeenCalled();
@@ -147,7 +148,7 @@ describe("PastPlansScreen", () => {
       plans: [dayPlan(-2, [slot("old", "Last week's lunch", -2)])],
     });
 
-    const view = await renderWithProviders(<PastPlansScreen />);
+    const view = await renderWithProviders(<HistoryScreen />);
     await fireEvent.press(view.getByText("Last week's lunch"));
 
     expect(router.push).toHaveBeenCalledWith("/plan/old");
@@ -158,7 +159,7 @@ describe("PastPlansScreen", () => {
       plans: [dayPlan(-2, [slot("old", "Last week's lunch", -2)])],
     });
 
-    const view = await renderWithProviders(<PastPlansScreen />);
+    const view = await renderWithProviders(<HistoryScreen />);
     await fireEvent.press(view.getByLabelText("Delete plan"));
 
     expect(useItineraryStore.getState().plans).toHaveLength(0);

@@ -5,6 +5,7 @@ import { cancelAndDeleteSlot } from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import type { ItinerarySlot } from "@/types/itinerary";
+import { hapticDelete } from "@/utils/haptics";
 import { saveWithFeedback, type SaveResult } from "@/utils/saveWithFeedback";
 
 /**
@@ -30,8 +31,9 @@ export function useDeleteSlotWithUndo() {
   const scheduleRainNotificationForSlot = useRainNotificationScheduler();
 
   return useCallback(
-    (date: string, slot: ItinerarySlot): SaveResult<void> =>
-      saveWithFeedback(
+    (date: string, slot: ItinerarySlot): SaveResult<void> => {
+      hapticDelete();
+      return saveWithFeedback(
         () => {
           cancelAndDeleteSlot(deleteSlot, date, slot);
           // A stop a routine filled in has to be remembered as *deleted*, not
@@ -77,7 +79,8 @@ export function useDeleteSlotWithUndo() {
             },
           },
         },
-      ),
+      );
+    },
     [
       deleteSlot,
       restoreSlot,

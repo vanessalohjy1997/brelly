@@ -1,9 +1,12 @@
+import * as Location from "expo-location";
 import { router } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
+import { OnboardingPermissionPrimer } from "@/components/OnboardingPermissionPrimer";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { LiveConditionsCard } from "@/components/weather/LiveConditionsCard";
@@ -18,10 +21,12 @@ import {
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useLiveConditions } from "@/hooks/useLiveConditions";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
+import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useTheme } from "@/hooks/useTheme";
 import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { todayKey } from "@/utils/dateKeys";
 import {
   findCurrentOrNextSlot,
@@ -36,6 +41,32 @@ export default function TodayScreen() {
   // what makes this screen re-render when a plan is added or edited.
   const plans = useItineraryStore((state) => state.plans);
   const deleteWithUndo = useDeleteSlotWithUndo();
+  const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
+  const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
+  const [onboardingStep, setOnboardingStep] = useState<
+    "location" | "notification" | null
+  >(() => (hasSeenOnboarding ? null : "location"));
+  const { request: requestNotification } = useNotificationPermission();
+
+  const handleOnboardingAllow = useCallback(async () => {
+    if (onboardingStep === "location") {
+      await Location.requestForegroundPermissionsAsync();
+      setOnboardingStep("notification");
+    } else if (onboardingStep === "notification") {
+      await requestNotification();
+      setOnboardingStep(null);
+      setHasSeenOnboarding(true);
+    }
+  }, [onboardingStep, requestNotification, setHasSeenOnboarding]);
+
+  const handleOnboardingSkip = useCallback(() => {
+    if (onboardingStep === "location") {
+      setOnboardingStep("notification");
+    } else {
+      setOnboardingStep(null);
+      setHasSeenOnboarding(true);
+    }
+  }, [onboardingStep, setHasSeenOnboarding]);
 
   const now = new Date();
   const todaysDate = todayKey(now);
@@ -126,8 +157,15 @@ export default function TodayScreen() {
           </ThemedView>
         </ThemedView>
 
-        {/* Slot list or empty state */}
-        {!hasSlotsToday ? (
+        {onboardingStep ? (
+          <ThemedView style={styles.emptyState}>
+            <OnboardingPermissionPrimer
+              kind={onboardingStep}
+              onAllow={handleOnboardingAllow}
+              onSkip={handleOnboardingSkip}
+            />
+          </ThemedView>
+        ) : !hasSlotsToday ? (
           <ScrollView
             contentContainerStyle={styles.emptyScroll}
             showsVerticalScrollIndicator={false}
@@ -178,7 +216,7 @@ export default function TodayScreen() {
                 style={{ color: colors.textSecondary, textAlign: "center" }}
               >
                 {dayIsDone
-                  ? "Every stop today has finished. You'll find them in Past plans."
+                  ? "Every stop today has finished. You'll find them in History."
                   : "Add a stop and Brelly will show the weather for it."}
               </ThemedText>
               <Pressable

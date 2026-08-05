@@ -54,10 +54,10 @@ export default function TabLayout() {
               name="settings"
               options={{ presentation: "modal", title: "Settings" }}
             />
-            {/* Pushed, not presented as a modal like the three above: the
-                archive is somewhere you browse and come back from, and a push
-                gives it the native back chevron that says so. */}
-            <Stack.Screen name="past" options={{ title: "Past plans" }} />
+            <Stack.Screen
+              name="routines"
+              options={{ presentation: "modal", title: "Routines" }}
+            />
           </Stack>
           {/* After the Stack so it draws over the tab screens, and clear of
               the tab bar. Each modal above mounts its own — see `hosts` in

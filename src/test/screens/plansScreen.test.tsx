@@ -130,24 +130,6 @@ describe("PlansScreen", () => {
     expect(view.getByText("Dinner")).toBeTruthy();
   });
 
-  it("offers the archive in the header once something has passed", async () => {
-    useItineraryStore.setState({
-      plans: [dayPlan(-2, [slot("old", "Last week's lunch", -2)])],
-    });
-    const view = await renderWithProviders(<PlansScreen />);
-
-    await fireEvent.press(view.getByLabelText("Past plans"));
-
-    expect(router.push).toHaveBeenCalledWith("/past");
-  });
-
-  it("shows no archive button when nothing has passed", async () => {
-    useItineraryStore.setState({ plans: [dayPlan(1, [slot("s1", "Picnic", 1)])] });
-    const view = await renderWithProviders(<PlansScreen />);
-
-    expect(view.queryByLabelText("Past plans")).toBeNull();
-  });
-
   it("says nothing is upcoming, not that nothing is planned, when all plans have passed", async () => {
     useItineraryStore.setState({
       plans: [dayPlan(-2, [slot("old", "Last week's lunch", -2)])],

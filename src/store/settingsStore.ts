@@ -41,6 +41,9 @@ type SettingsState = {
   /** Id of the currently scheduled digest, so it can be replaced or cancelled. */
   digestNotificationId: string | null;
   setDigestNotificationId: (id: string | null) => void;
+
+  hasSeenOnboarding: boolean;
+  setHasSeenOnboarding: (seen: boolean) => void;
 };
 
 // New keys added here land on installs whose persisted state predates them.
@@ -71,10 +74,21 @@ export const useSettingsStore = create<SettingsState>()(
 
       digestNotificationId: null,
       setDigestNotificationId: (id) => set({ digestNotificationId: id }),
+
+      hasSeenOnboarding: false,
+      setHasSeenOnboarding: (seen) => set({ hasSeenOnboarding: seen }),
     }),
     {
       name: "brelly-settings",
       storage: createJSONStorage(() => mmkvStorage),
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as Record<string, unknown>;
+        if (version < 2) {
+          state.hasSeenOnboarding = true;
+        }
+        return state as unknown as SettingsState;
+      },
     },
   ),
 );

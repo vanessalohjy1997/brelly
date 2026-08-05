@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SectionList, StyleSheet } from "react-native";
+import { Alert, Pressable, SectionList, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
@@ -10,10 +10,16 @@ import {
 } from "@/components/itinerary/PlanSearchField";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { MaxContentWidth, Spacing } from "@/constants/theme";
+import {
+  BottomTabInset,
+  HeaderHeight,
+  MaxContentWidth,
+  Spacing,
+} from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useTheme } from "@/hooks/useTheme";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { showToast } from "@/store/toastStore";
 import type { ItinerarySlot } from "@/types/itinerary";
 import { todayKey } from "@/utils/dateKeys";
 import { countSlots, filterPlans } from "@/utils/filterPlans";
@@ -28,14 +34,44 @@ import { splitPlansByTime } from "@/utils/splitPlansByTime";
  * one `splitPlansByTime` call, so a stop is in exactly one of them and the
  * boundary can't drift between the screens.
  *
- * A pushed screen rather than a tab: this is a place you go to look something
- * up, not one of the two things the app is for.
+ * A tab of its own, not a button buried in Plans: this is one of the three
+ * things the app is for, not a place you have to know exists.
  */
-export default function PastPlansScreen() {
+export default function HistoryScreen() {
   const theme = useTheme();
   const plans = useItineraryStore((state) => state.plans);
+  const deletePlan = useItineraryStore((state) => state.deletePlan);
   const deleteWithUndo = useDeleteSlotWithUndo();
   const [query, setQuery] = useState("");
+
+  const handlePrune = () => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoff = todayKey(thirtyDaysAgo);
+    const toPrune = past.filter((p) => p.date < cutoff);
+    if (toPrune.length === 0) {
+      showToast("Nothing older than 30 days", "success");
+      return;
+    }
+    Alert.alert(
+      "Clear old plans?",
+      `Delete ${toPrune.length} day${toPrune.length === 1 ? "" : "s"} older than 30 days. This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            for (const plan of toPrune) deletePlan(plan.date);
+            showToast(
+              `Cleared ${toPrune.length} old day${toPrune.length === 1 ? "" : "s"}`,
+              "success",
+            );
+          },
+        },
+      ],
+    );
+  };
 
   const today = todayKey();
   const { past } = splitPlansByTime(plans, new Date());
@@ -54,14 +90,41 @@ export default function PastPlansScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-        {hasPast && showSearch && (
-          <ThemedView style={styles.searchRow}>
-            <PlanSearchField
-              value={query}
-              onChange={setQuery}
-              placeholder="Search past plans"
-            />
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <ThemedView style={styles.header}>
+          <ThemedText type="title">History</ThemedText>
+        </ThemedView>
+
+        {hasPast && (
+          <ThemedView style={styles.topRow}>
+            {showSearch && (
+              <ThemedView style={styles.searchField}>
+                <PlanSearchField
+                  value={query}
+                  onChange={setQuery}
+                  placeholder="Search past plans"
+                />
+              </ThemedView>
+            )}
+            <Pressable
+              onPress={handlePrune}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear plans older than 30 days"
+              style={[
+                styles.pruneButton,
+                { backgroundColor: theme.backgroundElement },
+              ]}
+            >
+              <Icon
+                name={{ ios: "trash", android: "delete_sweep" }}
+                size={16}
+                tintColor={theme.textSecondary}
+              />
+              <ThemedText themeColor="textSecondary" style={styles.pruneText}>
+                Clear older
+              </ThemedText>
+            </Pressable>
           </ThemedView>
         )}
 
@@ -133,6 +196,12 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.three,
   },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    height: HeaderHeight,
+  },
   emptyState: {
     flex: 1,
     alignItems: "center",
@@ -143,9 +212,26 @@ const styles = StyleSheet.create({
   emptyIcon: {
     marginBottom: Spacing.two,
   },
-  searchRow: {
-    paddingTop: Spacing.three,
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
     paddingBottom: Spacing.two,
+  },
+  searchField: {
+    flex: 1,
+  },
+  pruneButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.two,
+  },
+  pruneText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   sectionHeader: {
     paddingBottom: Spacing.two,
@@ -153,8 +239,7 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: Spacing.three,
-    // No tab bar under this screen, so the list only owes the safe area —
-    // `BottomTabInset` here would leave a permanent gap at the end.
-    paddingBottom: Spacing.three,
+    // A tab bar sits under this screen now, same as Today and Plans.
+    paddingBottom: BottomTabInset + Spacing.three,
   },
 });

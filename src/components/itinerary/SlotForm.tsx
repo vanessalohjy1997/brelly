@@ -61,6 +61,7 @@ export type SlotFormValues = {
    * `planRoutineMaterialization` for how a rule becomes stops.
    */
   repeat?: RepeatRule | null;
+  notes?: string;
 };
 
 /** Which field an error belongs under. Errors render at the field, not in a pile. */
@@ -173,6 +174,7 @@ export function SlotForm({
     resolveSlotKind(initialValues?.kind),
   );
   const [repeat, setRepeat] = useState<RepeatRule | null>(null);
+  const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [errors, setErrors] = useState<FieldErrors>({});
 
   const scrollRef = useRef<ScrollView>(null);
@@ -195,7 +197,8 @@ export function SlotForm({
       notificationsMuted !== (initialValues.notificationsMuted ?? false) ||
       // Normalised on both sides: an untagged slot resolves to "outdoor", and
       // comparing that against `undefined` would read as dirty on mount.
-      kind !== resolveSlotKind(initialValues.kind)
+      kind !== resolveSlotKind(initialValues.kind) ||
+      notes !== (initialValues.notes ?? "")
     : label.trim().length > 0 || locationQuery.trim().length > 0;
 
   useEffect(() => {
@@ -305,6 +308,7 @@ export function SlotForm({
       notificationsMuted,
       kind,
       repeat: allowRepeat ? repeat : null,
+      notes: notes.trim() || undefined,
     });
   };
 
@@ -677,6 +681,25 @@ export function SlotForm({
         </ThemedText>
       )}
 
+      <ThemedView style={styles.field}>
+        <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+          Notes
+        </ThemedText>
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Anything to remember for this stop"
+          placeholderTextColor={theme.textSecondary}
+          multiline
+          accessibilityLabel="Notes"
+          style={[
+            styles.input,
+            styles.notesInput,
+            { color: theme.text, backgroundColor: theme.backgroundElement },
+          ]}
+        />
+      </ThemedView>
+
       <Pressable
         onPress={handleSubmit}
         style={[styles.submitButton, { backgroundColor: theme.primary }]}
@@ -923,6 +946,11 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontWeight: "600",
+  },
+  notesInput: {
+    minHeight: 80,
+    textAlignVertical: "top",
+    paddingTop: Spacing.two,
   },
   deleteButton: {
     alignItems: "center",

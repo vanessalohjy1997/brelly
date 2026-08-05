@@ -17,6 +17,7 @@ import { Spacing } from "@/constants/theme";
 import { useCalendarSync } from "@/hooks/useCalendarSync";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useTheme } from "@/hooks/useTheme";
+import { exportBackup } from "@/services/backup";
 import { IMPORT_HORIZON_DAYS } from "@/services/calendar";
 import {
   countScheduledNotifications,
@@ -29,6 +30,7 @@ import {
   type RainLeadMinutes,
 } from "@/store/settingsStore";
 import { formatLeadTime, formatLeadTimeShort } from "@/utils/formatLeadTime";
+import { assessNotificationCap } from "@/utils/notificationCapWarning";
 import type { ThemePreference } from "@/utils/resolveColorScheme";
 import { saveWithFeedback } from "@/utils/saveWithFeedback";
 
@@ -348,6 +350,18 @@ export default function SettingsScreen() {
                       ? "1 alert waiting to be delivered"
                       : `${scheduledCount} alerts waiting to be delivered`}
                 </ThemedText>
+                {scheduledCount !== null &&
+                  assessNotificationCap(scheduledCount).nearCap && (
+                    <ThemedText style={[styles.hint, { color: theme.umbrellaSun }]}>
+                      Approaching the iOS limit of 64 scheduled notifications
+                    </ThemedText>
+                  )}
+                {scheduledCount !== null &&
+                  assessNotificationCap(scheduledCount).atCap && (
+                    <ThemedText style={[styles.hint, { color: theme.danger }]}>
+                      At the iOS limit — some alerts may not be delivered
+                    </ThemedText>
+                  )}
               </ThemedView>
             </ThemedView>
             <ThemedView style={styles.subSetting}>
@@ -423,11 +437,38 @@ export default function SettingsScreen() {
               </ThemedText>
             </ThemedView>
           </ThemedView>
+
+          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            Backup
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.optionGroup}>
+            <ThemedView style={styles.subSetting}>
+              <Pressable
+                onPress={async () => {
+                  try {
+                    await exportBackup();
+                    showToast("Backup exported", "success");
+                  } catch {
+                    showToast("Couldn't export backup", "error");
+                  }
+                }}
+                accessibilityRole="button"
+                style={[
+                  styles.testButton,
+                  { backgroundColor: theme.background },
+                ]}
+              >
+                <ThemedText style={styles.testButtonText}>
+                  Export data
+                </ThemedText>
+              </Pressable>
+              <ThemedText themeColor="textSecondary" style={styles.hint}>
+                Save all plans, routines, and settings as a JSON file.
+              </ThemedText>
+            </ThemedView>
+          </ThemedView>
         </ScrollView>
       </SafeAreaView>
-      {/* Every control here commits without leaving the modal, so the
-          confirmation has to be visible from inside it — a host at the root
-          would be behind this screen on iOS. */}
       <ToastHost />
     </ThemedView>
   );

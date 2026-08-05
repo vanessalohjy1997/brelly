@@ -90,6 +90,21 @@ links back here.
   Info.plist and the iOS permission prompt silently fails. `expo-calendar` and
   `expo-notifications` now carry theirs too — the latter's `icon`/`color`, or
   Android falls back to a generic bell.
+- **`yarn add`ing a native package without running `expo install --check`
+  crashes the app at launch, not at build time.** `expo`/`expo-modules-core`
+  and every `expo-*` package have to be on versions that agree with each
+  other's precompiled binaries — a stray direct `expo-file-system` bump left
+  `expo` itself two patch versions behind, so `ExpoFileSystem.framework`
+  referenced a Swift symbol `ExpoModulesCore.framework` didn't export yet.
+  `tsc`, `yarn lint`, `yarn test` and even `npx expo export` all stay green;
+  the only symptom is a `dyld: Symbol not found` crash report in
+  `~/Library/Logs/DiagnosticReports/`. Run `npx expo install --fix` after
+  touching any `expo-*`/native dependency, then `cd ios && rm -rf Pods
+  Podfile.lock build && npx pod-install` — a plain `pod install` on top of the
+  old lock can leave stale precompiled xcframeworks in place. After that,
+  restart Metro with `--clear`: Reanimated/Worklets bumps throw "[Worklets]
+  Mismatch between JavaScript code version and Worklets Babel plugin version"
+  from a cached transform that still embeds the old plugin version otherwise.
 - **A native picker's props are invisible when the mock drops them.** The
   `DateTimePicker` stub in `jest.setup.js` forwards `themeVariant`, `mode`,
   `value` and `onValueChange` on purpose: each was, at some point, the only
@@ -137,9 +152,10 @@ links back here.
   or deleting one day asks whether it means the day or the rule
   (`askEditScope`); "this day only" detaches the slot and records an exception,
   which is what stops the next top-up refilling it. Nothing downstream knows
-  routines exist.
-- **Routing.** `(tabs)` group (Today, Plans) + root `Stack` with `plan/new`,
-  `plan/[id]` and `settings` as modals.
+  routines exist. A dedicated routines screen (`src/app/routines.tsx`, modal
+  route) lists all rules with `describeRoutine` and exception counts.
+- **Routing.** `(tabs)` group (Today, Plans, History) + root `Stack` with
+  `plan/new`, `plan/[id]`, `settings` and `routines` as modals.
 - **Notifications.** Rain alerts scheduled a user-set lead time ahead
   (`rainLeadMinutes`, default 45) via `useRainNotificationScheduler`;
   `cancelAndDeleteSlot` cancels the pending notification at every delete site
@@ -149,13 +165,27 @@ links back here.
 - **Appearance.** Pastel lavender/plum palette (`Colors`, plus a `danger`
   token so destructive actions theme with everything else), SF Symbols /
   Material Symbols via a shared `Icon` component, a `HeaderHeight` constant so
-  the Today/Plans headers don't shift on tab switch, and a manual
+  the Today/Plans/History headers don't shift on tab switch, and a manual
   light/dark/system override in `settings` (`useSettingsStore`, read through
   `useTheme`/`useAppColorScheme` — never `useColorScheme()` directly, or the
   override applies inconsistently).
-- **Past plans** are split out of the Plans list behind a "Show N past plans"
-  toggle rather than auto-deleted — silently destroying a user's history was
-  the wrong default.
+- **Past plans** are split out of the Plans list rather than auto-deleted —
+  silently destroying a user's history was the wrong default. They live on
+  their own **History** tab (`src/app/(tabs)/history.tsx`), alongside Today
+  and Plans in the bottom nav. Archive pruning ("clear before this date") is
+  available there.
+- **Itinerary intelligence.** Gap/overlap warnings (`detectScheduleConflicts`)
+  on the Plans screen, dry-window suggestion (`suggestDryWindow`) on the edit
+  screen, notes field per slot, and an auto-seeded packing list
+  (`derivePackingList`) derived from the forecast text. A `WeekStrip` on Plans
+  shows the next 7 days with stop counts.
+- **Onboarding.** A two-step permission primer (location then notification) on
+  the Today screen for new users, gated by `hasSeenOnboarding` in the settings
+  store.
+- **Backup.** Export/import of itinerary + routine store state as a JSON file
+  via expo-file-system v57's `File` class.
+- **Haptics.** `expo-haptics` fires on delete and on save success/failure.
+- **Store versioning.** All three persist configs carry `version` and `migrate`.
 
 ## Round history
 
@@ -503,6 +533,94 @@ indistinguishable from five typed by hand.
   recovers for the next test in the file. The prompt has to answer itself from
   the mock's implementation instead.
 
+### Round 13 — the backlog cleared
+
+Everything under "Not started" in `PLAN.md` is done except the widget (which
+needs Xcode/WidgetKit). Twelve tasks shipped; what follows is what a future
+round needs to know.
+
+- **Store schema versioning is in.** All three persist configs
+  (`itineraryStore`, `routineStore`, `settingsStore`) carry `version` and
+  `migrate`. The settings store is at version 2 — the first migration sets
+  `hasSeenOnboarding: true` for existing installs so returning users skip the
+  onboarding primer. The itinerary and routine stores are at version 1 with
+  identity migrations, ready for the first breaking change.
+- **Onboarding primes location then notification.** A two-step flow on the
+  Today screen (`OnboardingPermissionPrimer`), gated by `hasSeenOnboarding`
+  in the settings store. Location first (enables nearby weather), notification
+  second (enables rain alerts). Each step offers "Allow" and "Not now"; either
+  advances. The flow is a `useState` initialised from MMKV (synchronous read,
+  so the value is correct on the first render — no flash). Existing users get
+  `hasSeenOnboarding: true` from the version-2 migration and never see it.
+- **Gap and overlap warnings** are a pure util (`detectScheduleConflicts`) that
+  returns time overlaps and implausible-distance gaps (Haversine at 60 km/h
+  threshold). Wired into the Plans screen above the SectionList as amber
+  banners.
+- **Dry-window suggestion** on the edit screen. A separate `useQuery` to
+  `getUpcomingForecast` (24hr window) feeds `suggestDryWindow`, which finds the
+  nearest dry period when the current slot's period is wet. The banner says
+  "{Period} looks dry — Tap to move this stop" and applies the time shift on
+  press.
+- **Notes field** added to `ItinerarySlot` (optional, no migration needed) and
+  rendered as a multiline `TextInput` in `SlotForm`.
+- **Packing list** per slot derived from the forecast text
+  (`derivePackingList`). Shows "Pack for this stop" with items like "Umbrella —
+  rain expected" or "Sunscreen — high UV". Rendered in the edit screen between
+  the repeat note and the dry-window banner.
+- **Week strip** on Plans (`WeekStrip`). A horizontal row of 7 day cells
+  starting from today, each showing the day name, date number, and stop count.
+  Today's cell is distinguished with a primary border.
+- **Routines screen** (`src/app/routines.tsx`) registered as a modal route.
+  Lists all routines with `describeRoutine`, shows exception count, and has an
+  empty state. Reachable from a repeat button in the Plans header.
+- **Export backup** writes itinerary + routine store state to a JSON file via
+  expo-file-system v57's `File` class (not the old `FileSystem.writeAsString`).
+  Import is wired in Settings. The backup service uses `Paths.cache` and
+  `shareAsync`.
+- **Archive pruning** on the Past plans screen. A "Clear before this date"
+  action removes finished stops older than a user-selected cutoff.
+- **Notification cap warning** in Settings. `notificationCapWarning` computes a
+  message when scheduled notifications approach the iOS 64 limit, surfaced as
+  an amber banner.
+- **Accessibility: swipe-to-delete now has `accessibilityActions`.** The
+  `accessibilityActions` live on the `Pressable` inside `ItineraryCard` (not on
+  `Swipeable`, which doesn't accept them). Dynamic Type is still open.
+- **Haptics** on delete (`hapticDelete` in `useDeleteSlotWithUndo`) and on save
+  success/failure (`saveWithFeedback`), via `expo-haptics`.
+  `hapticNotification` for success/error, `hapticImpact("medium")` for delete.
+- **Testing.** 835 tests across 78 suites. The onboarding primer required
+  seeding `hasSeenOnboarding: true` in the Today screen test's `beforeEach`,
+  since the primer now renders instead of the empty state for fresh users.
+
+### Round 14 — the archive becomes a tab
+
+Past plans moved from a screen you had to know existed (an archive button
+buried in the Plans header, opening a pushed `src/app/past.tsx`) to a third
+bottom-nav tab, on the reasoning that it's one of the three things the app is
+for — Today, Plans, and what's already happened — not a place you burrow into.
+
+- `src/app/past.tsx` → `src/app/(tabs)/history.tsx`. Being inside `(tabs)`
+  changes two things the old screen relied on: it no longer needs its own
+  `ToastHost` (the root one in `_layout.tsx` already covers every tab screen)
+  or `edges={["bottom"]}` safe-area handling (the tab bar now sits under it,
+  so `BottomTabInset` in the list's `paddingBottom` does that job, same as
+  Today and Plans). It also gained the title-row header the other two tabs
+  have, since a tab screen has no native header to fall back on.
+- `appTabs.tsx` gets a third `NativeTabs.Trigger`. Its icon is `sf`/`md`
+  (`clock.arrow.circlepath` / `history`) rather than a `src` PNG like the
+  other two — there was no History artwork in `assets/images/tabIcons/`, and
+  `NativeTabsTriggerIcon` accepts either per trigger, so the two styles
+  coexist without needing a matching asset made.
+- The Plans-header archive button is gone (redundant with the tab), and the
+  copy that used to point at it — on Today and Plans' empty states, in
+  `plans.tsx`'s own comments — now says "History" instead of "Past plans" so
+  it names the thing you'd actually tap.
+- Test coverage moved with the file: `pastPlansScreen.test.tsx` →
+  `historyScreen.test.tsx`, importing `@/app/(tabs)/history` per the
+  `src/app/` route-collision trap above, plus an assertion that the screen's
+  own "History" title renders. The two `plansScreen.test.tsx` cases that
+  exercised the removed header button are gone with it.
+
 ## Shipped from the feature-idea list
 
 The feature ideas were derived from what was already built — each named the seam
@@ -577,12 +695,13 @@ the sketch. The open ones live in `PLAN.md`.
   No buffer was needed: the deleted slot is closed over by the toast's action,
   and `restoreSlot` puts it back under its own id.*
 
-### Store schema versioning — why it is still open
+### Store schema versioning — resolved in round 13
 
 `kind` shipped without it (round 11), as `notificationsMuted` and
 `notificationLeadMinutes` did before it: an **optional** field whose absence has
 a defined reading needs no migration, because "not there" is already a valid
-value. The task is still open and still worth doing — it is what a field that
-**changes** or **removes** an existing one will need, and a `kind` that had been
-required would have needed it on day one. It is just not a prerequisite for
-adding optional fields, which is what the original note implied.
+value. The task shipped in round 13: all three stores now carry `version` and
+`migrate`. The settings store's first real migration (version 2) sets
+`hasSeenOnboarding: true` for existing installs. The itinerary and routine
+stores are at version 1 with identity migrations, ready for the first
+breaking change.

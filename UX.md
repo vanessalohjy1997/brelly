@@ -39,9 +39,8 @@ problem, not the current code, so a `[x]` item's file references point at what
   and the layout has hard constraints (`HeaderHeight`, `DateTimePickerWidth`,
   the picker widths added this round) that break when text scales. It wants a
   pass of its own with a device at the largest setting.
-- **Haptics** (accessibility). Needs `expo-haptics` — a native dependency, so a
-  rebuild — for what is genuinely polish. Grouping it with the Dynamic Type
-  pass costs one rebuild instead of two.
+- ~~**Haptics** (accessibility). Done in round 13 — `expo-haptics` fires on
+  delete and on save success/failure.~~
 - **Free-text times in Settings.** The file already calls the three fixed chips
   "defensible as a constraint"; nothing has changed to make them less so.
 - **Generating the colour ramp.** Explicitly a "consider" — and with `border`
@@ -435,11 +434,11 @@ system settings) when the status is denied.
   fortnight filled in ahead of you. The hint under it now names the rule
   ("Repeats Mon–Fri") rather than a count, because a routine has no count.*
 
-- [ ] **A routine is only reachable through one of its days.** Editing or
+- [x] **A routine is only reachable through one of its days.** Editing or
   deleting any stop asks whether you mean the day or the rule, which is enough
   to change or end a routine — but there is no list of the routines you have,
-  and no way back to one whose days were all deleted individually. Tracked in
-  `PLAN.md`; it needs a screen, not a change to this form.
+  and no way back to one whose days were all deleted individually. Resolved:
+  `src/app/routines.tsx` lists all routines, reachable from the Plans header.
 
 - [ ] **Two questions on Save is one more than a form usually asks.** A
   routine's stop raises a scope prompt on Save *and* the unsaved-changes guard
@@ -466,11 +465,13 @@ system settings) when the status is denied.
   header as a filter.
 
   Resolved by moving past plans off this screen entirely rather than by moving
-  the toggle. They live on their own pushed screen,
-  [past.tsx](src/app/past.tsx), reached from an archive button in the header —
-  and only when there is something in it, so the button never leads nowhere.
-  The Plans list is now upcoming-only, with no footer toggle and no
-  `showPast` state.
+  the toggle. They first got their own pushed screen reached from an archive
+  button in the Plans header, then — since the archive is one of the three
+  things the app is for, not a place you'd only find by knowing it exists —
+  a **History** tab of its own,
+  [history.tsx](src/app/%28tabs%29/history.tsx), alongside Today and Plans in
+  the bottom nav (`appTabs.tsx`). The header button is gone with it. The Plans
+  list is now upcoming-only, with no footer toggle and no `showPast` state.
 
   The split moved with it. `splitPlansByDate` cut on the date key, so every
   stop on today's plan stayed "upcoming" until midnight — the 9–11am stop was
@@ -711,7 +712,7 @@ Contrast figures below are computed from the hex values in
   `accessibilityRole="radio"`, but no parent declares `radiogroup`, so
   assistive tech announces them as unrelated buttons.
 
-- [ ] **No haptics anywhere** — not on delete, reorder, save, or toggle.
+- [x] **No haptics anywhere** — not on delete, reorder, save, or toggle.
 
 - [x] **Reduce-motion isn't respected** for the splash overlay
   ([animatedIcon.tsx](src/components/animatedIcon.tsx)) or the

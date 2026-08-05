@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Icon } from "@/components/icon";
 import { HeaderDismissButton } from "@/components/headerDismissButton";
 import { CopyToDateAction } from "@/components/itinerary/CopyToDateAction";
 import { SlotForm } from "@/components/itinerary/SlotForm";
@@ -14,18 +16,24 @@ import { Spacing } from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
 import { useRoutineMaterializer } from "@/hooks/useRoutineMaterializer";
+import { useTheme } from "@/hooks/useTheme";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { useWeatherForSlot } from "@/hooks/useWeatherForSlot";
 import { cancelNotification } from "@/services/notifications";
+import { getUpcomingForecast } from "@/services/weather";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { askEditScope } from "@/utils/askEditScope";
 import { toDateKey } from "@/utils/dateKeys";
+import { derivePackingList } from "@/utils/derivePackingList";
 import { describeRoutine } from "@/utils/describeRoutine";
+import { formatPeriodLabel } from "@/utils/formatPeriodLabel";
 import { findSlotById } from "@/utils/planSelectors";
 import { retargetSlotDate } from "@/utils/retargetSlotDate";
 import { routineUpdatesFromSlot } from "@/utils/routineOccurrences";
 import { routineForSlot } from "@/utils/routineSelectors";
 import { saveWithFeedback } from "@/utils/saveWithFeedback";
+import { suggestDryWindow } from "@/utils/suggestDryWindow";
 
 export default function EditSlotScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,6 +56,34 @@ export default function EditSlotScreen() {
   // would change the hook order between the two branches.
   const [dirty, setDirty] = useState(false);
   const confirmDiscard = useUnsavedChangesGuard(dirty);
+  const theme = useTheme();
+
+  const { data: weather } = useWeatherForSlot({
+    region: found?.slot.neaRegion ?? ("" as any),
+    latitude: found?.slot.latitude ?? 0,
+    longitude: found?.slot.longitude ?? 0,
+    slotStartTime: found?.slot.startTime ?? "",
+    enabled: !!found,
+  });
+
+  const packingItems = useMemo(() => {
+    if (!weather || weather.source === "error" || weather.source === "unavailable")
+      return [];
+    return derivePackingList(weather.forecast);
+  }, [weather]);
+
+  const { data: upcomingPeriods } = useQuery({
+    queryKey: ["upcoming-periods", found?.slot.neaRegion],
+    queryFn: () =>
+      getUpcomingForecast(found!.slot.neaRegion, 24),
+    staleTime: 1000 * 60 * 10,
+    enabled: !!found,
+  });
+
+  const dryWindow = useMemo(() => {
+    if (!found || !upcomingPeriods) return null;
+    return suggestDryWindow(found.slot.startTime, upcomingPeriods);
+  }, [found, upcomingPeriods]);
 
   if (!found) {
     return (
@@ -148,6 +184,7 @@ export default function EditSlotScreen() {
             endTime: slot.endTime,
             notificationsMuted: slot.notificationsMuted,
             kind: slot.kind,
+            notes: slot.notes,
           }}
           onSubmit={async (values) => {
             const movedToAnotherDay =
@@ -234,12 +271,62 @@ export default function EditSlotScreen() {
           onDelete={handleDelete}
         >
           {routine && (
-            // There is no repeat control on this screen — the scope prompts on
-            // Save and Delete are how a routine is edited — so this line is the
-            // only thing that says the stop is one of many.
             <ThemedText themeColor="textSecondary" style={styles.repeatNote}>
               {describeRoutine(routine)}
             </ThemedText>
+          )}
+          {packingItems.length > 0 && (
+            <ThemedView style={styles.packingList}>
+              <ThemedText type="smallBold">Pack for this stop</ThemedText>
+              {packingItems.map((item) => (
+                <ThemedView key={item.item} style={styles.packingRow}>
+                  <Icon
+                    name={{ ios: "checkmark.circle", android: "check_circle_outline" }}
+                    size={14}
+                    tintColor={theme.textSecondary}
+                  />
+                  <ThemedText style={styles.packingItem}>
+                    {item.item}
+                  </ThemedText>
+                  <ThemedText themeColor="textSecondary" style={styles.packingReason}>
+                    {item.reason}
+                  </ThemedText>
+                </ThemedView>
+              ))}
+            </ThemedView>
+          )}
+          {dryWindow && (
+            <Pressable
+              style={[styles.dryWindowBanner, { borderColor: theme.umbrellaSun }]}
+              onPress={() => {
+                const target = new Date(dryWindow.suggestedPeriod.start);
+                const endOffset =
+                  new Date(slot.endTime).getTime() -
+                  new Date(slot.startTime).getTime();
+                const newEnd = new Date(target.getTime() + endOffset);
+                updateSlot(date, slot.id, {
+                  startTime: target.toISOString(),
+                  endTime: newEnd.toISOString(),
+                });
+                router.back();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Move to ${formatPeriodLabel(dryWindow.suggestedPeriod.start)}`}
+            >
+              <Icon
+                name={{ ios: "sun.max.fill", android: "wb_sunny" }}
+                size={16}
+                tintColor={theme.umbrellaSun}
+              />
+              <ThemedView style={styles.dryWindowText}>
+                <ThemedText style={{ fontWeight: "600", fontSize: 13 }}>
+                  {formatPeriodLabel(dryWindow.suggestedPeriod.start)} looks dry
+                </ThemedText>
+                <ThemedText themeColor="textSecondary" style={{ fontSize: 12 }}>
+                  Tap to move this stop
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
           )}
           <CopyToDateAction onDuplicate={handleDuplicate} />
         </SlotForm>
@@ -270,5 +357,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: Spacing.four,
+  },
+  packingList: {
+    gap: Spacing.one,
+    paddingVertical: Spacing.two,
+  },
+  packingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    backgroundColor: "transparent",
+  },
+  packingItem: {
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  packingReason: {
+    fontSize: 12,
+  },
+  dryWindowBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    padding: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+  },
+  dryWindowText: {
+    flex: 1,
+    gap: 2,
+    backgroundColor: "transparent",
   },
 });

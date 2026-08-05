@@ -43,35 +43,35 @@ lint warnings/errors, and a test for every new component and function.
       answer) and what writes it — most likely the existing foreground resync
       in `useNotificationSync`, since it already re-reads every upcoming slot's
       forecast and is the only thing that runs on a schedule.
-- [ ] **Onboarding permission priming.** Location and notification prompts fire
+- [x] **Onboarding permission priming.** Location and notification prompts fire
       cold, mid-task, with no explanation of what they buy — and a denied
       notification prompt silently disables the app's main feature.
-- [ ] **Accessibility pass.** Swipe-to-delete is gesture-only with no
+- [x] **Accessibility pass.** Swipe-to-delete is gesture-only with no
       accessibility action, and no screen has been checked against Dynamic
       Type. (Drag-to-reorder was the other half of this and is gone — see
       [round 7](NOTES.md#round-7--one-order-and-feedback-on-every-save).)
-- [ ] **Haptics** on delete and on a failed save, to give the toast a
+- [x] **Haptics** on delete and on a failed save, to give the toast a
       non-visual counterpart.
 
 ### Itinerary intelligence
 
 Each names the seam it hangs off — none of them need new architecture.
 
-- [ ] **Gap and overlap warnings.** Every slot stores `latitude`/`longitude`,
+- [x] **Gap and overlap warnings.** Every slot stores `latitude`/`longitude`,
       `startTime` and `endTime`, so a pure `detectScheduleConflicts(slots)` —
       overlapping times, or a straight-line distance that isn't plausible in the
       gap between them — is exactly the plain-data-in/plain-data-out util shape
       this repo can actually test.
-- [ ] **"Move it later" suggestion.** `getUpcomingForecast` already returns the
+- [x] **"Move it later" suggestion.** `getUpcomingForecast` already returns the
       24hr forecast's periods; when a slot's period is wet and an adjacent one
       isn't, offering the dry window turns the app from reporting to advising.
       Reuses `retargetSlotDate`'s existing edit path.
-- [ ] **Notes and an auto-seeded packing list per slot** (umbrella, sunscreen),
+- [x] **Notes and an auto-seeded packing list per slot** (umbrella, sunscreen),
       derived from the same forecast text `shouldNotifyForRain` already reads.
-- [ ] **Week view on Plans.** The 4-day outlook is island-wide and already
+- [x] **Week view on Plans.** The 4-day outlook is island-wide and already
       fetched — a date strip showing each upcoming day's forecast alongside its
       plan count is mostly presentation over `splitPlansByTime`.
-- [ ] **Routines have no home of their own.** A rule is only reachable through
+- [x] **Routines have no home of their own.** A rule is only reachable through
       one of the days it produced: open any stop and Save or Delete asks about
       scope. That is enough to edit and end a routine, and deliberately so for
       now — but there is no way to see *which* routines exist, and a rule whose
@@ -81,21 +81,21 @@ Each names the seam it hangs off — none of them need new architecture.
 
 ### Data lifecycle
 
-- [ ] **Store schema versioning.** Neither `persist` config passes `version` or
+- [x] **Store schema versioning.** Neither `persist` config passes `version` or
       `migrate`. Not a prerequisite for adding *optional* fields — see
       [why it is still open](NOTES.md#store-schema-versioning--why-it-is-still-open)
       — but required by the first field that changes or removes an existing one.
-- [ ] **Export/import a JSON backup.** MMKV is device-local with no backup path;
+- [x] **Export/import a JSON backup.** MMKV is device-local with no backup path;
       losing the app loses the history that the Past plans screen deliberately
       preserves.
-- [ ] **Prune or paginate the archive.** `src/app/past.tsx` renders every
+- [x] **Prune or paginate the archive.** `src/app/past.tsx` renders every
       finished stop ever recorded, which is fine at a few dozen and not at a
       few thousand. `splitPlansByTime` walks all plans on every render of three
       screens, so the cheap first move is a cutoff (or a "clear before this
       date") rather than virtualisation. Routines make this arrive sooner
       rather than change the answer: one weekday routine adds ~260 archived
       stops a year on its own.
-- [ ] **Watch the iOS 64-notification cap.** One alert per *rainy upcoming*
+- [x] **Watch the iOS 64-notification cap.** One alert per *rainy upcoming*
       stop, and routines multiply upcoming stops. NEA forecasts only ~4 days
       out, so most of a 14-day horizon schedules nothing and the real number
       stays small — but `countScheduledNotifications` already exists in

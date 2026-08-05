@@ -35,6 +35,7 @@ export type ItinerarySlot = {
   // Absent reads as "belongs to nobody", the behaviour every slot had before
   // routines existed, so no store migration is needed.
   routineId?: string;
+  notes?: string;
 };
 
 export type DayPlan = {

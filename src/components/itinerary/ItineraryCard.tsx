@@ -147,6 +147,10 @@ export function ItineraryCard({
     >
       <Pressable
         onPress={() => router.push(`/plan/${slot.id}`)}
+        accessibilityActions={[{ name: "delete", label: "Delete" }]}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === "delete") onDelete();
+        }}
         style={({ pressed }) => [
           styles.card,
           { backgroundColor: colors.backgroundElement },

@@ -189,6 +189,11 @@ export const useItineraryStore = create<ItineraryState>()(
     {
       name: "brelly-itinerary",
       storage: createJSONStorage(() => mmkvStorage),
+      version: 1,
+      migrate: (persisted, version) => {
+        if (version === 0) return persisted as ItineraryState;
+        return persisted as ItineraryState;
+      },
     },
   ),
 );

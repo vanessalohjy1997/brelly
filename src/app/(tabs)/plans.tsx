@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, SectionList, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -9,6 +9,7 @@ import {
   PlanSearchField,
   SearchThreshold,
 } from "@/components/itinerary/PlanSearchField";
+import { WeekStrip } from "@/components/itinerary/WeekStrip";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
@@ -26,6 +27,7 @@ import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
 import { useItineraryStore } from "@/store/itineraryStore";
 import type { ItinerarySlot } from "@/types/itinerary";
 import { todayKey } from "@/utils/dateKeys";
+import { detectScheduleConflicts } from "@/utils/detectScheduleConflicts";
 import { countSlots, filterPlans } from "@/utils/filterPlans";
 import { formatPlanDate } from "@/utils/formatPlanDate";
 import { sortSlotsByStart } from "@/utils/planSelectors";
@@ -53,12 +55,21 @@ export default function PlansScreen() {
 
   const today = todayKey();
   // Only what's still ahead renders here. Finished stops are not deleted —
-  // they move to the Past plans screen behind the header's archive button, so
-  // this list stops growing forever and reads as "what's coming".
+  // they move to the History tab, so this list stops growing forever and
+  // reads as "what's coming".
   const { upcoming, past } = splitPlansByTime(plans, new Date());
 
   const matching = filterPlans(upcoming, query);
   const sections = toSections(matching, today);
+
+  const allUpcomingSlots = useMemo(
+    () => upcoming.flatMap((p) => p.slots),
+    [upcoming],
+  );
+  const conflicts = useMemo(
+    () => detectScheduleConflicts(allUpcomingSlots),
+    [allUpcomingSlots],
+  );
 
   const hasUpcoming = upcoming.length > 0;
   const hasPast = past.length > 0;
@@ -81,26 +92,21 @@ export default function PlansScreen() {
         <ThemedView style={styles.header}>
           <ThemedText type="title">Plans</ThemedText>
           <ThemedView style={styles.headerActions}>
-            {/* Only once there is an archive to open. A button that leads to
-                an empty screen is chrome, and the header already carries
-                two. */}
-            {hasPast && (
-              <Pressable
-                style={[
-                  styles.addButton,
-                  { backgroundColor: theme.backgroundElement },
-                ]}
-                onPress={() => router.push("/past")}
-                hitSlop={8}
-                accessibilityLabel="Past plans"
-              >
-                <Icon
-                  name={{ ios: "clock.arrow.circlepath", android: "history" }}
-                  size={18}
-                  tintColor={theme.text}
-                />
-              </Pressable>
-            )}
+            <Pressable
+              style={[
+                styles.addButton,
+                { backgroundColor: theme.backgroundElement },
+              ]}
+              onPress={() => router.push("/routines")}
+              hitSlop={8}
+              accessibilityLabel="Routines"
+            >
+              <Icon
+                name={{ ios: "repeat", android: "repeat" }}
+                size={18}
+                tintColor={theme.text}
+              />
+            </Pressable>
             <Pressable
               style={[
                 styles.addButton,
@@ -162,8 +168,8 @@ export default function PlansScreen() {
                 />
               )}
               {/* "Nothing planned" would be untrue for someone whose plans
-                  have all simply happened — they're in the archive, one tap
-                  away in the header. */}
+                  have all simply happened — they're in History, one tab
+                  away. */}
               <ThemedText type="subtitle">
                 {hasPast ? "Nothing upcoming" : "Nothing planned"}
               </ThemedText>
@@ -171,7 +177,7 @@ export default function PlansScreen() {
                 style={{ color: theme.textSecondary, textAlign: "center" }}
               >
                 {hasPast
-                  ? "Everything you planned has been and gone. Add another, or look back through Past plans."
+                  ? "Everything you planned has been and gone. Add another, or look back through History."
                   : "Add a plan for today or a future day to see it here."}
               </ThemedText>
               <Pressable
@@ -206,7 +212,7 @@ export default function PlansScreen() {
               style={{ color: theme.textSecondary, textAlign: "center" }}
             >
               Nothing upcoming matches “{query.trim()}”. Finished stops are in
-              Past plans.
+              History.
             </ThemedText>
             <Pressable
               style={[styles.emptyStateCta, { backgroundColor: theme.primary }]}
@@ -224,6 +230,32 @@ export default function PlansScreen() {
           <SectionList
             sections={sections}
             keyExtractor={(slot: ItinerarySlot) => slot.id}
+            ListHeaderComponent={
+              <>
+                <WeekStrip plans={upcoming} />
+                {conflicts.map((c, i) => (
+                  <ThemedView
+                    key={`conflict-${i}`}
+                    style={[
+                      styles.conflictBanner,
+                      { borderColor: theme.umbrellaSun },
+                    ]}
+                  >
+                    <Icon
+                      name={{
+                        ios: "exclamationmark.triangle.fill",
+                        android: "warning",
+                      }}
+                      size={14}
+                      tintColor={theme.umbrellaSun}
+                    />
+                    <ThemedText style={styles.conflictText}>
+                      {c.detail}
+                    </ThemedText>
+                  </ThemedView>
+                ))}
+              </>
+            }
             renderItem={({ item, section }) => (
               <ItineraryCard
                 slot={item}
@@ -334,5 +366,18 @@ const styles = StyleSheet.create({
   list: {
     gap: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.three,
+  },
+  conflictBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    padding: Spacing.two,
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    marginBottom: Spacing.two,
+  },
+  conflictText: {
+    fontSize: 12,
+    flex: 1,
   },
 });

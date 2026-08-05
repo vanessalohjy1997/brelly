@@ -84,6 +84,11 @@ export const useRoutineStore = create<RoutineState>()(
     {
       name: "brelly-routines",
       storage: createJSONStorage(() => mmkvStorage),
+      version: 1,
+      migrate: (persisted, version) => {
+        if (version === 0) return persisted as RoutineState;
+        return persisted as RoutineState;
+      },
     },
   ),
 );
