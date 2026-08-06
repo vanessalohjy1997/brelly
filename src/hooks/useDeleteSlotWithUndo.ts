@@ -7,6 +7,7 @@ import { useRoutineStore } from "@/store/routineStore";
 import type { ItinerarySlot } from "@/types/itinerary";
 import { hapticDelete } from "@/utils/haptics";
 import { saveWithFeedback, type SaveResult } from "@/utils/saveWithFeedback";
+import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 
 /**
  * Deletes a stop and offers it back for as long as the toast is up.
@@ -54,16 +55,11 @@ export function useDeleteSlotWithUndo() {
                   // Lifted before the stop goes back, so the day is wanted
                   // again by the time anything reads the routine.
                   if (slot.routineId) removeException(slot.routineId, date);
-                  return restoreSlot(date, {
-                    ...slot,
-                    // The delete cancelled the scheduled alert, so the id on
-                    // the slot now refers to a notification that no longer
-                    // exists. Carrying it back would leave the slot looking
-                    // scheduled forever: the foreground resync reads "has an
-                    // alert" and leaves it alone, and no alert would ever fire.
-                    notificationId: undefined,
-                    notificationLeadMinutes: undefined,
-                  });
+                  // The delete cancelled the scheduled alert, so the id on the
+                  // slot now refers to a notification that no longer exists —
+                  // carrying it back would leave the stop looking scheduled
+                  // forever and no alert would ever fire again.
+                  return restoreSlot(date, stripNotificationHandles(slot));
                 },
                 {
                   success: `Restored ${slot.label}`,

@@ -19,6 +19,22 @@ type RoutineState = {
   routines: Routine[];
 
   addRoutine: (routine: Omit<Routine, "id" | "exceptions">) => Routine;
+  /**
+   * Puts a routine back exactly as it was — same id, same exceptions.
+   *
+   * `addRoutine` cannot do this, and the difference is not cosmetic. It mints a
+   * fresh id, but every stop the routine already produced carries the *old*
+   * `routineId`, so a new one orphans them: `planRoutineMaterialization` reads
+   * a slot whose rule it can't find as unwanted and sweeps every upcoming one.
+   * And it resets `exceptions` to empty, which is the record of the days the
+   * user deliberately deleted — losing it refills them on the next top-up,
+   * the "undo the user never asked for" that `Routine.exceptions` exists to
+   * prevent.
+   *
+   * Replaces any routine already holding this id, so importing the same backup
+   * twice restores rather than duplicates.
+   */
+  restoreRoutine: (routine: Routine) => Routine;
   updateRoutine: (
     id: string,
     updates: Partial<Omit<Routine, "id" | "exceptions">>,
@@ -44,6 +60,16 @@ export const useRoutineStore = create<RoutineState>()(
           exceptions: [],
         };
         set((state) => ({ routines: [...state.routines, routine] }));
+        return routine;
+      },
+
+      restoreRoutine: (routine) => {
+        set((state) => ({
+          routines: [
+            ...state.routines.filter((r) => r.id !== routine.id),
+            routine,
+          ],
+        }));
         return routine;
       },
 

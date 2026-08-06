@@ -4,6 +4,7 @@ import * as Sharing from "expo-sharing";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 
 export type BackupData = {
   version: 1;
@@ -27,7 +28,15 @@ export async function exportBackup(): Promise<void> {
   const backup: BackupData = {
     version: 1,
     exportedAt: new Date().toISOString(),
-    itinerary: { plans: itinerary.plans },
+    itinerary: {
+      // A backup outlives the device that wrote it — that is the entire point
+      // of one — so the per-device notification bookkeeping must not travel
+      // with it. See `stripNotificationHandles` for what carrying it costs.
+      plans: itinerary.plans.map((plan) => ({
+        ...plan,
+        slots: plan.slots.map(stripNotificationHandles),
+      })),
+    },
     routines: { routines: routines.routines },
     settings: {
       themePreference: settings.themePreference,
@@ -61,17 +70,27 @@ export async function importBackup(uri: string): Promise<{
   const { plans } = data.itinerary;
   const { routines } = data.routines;
 
+  if (!Array.isArray(plans) || !Array.isArray(routines)) {
+    throw new Error("Not a valid Brelly backup file");
+  }
+
   const itineraryStore = useItineraryStore.getState();
   const routineStore = useRoutineStore.getState();
 
   for (const plan of plans) {
     for (const slot of plan.slots) {
-      itineraryStore.restoreSlot(plan.date, slot);
+      // Stripped on the way in as well as on the way out: files written before
+      // the export learned to strip are already out there, and this is the
+      // only place they can be cleaned up.
+      itineraryStore.restoreSlot(plan.date, stripNotificationHandles(slot));
     }
   }
 
   for (const routine of routines) {
-    routineStore.addRoutine(routine);
+    // `restoreRoutine`, not `addRoutine` — the latter mints a new id and
+    // empties `exceptions`, which orphans every stop the routine made and
+    // refills the days the user had deleted.
+    routineStore.restoreRoutine(routine);
   }
 
   if (data.settings) {

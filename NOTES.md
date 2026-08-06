@@ -112,6 +112,20 @@ links back here.
   app's theme rather than the device's, and `mode` is the only way to tell the
   Day picker apart from Starts and Ends. Adding a prop the mock swallows means
   the test passes and the app is wrong.
+- **A slot's `notificationId` must never leave the device that wrote it.** It
+  is a handle into *this* device's notification queue, and
+  `notificationLeadMinutes` is the lead time that particular alert was
+  scheduled against. Carried anywhere else — into a backup file, onto a second
+  device, or back onto this one after the alert was cancelled — the stop looks
+  permanently scheduled: `planNotificationResync` reads `!!notificationId` as
+  "has an alert", finds the lead time unchanged, and does nothing, so no alert
+  is ever scheduled and nothing on screen says so. Worse, it *half*-works: if
+  the receiving device's `rainLeadMinutes` differs from the imported one the
+  resync cancels and reschedules, so the bug only bites when they agree — the
+  default. Anything moving a slot across a device or account boundary goes
+  through `stripNotificationHandles`. Note the strip is **not** in
+  `restoreSlot`, which files whatever it is handed; it lives in the callers,
+  which is precisely how `backup.ts` shipped without it.
 - **`useNavigation` is mocked, and something depends on it.**
   `useUnsavedChangesGuard` disables a modal's swipe-to-dismiss through
   `setOptions({ gestureEnabled })`, which is the *only* trace it leaves —
@@ -575,8 +589,12 @@ round needs to know.
   empty state. Reachable from a repeat button in the Plans header.
 - **Export backup** writes itinerary + routine store state to a JSON file via
   expo-file-system v57's `File` class (not the old `FileSystem.writeAsString`).
-  Import is wired in Settings. The backup service uses `Paths.cache` and
-  `shareAsync`.
+  The backup service uses `Paths.cache` and `shareAsync`.
+  **`importBackup` exists but is not wired to anything** — Settings' Backup
+  section has an "Export data" button and no import counterpart. (The
+  `isImporting` flag in `settings.tsx` belongs to the *calendar* sync, which is
+  what made this look done. It was recorded here as "wired in Settings" until
+  round 15 found otherwise.)
 - **Archive pruning** on the Past plans screen. A "Clear before this date"
   action removes finished stops older than a user-selected cutoff.
 - **Notification cap warning** in Settings. `notificationCapWarning` computes a
@@ -620,6 +638,48 @@ for — Today, Plans, and what's already happened — not a place you burrow int
   `src/app/` route-collision trap above, plus an assertion that the screen's
   own "History" title renders. The two `plansScreen.test.tsx` cases that
   exercised the removed header button are gone with it.
+
+### Round 15 — the backup was quietly lossy
+
+Found while reviewing `FIREBASE_MIGRATION.md`, not from a report — nothing on
+screen would ever have shown either of these. Both are in `importBackup`,
+which turned out never to have been called (see the correction above), so they
+were latent rather than live; they would have shipped the moment an import
+button was wired up, and the Firebase plan keeps `importBackup`.
+
+- **Every restored stop lost its rain alert.** `exportBackup` wrote slots
+  verbatim, notification handles included, and the import handed them straight
+  to `restoreSlot` — which does not strip, because the stripping lived in the
+  *other* caller, `useDeleteSlotWithUndo`. See the trap above for what carrying
+  the handle costs. Fixed by stripping on export *and* on import (files written
+  by earlier builds already carry the ids, and the import is the only place
+  those can be cleaned up), with the knowledge moved into
+  `stripNotificationHandles` so there is one place that knows what is
+  device-local. `useDeleteSlotWithUndo` now calls it too — two call sites
+  disagreeing is what caused this.
+- **Importing a routine re-keyed it and dropped its exceptions.** The import
+  called `addRoutine`, which mints a fresh id and resets `exceptions` to `[]` —
+  correct for a new rule, wrong for one coming back. It type-checked because
+  passing a variable (rather than an object literal) to an
+  `Omit<Routine, "id" | "exceptions">` parameter skips excess-property
+  checking, so the extra `id`/`exceptions` were silently overwritten by the
+  spread. Two consequences: the imported slots still carried the *old*
+  `routineId`, so `planRoutineMaterialization` read every upcoming stop as
+  belonging to a rule that no longer existed and swept it; and the lost
+  exceptions meant every day the user had deliberately deleted came back on the
+  next top-up. New `restoreRoutine` mirrors `restoreSlot` — same id, same
+  exceptions, replacing any routine already holding that id so importing twice
+  restores rather than duplicates.
+- **`backup.ts` had no tests at all.** It does now
+  (`src/services/backup.test.ts`), including the round trip, a legacy file that
+  still contains notification handles, and a double import. The in-memory
+  `expo-file-system` double lets a test write a file, hand its uri to
+  `importBackup`, and read back what `exportBackup` produced.
+- **Testing.** 850 tests across 81 suites. One thing to know: the suite is
+  meaningfully slower on a cold Jest cache (~34s vs ~13s warm), and
+  `SlotForm.test.tsx` can exceed RNTL's 5s per-test timeout in that state while
+  passing in 1.3s on its own. A single timeout there after a `--clear` or a
+  fresh checkout is worth re-running before believing.
 
 ## Shipped from the feature-idea list
 

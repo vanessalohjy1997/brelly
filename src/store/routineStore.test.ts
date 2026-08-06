@@ -81,6 +81,34 @@ describe("useRoutineStore", () => {
     expect(useRoutineStore.getState().routines).toEqual([]);
   });
 
+  it("restores a routine under its own id and exceptions", () => {
+    // `addRoutine` mints a new id and empties `exceptions`, which is right for
+    // a new rule and wrong for one coming back from a backup: the stops it
+    // already made point at the old id, and the exceptions are the record of
+    // the days the user deleted on purpose.
+    const saved = {
+      ...office,
+      id: "routine-1",
+      exceptions: ["2026-08-05"],
+    };
+
+    const restored = useRoutineStore.getState().restoreRoutine(saved);
+
+    expect(restored).toEqual(saved);
+    expect(useRoutineStore.getState().routines).toEqual([saved]);
+  });
+
+  it("replaces rather than duplicates when the id is already there", () => {
+    const saved = { ...office, id: "routine-1", exceptions: [] };
+    useRoutineStore.getState().restoreRoutine(saved);
+
+    useRoutineStore.getState().restoreRoutine({ ...saved, label: "Gym" });
+
+    expect(useRoutineStore.getState().routines).toEqual([
+      { ...saved, label: "Gym" },
+    ]);
+  });
+
   it("deletes only the routine asked for", () => {
     const first = useRoutineStore.getState().addRoutine(office);
     const second = useRoutineStore
