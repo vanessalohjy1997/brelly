@@ -18,6 +18,21 @@ export type RoutineSlotInput = Omit<
   "id" | "neaRegion" | "notificationId"
 >;
 
+/**
+ * The deterministic id a routine's stop on a given day is filed under.
+ *
+ * Both devices sharing a uid compute the same id for the same
+ * (routine, date) pair, so a second device's materialisation pass is an
+ * idempotent overwrite of the first's rather than a duplicate — see
+ * FIREBASE_MIGRATION.md's `useRoutineMaterializer.ts` section. Detaching a
+ * stop with "this day only" must re-key it to an ordinary id, or a later
+ * exception-lift would let this function recompute the same id and overwrite
+ * the detached stop the user deliberately kept.
+ */
+export function materializedSlotId(routineId: string, date: string): string {
+  return `r_${routineId}_${date}`;
+}
+
 /** `"HH:MM"` → `{ hours, minutes }`. */
 function parseTimeOfDay(time: string): { hours: number; minutes: number } {
   const [hours, minutes] = time.split(":").map(Number);

@@ -17,3 +17,7 @@ Read the relevant one before implementing — do not work from memory of them.
 
 Keep all three current as you work: a stale plan gets acted on as if it were
 true.
+
+# Tests
+
+All new features must come with tests.

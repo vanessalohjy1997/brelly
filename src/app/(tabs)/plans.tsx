@@ -10,6 +10,7 @@ import {
   SearchThreshold,
 } from "@/components/itinerary/PlanSearchField";
 import { WeekStrip } from "@/components/itinerary/WeekStrip";
+import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
@@ -24,6 +25,7 @@ import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
+import { useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import type { ItinerarySlot } from "@/types/itinerary";
 import { todayKey } from "@/utils/dateKeys";
@@ -48,6 +50,7 @@ function toSections(
 
 export default function PlansScreen() {
   const theme = useTheme();
+  const ready = useCloudReady();
   const plans = useItineraryStore((state) => state.plans);
   const deleteWithUndo = useDeleteSlotWithUndo();
   const { isRefreshing, refresh } = useWeatherRefresh();
@@ -146,7 +149,9 @@ export default function PlansScreen() {
           </ThemedView>
         )}
 
-        {!hasUpcoming ? (
+        {!ready ? (
+          <Skeleton label="Loading your plans…" />
+        ) : !hasUpcoming ? (
           <>
             {hasWeatherNearby ? (
               <NearbyForecastPreview forecasts={nearbyForecasts} />

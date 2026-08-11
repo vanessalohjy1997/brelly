@@ -76,10 +76,13 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "useFrameworks": "dynamic"
           }
         }
-      ]
+      ],
+      "./plugins/withExplicitModulesDisabled",
+      "./plugins/withExpoUiReactHeaderFix",
+      "./plugins/withFirebaseCoreSpmLink"
     ],
     "experiments": {
       "typedRoutes": true,

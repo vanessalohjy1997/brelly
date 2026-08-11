@@ -1,7 +1,7 @@
-import { mmkvStorage } from "@/store/mmkvStorage";
-import type { ThemePreference } from "@/utils/resolveColorScheme";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+
+import { writeSettingsFields } from "@/services/settingsSync";
+import type { ThemePreference } from "@/utils/resolveColorScheme";
 
 export type QuietHours = {
   enabled: boolean;
@@ -46,49 +46,70 @@ type SettingsState = {
   setHasSeenOnboarding: (seen: boolean) => void;
 };
 
-// New keys added here land on installs whose persisted state predates them.
-// Zustand's `persist` shallow-merges stored state over these defaults, so a
-// missing key falls back rather than arriving as undefined — which is why
-// none of this needs a migration.
-export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set) => ({
-      themePreference: "system",
-      setThemePreference: (preference) => set({ themePreference: preference }),
+/**
+ * The fields that live in the cloud settings doc — every `SettingsState`
+ * field except `digestNotificationId`, which is a handle into this device's
+ * scheduled notification and must never leave it (see
+ * FIREBASE_MIGRATION.md). Doubles as the merge target for a settings
+ * snapshot, replicating the `{...defaults, ...persisted}` merge the old
+ * zustand `persist` did implicitly on rehydrate.
+ */
+export const DEFAULT_SETTINGS = {
+  themePreference: "system" as ThemePreference,
+  rainAlertsEnabled: true,
+  // 45 was the hardcoded constant before this became a setting, so existing
+  // installs keep the behaviour they already had.
+  rainLeadMinutes: 45 as RainLeadMinutes,
+  quietHours: { enabled: false, start: "22:00", end: "07:00" },
+  digest: { enabled: false, time: "07:30" },
+  hasSeenOnboarding: false,
+};
 
-      rainAlertsEnabled: true,
-      setRainAlertsEnabled: (enabled) => set({ rainAlertsEnabled: enabled }),
+// Firestore is now the source of truth (`useCloudBootstrap` hydrates this
+// store from the settings doc's `onSnapshot`), so there is no `persist`
+// middleware here any more. Every setter keeps its old synchronous shape —
+// `set()` first for an instant local update, then a fire-and-forget cloud
+// write underneath it. See FIREBASE_MIGRATION.md's "keep every store
+// action's public shape" section.
+export const useSettingsStore = create<SettingsState>()((set) => ({
+  ...DEFAULT_SETTINGS,
 
-      // 45 was the hardcoded constant before this became a setting, so
-      // existing installs keep the behaviour they already had.
-      rainLeadMinutes: 45,
-      setRainLeadMinutes: (minutes) => set({ rainLeadMinutes: minutes }),
+  setThemePreference: (preference) => {
+    set({ themePreference: preference });
+    writeSettingsFields({ themePreference: preference });
+  },
 
-      quietHours: { enabled: false, start: "22:00", end: "07:00" },
-      setQuietHours: (quietHours) =>
-        set((state) => ({ quietHours: { ...state.quietHours, ...quietHours } })),
+  setRainAlertsEnabled: (enabled) => {
+    set({ rainAlertsEnabled: enabled });
+    writeSettingsFields({ rainAlertsEnabled: enabled });
+  },
 
-      digest: { enabled: false, time: "07:30" },
-      setDigest: (digest) =>
-        set((state) => ({ digest: { ...state.digest, ...digest } })),
+  setRainLeadMinutes: (minutes) => {
+    set({ rainLeadMinutes: minutes });
+    writeSettingsFields({ rainLeadMinutes: minutes });
+  },
 
-      digestNotificationId: null,
-      setDigestNotificationId: (id) => set({ digestNotificationId: id }),
-
-      hasSeenOnboarding: false,
-      setHasSeenOnboarding: (seen) => set({ hasSeenOnboarding: seen }),
+  setQuietHours: (quietHours) =>
+    set((state) => {
+      const next = { ...state.quietHours, ...quietHours };
+      writeSettingsFields({ quietHours: next });
+      return { quietHours: next };
     }),
-    {
-      name: "brelly-settings",
-      storage: createJSONStorage(() => mmkvStorage),
-      version: 2,
-      migrate: (persisted, version) => {
-        const state = persisted as Record<string, unknown>;
-        if (version < 2) {
-          state.hasSeenOnboarding = true;
-        }
-        return state as unknown as SettingsState;
-      },
-    },
-  ),
-);
+
+  setDigest: (digest) =>
+    set((state) => {
+      const next = { ...state.digest, ...digest };
+      writeSettingsFields({ digest: next });
+      return { digest: next };
+    }),
+
+  digestNotificationId: null,
+  // Device-local — deliberately never written to Firestore, see
+  // `DEFAULT_SETTINGS`'s comment above.
+  setDigestNotificationId: (id) => set({ digestNotificationId: id }),
+
+  setHasSeenOnboarding: (seen) => {
+    set({ hasSeenOnboarding: seen });
+    writeSettingsFields({ hasSeenOnboarding: seen });
+  },
+}));

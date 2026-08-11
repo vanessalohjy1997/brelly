@@ -2,6 +2,7 @@ import { fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import TodayScreen from "@/app/(tabs)/index";
+import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useToastStore } from "@/store/toastStore";
@@ -69,9 +70,23 @@ beforeEach(() => {
   useItineraryStore.setState({ plans: [] });
   useSettingsStore.setState({ hasSeenOnboarding: true });
   useToastStore.setState({ toast: null, modalHosts: [] });
+  useCloudSyncStore.setState({
+    settingsReady: true,
+    routinesReady: true,
+    slotsReady: true,
+  });
 });
 
 describe("TodayScreen", () => {
+  it("shows a loading skeleton before the cloud data is ready", async () => {
+    useCloudSyncStore.setState({ slotsReady: false });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.getByText("Loading your plans…")).toBeTruthy();
+    expect(view.queryByText("No plans yet")).toBeNull();
+  });
+
   it("shows the empty state when nothing is planned today", async () => {
     const view = await renderWithProviders(<TodayScreen />);
 

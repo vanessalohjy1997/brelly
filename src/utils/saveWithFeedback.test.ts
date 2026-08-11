@@ -1,5 +1,5 @@
 import { useToastStore } from "@/store/toastStore";
-import { saveWithFeedback } from "@/utils/saveWithFeedback";
+import { notifyCloudSyncFailure, saveWithFeedback } from "@/utils/saveWithFeedback";
 
 const MESSAGES = {
   success: "Rain alerts on",
@@ -64,5 +64,16 @@ describe("saveWithFeedback", () => {
     }, MESSAGES);
 
     expect(useToastStore.getState().toast?.message).not.toBe("Rain alerts on");
+  });
+});
+
+describe("notifyCloudSyncFailure", () => {
+  it("says the change is still safe locally, not that it wasn't saved", () => {
+    notifyCloudSyncFailure();
+
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Couldn't sync to the cloud — you're still working locally",
+      variant: "error",
+    });
   });
 });

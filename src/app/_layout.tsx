@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AnimatedSplashOverlay } from "@/components/animatedIcon";
 import { ToastHost } from "@/components/toast";
 import { BottomTabInset } from "@/constants/theme";
+import { useCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useNotificationSync } from "@/hooks/useNotificationSync";
 import { useRoutineSync } from "@/hooks/useRoutineMaterializer";
 import { useAppColorScheme } from "@/hooks/useTheme";
@@ -25,6 +26,12 @@ const queryClient = new QueryClient({
 
 export default function TabLayout() {
   const colorScheme = useAppColorScheme();
+  // Ensures a signed-in (possibly anonymous) uid exists, migrates settings
+  // to Firestore once, and attaches the live settings listener — see
+  // FIREBASE_MIGRATION.md phase 2. The return value isn't consumed here yet;
+  // no screen needs the readiness flag until phases 3–4 give itinerary/
+  // routine screens an empty state to distinguish from "not loaded".
+  useCloudBootstrap();
   // Mounted once, at the root: fills in the next fortnight of every routine
   // before anything reads the itinerary, then brings scheduled notifications
   // back in line with the current forecast. Both re-run on every return to the

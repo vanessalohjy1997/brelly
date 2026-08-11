@@ -5,11 +5,15 @@ import {
   useRoutineMaterializer,
   useRoutineSync,
 } from "@/hooks/useRoutineMaterializer";
+import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { Routine } from "@/types/routine";
-import { RoutineHorizonDays } from "@/utils/routineOccurrences";
+import {
+  materializedSlotId,
+  RoutineHorizonDays,
+} from "@/utils/routineOccurrences";
 
 jest.mock("@/services/weather", () => ({
   getForecastForSlot: jest
@@ -53,6 +57,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
   useRoutineStore.setState({ routines: [] });
+  useCloudSyncStore.setState({
+    settingsReady: true,
+    routinesReady: true,
+    slotsReady: true,
+  });
   useSettingsStore.setState({
     rainAlertsEnabled: false, // keeps the fire-and-forget fetch out of the way
     quietHours: { enabled: false, start: "22:00", end: "07:00" },
@@ -157,10 +166,43 @@ describe("useRoutineMaterializer", () => {
 
     expect(slotCount()).toBeGreaterThan(0);
   });
+
+  it("materialises each day under the deterministic routine-slot id", async () => {
+    const routine = useRoutineStore.getState().addRoutine(OFFICE);
+    const { result } = await renderHook(() => useRoutineMaterializer());
+
+    result.current();
+
+    const ids = useItineraryStore
+      .getState()
+      .plans.flatMap((p) => p.slots)
+      .map((s) => s.id);
+    expect(ids).toContain(materializedSlotId(routine.id, "2026-08-03"));
+  });
 });
 
 describe("useRoutineSync", () => {
-  it("tops up on mount", async () => {
+  it("does not materialise while the cloud snapshot hasn't landed yet", async () => {
+    useCloudSyncStore.setState({ slotsReady: false });
+    useRoutineStore.getState().addRoutine(OFFICE);
+
+    await renderHook(() => useRoutineSync());
+
+    expect(slotCount()).toBe(0);
+  });
+
+  it("materialises once cloud readiness flips true", async () => {
+    useCloudSyncStore.setState({ slotsReady: false });
+    useRoutineStore.getState().addRoutine(OFFICE);
+    await renderHook(() => useRoutineSync());
+    expect(slotCount()).toBe(0);
+
+    useCloudSyncStore.setState({ slotsReady: true });
+
+    await waitFor(() => expect(slotCount()).toBeGreaterThan(0));
+  });
+
+  it("tops up on mount once already ready", async () => {
     useRoutineStore.getState().addRoutine(OFFICE);
 
     await renderHook(() => useRoutineSync());

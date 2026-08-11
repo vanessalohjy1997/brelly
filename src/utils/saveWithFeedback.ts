@@ -50,3 +50,16 @@ export function saveWithFeedback<T>(
     return { ok: false, error };
   }
 }
+
+/**
+ * For a background Firestore write that fails after the triggering store
+ * action already returned — a fire-and-forget `.catch()`, not this file's
+ * synchronous `try`/`catch`. By the time this fires the local change is
+ * already on screen, so the message says the data is still safe rather than
+ * that it wasn't saved. See FIREBASE_MIGRATION.md's `saveWithFeedback.ts`
+ * section.
+ */
+export function notifyCloudSyncFailure(): void {
+  hapticError();
+  showToast("Couldn't sync to the cloud — you're still working locally", "error");
+}

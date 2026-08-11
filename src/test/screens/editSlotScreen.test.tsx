@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Alert } from "react-native";
 
 import EditSlotScreen from "@/app/plan/[id]";
+import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { useToastStore } from "@/store/toastStore";
@@ -88,10 +89,24 @@ beforeEach(() => {
   useItineraryStore.setState({ plans: [PLAN] });
   useRoutineStore.setState({ routines: [] });
   useToastStore.setState({ toast: null, modalHosts: [] });
+  useCloudSyncStore.setState({
+    settingsReady: true,
+    routinesReady: true,
+    slotsReady: true,
+  });
   mockSearchParams.mockReturnValue({ id: "slot-1" });
 });
 
 describe("EditSlotScreen", () => {
+  it("shows a loading skeleton before the cloud data is ready", async () => {
+    useCloudSyncStore.setState({ slotsReady: false });
+
+    const view = await renderWithProviders(<EditSlotScreen />);
+
+    expect(view.getByText("Loading your plan…")).toBeTruthy();
+    expect(view.queryByDisplayValue("Lunch with Sam")).toBeNull();
+  });
+
   // Regression test. `useItineraryStore((s) => s.findSlotById(id))` returned a
   // fresh `{ date, slot }` object on every render, which zustand's
   // useSyncExternalStore read as a perpetual state change — opening a plan

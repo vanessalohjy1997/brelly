@@ -1,10 +1,56 @@
+import { doc, writeBatch } from "@react-native-firebase/firestore";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
+import { getFirebaseAuth, getFirebaseFirestore } from "@/services/firebase";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { notifyCloudSyncFailure } from "@/utils/saveWithFeedback";
 import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
+import type { DayPlan } from "@/types/itinerary";
+import type { Routine } from "@/types/routine";
+
+/** Firestore's own per-batch cap is 500; chunking below it leaves headroom —
+ * same rationale as `localDataMigration.ts`'s constant of the same name. */
+const MAX_BATCH_WRITES = 400;
+
+/**
+ * Batches the import's Firestore side explicitly via chunked `writeBatch()`,
+ * on top of — not instead of — each `restoreSlot`/`restoreRoutine` call's own
+ * individual write below. The two are redundant (same final doc state, so
+ * harmless), but the explicit batch is what gives a large import atomicity
+ * within each chunk, which individual fire-and-forget writes don't. No-ops
+ * before a uid exists, same as every other write path in this app.
+ */
+function batchWriteImportedData(plans: DayPlan[], routines: Routine[]): void {
+  const uid = getFirebaseAuth().currentUser?.uid;
+  if (!uid) return;
+
+  const db = getFirebaseFirestore();
+  const commits: Promise<void>[] = [];
+
+  const slots = plans.flatMap((plan) =>
+    plan.slots.map((slot) => ({ ...stripNotificationHandles(slot), date: plan.date })),
+  );
+  for (let i = 0; i < slots.length; i += MAX_BATCH_WRITES) {
+    const batch = writeBatch(db);
+    for (const slot of slots.slice(i, i + MAX_BATCH_WRITES)) {
+      batch.set(doc(db, "users", uid, "slots", slot.id), slot);
+    }
+    commits.push(batch.commit());
+  }
+
+  for (let i = 0; i < routines.length; i += MAX_BATCH_WRITES) {
+    const batch = writeBatch(db);
+    for (const routine of routines.slice(i, i + MAX_BATCH_WRITES)) {
+      batch.set(doc(db, "users", uid, "routines", routine.id), routine);
+    }
+    commits.push(batch.commit());
+  }
+
+  Promise.all(commits).catch(() => notifyCloudSyncFailure());
+}
 
 export type BackupData = {
   version: 1;
@@ -73,6 +119,8 @@ export async function importBackup(uri: string): Promise<{
   if (!Array.isArray(plans) || !Array.isArray(routines)) {
     throw new Error("Not a valid Brelly backup file");
   }
+
+  batchWriteImportedData(plans, routines);
 
   const itineraryStore = useItineraryStore.getState();
   const routineStore = useRoutineStore.getState();

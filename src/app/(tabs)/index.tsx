@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon } from "@/components/icon";
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
 import { OnboardingPermissionPrimer } from "@/components/OnboardingPermissionPrimer";
+import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { LiveConditionsCard } from "@/components/weather/LiveConditionsCard";
@@ -25,6 +26,7 @@ import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useTheme } from "@/hooks/useTheme";
 import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
+import { useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { todayKey } from "@/utils/dateKeys";
@@ -37,6 +39,7 @@ import { splitPlansByTime } from "@/utils/splitPlansByTime";
 
 export default function TodayScreen() {
   const colors = useTheme();
+  const ready = useCloudReady();
   // Subscribing to `plans` (not to a getter, whose identity never changes) is
   // what makes this screen re-render when a plan is added or edited.
   const plans = useItineraryStore((state) => state.plans);
@@ -157,7 +160,9 @@ export default function TodayScreen() {
           </ThemedView>
         </ThemedView>
 
-        {onboardingStep ? (
+        {!ready ? (
+          <Skeleton label="Loading your plans…" />
+        ) : onboardingStep ? (
           <ThemedView style={styles.emptyState}>
             <OnboardingPermissionPrimer
               kind={onboardingStep}

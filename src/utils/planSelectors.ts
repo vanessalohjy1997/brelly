@@ -88,6 +88,33 @@ export function findCurrentOrNextSlot(
   return next ?? byStart[byStart.length - 1];
 }
 
+/** A raw Firestore slot doc — `date` lives on the doc, not on `ItinerarySlot`
+ * itself, since the cloud model is a flat collection (see
+ * FIREBASE_MIGRATION.md's "Firestore data model"). */
+export type CloudSlot = ItinerarySlot & { date: string };
+
+/**
+ * Groups a flat list of cloud slot docs back into `DayPlan`s, the shape every
+ * screen already reads. The date string doubles as `DayPlan.id` — nothing
+ * downstream treats a plan's id as more than a React key.
+ */
+export function groupSlotsIntoPlans(slots: CloudSlot[]): DayPlan[] {
+  const byDate = new Map<string, ItinerarySlot[]>();
+  for (const { date, ...slot } of slots) {
+    const bucket = byDate.get(date) ?? [];
+    bucket.push(slot);
+    byDate.set(date, bucket);
+  }
+
+  return Array.from(byDate.entries())
+    .map(([date, daySlots]) => ({
+      id: date,
+      date,
+      slots: sortSlotsByStart(daySlots),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /**
  * Slots that start after `now`, soonest first — the only ones whose
  * notifications are still worth scheduling or re-checking.

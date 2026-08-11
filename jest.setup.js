@@ -29,6 +29,25 @@ jest.mock("react-native-mmkv", () => {
   };
 });
 
+// @react-native-firebase/auth is native-backed the same way. Only the
+// modular functions src/services/firebase.ts actually calls are faked, per
+// FIREBASE_MIGRATION.md's testing section — the namespaced API doesn't exist
+// in the installed SDK, so there's nothing to fake beyond these.
+jest.mock("@react-native-firebase/auth", () => ({
+  getAuth: jest.fn(() => ({ currentUser: null })),
+  signInAnonymously: jest
+    .fn()
+    .mockResolvedValue({ user: { uid: "test-uid", isAnonymous: true } }),
+}));
+
+// @react-native-firebase/firestore is native-backed too, and — per
+// FIREBASE_MIGRATION.md — the installed SDK's modular entry point has no
+// chained `collection().doc().set()` API left to fake, only the standalone
+// functions in src/test/fakeFirestore.ts.
+jest.mock("@react-native-firebase/firestore", () =>
+  require("./src/test/fakeFirestore").createFirestoreMock(),
+);
+
 jest.mock("expo-notifications", () => ({
   getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),

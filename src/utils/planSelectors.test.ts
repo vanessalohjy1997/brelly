@@ -4,6 +4,7 @@ import {
   findCurrentOrNextSlot,
   findPlanByDate,
   findSlotById,
+  groupSlotsIntoPlans,
   sortSlotsByStart,
   upcomingSlots,
 } from "@/utils/planSelectors";
@@ -186,5 +187,56 @@ describe("upcomingSlots", () => {
     expect(upcomingSlots(PLANS, new Date("2026-09-01T00:00:00+08:00"))).toEqual(
       [],
     );
+  });
+});
+
+describe("groupSlotsIntoPlans", () => {
+  it("groups slots under the day they carry", () => {
+    const grouped = groupSlotsIntoPlans([
+      { ...slot("a", "2026-07-31T09:00:00+08:00"), date: "2026-07-31" },
+      { ...slot("b", "2026-08-01T10:00:00+08:00"), date: "2026-08-01" },
+    ]);
+
+    expect(grouped.map((p) => p.date)).toEqual(["2026-07-31", "2026-08-01"]);
+    expect(grouped[0].slots.map((s) => s.id)).toEqual(["a"]);
+  });
+
+  it("uses the date as the plan id", () => {
+    const grouped = groupSlotsIntoPlans([
+      { ...slot("a", "2026-07-31T09:00:00+08:00"), date: "2026-07-31" },
+    ]);
+
+    expect(grouped[0].id).toBe("2026-07-31");
+  });
+
+  it("combines multiple slots on the same day, sorted by start time", () => {
+    const grouped = groupSlotsIntoPlans([
+      { ...slot("evening", "2026-07-31T18:00:00+08:00"), date: "2026-07-31" },
+      { ...slot("morning", "2026-07-31T09:00:00+08:00"), date: "2026-07-31" },
+    ]);
+
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].slots.map((s) => s.id)).toEqual(["morning", "evening"]);
+  });
+
+  it("does not leak the `date` field onto the slot itself", () => {
+    const grouped = groupSlotsIntoPlans([
+      { ...slot("a", "2026-07-31T09:00:00+08:00"), date: "2026-07-31" },
+    ]);
+
+    expect(grouped[0].slots[0]).not.toHaveProperty("date");
+  });
+
+  it("returns plans sorted chronologically regardless of input order", () => {
+    const grouped = groupSlotsIntoPlans([
+      { ...slot("b", "2026-08-01T10:00:00+08:00"), date: "2026-08-01" },
+      { ...slot("a", "2026-07-31T09:00:00+08:00"), date: "2026-07-31" },
+    ]);
+
+    expect(grouped.map((p) => p.date)).toEqual(["2026-07-31", "2026-08-01"]);
+  });
+
+  it("returns an empty array for no slots", () => {
+    expect(groupSlotsIntoPlans([])).toEqual([]);
   });
 });

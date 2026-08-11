@@ -8,10 +8,10 @@ import { Icon } from "@/components/icon";
 import { HeaderDismissButton } from "@/components/headerDismissButton";
 import { CopyToDateAction } from "@/components/itinerary/CopyToDateAction";
 import { SlotForm } from "@/components/itinerary/SlotForm";
+import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { ToastHost } from "@/components/toast";
-import { getRegionFromCoordinates } from "@/constants/neaRegions";
 import { Spacing } from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
@@ -21,6 +21,7 @@ import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useWeatherForSlot } from "@/hooks/useWeatherForSlot";
 import { cancelNotification } from "@/services/notifications";
 import { getUpcomingForecast } from "@/services/weather";
+import { useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { askEditScope } from "@/utils/askEditScope";
@@ -52,11 +53,12 @@ export default function EditSlotScreen() {
   const materializeRoutines = useRoutineMaterializer();
   const scheduleRainNotificationForSlot = useRainNotificationScheduler();
   const deleteWithUndo = useDeleteSlotWithUndo();
-  // Declared above the `!found` bail-out — an early return that skips hooks
-  // would change the hook order between the two branches.
+  // Declared above the `!ready`/`!found` bail-outs — an early return that
+  // skips hooks would change the hook order between the branches.
   const [dirty, setDirty] = useState(false);
   const confirmDiscard = useUnsavedChangesGuard(dirty);
   const theme = useTheme();
+  const ready = useCloudReady();
 
   const { data: weather } = useWeatherForSlot({
     region: found?.slot.neaRegion ?? ("" as any),
@@ -84,6 +86,10 @@ export default function EditSlotScreen() {
     if (!found || !upcomingPeriods) return null;
     return suggestDryWindow(found.slot.startTime, upcomingPeriods);
   }, [found, upcomingPeriods]);
+
+  if (!ready) {
+    return <Skeleton label="Loading your plan…" />;
+  }
 
   if (!found) {
     return (
@@ -248,23 +254,22 @@ export default function EditSlotScreen() {
               },
             );
             // Dismissing on a failed save would look like it worked, and the
-            // edits would be gone.
-            if (!saved.ok) return;
+            // edits would be gone. `!saved.value` shouldn't happen — `slot`
+            // was just confirmed present above — but `updateSlot` types its
+            // return as possibly-missing for the general case, so this stays
+            // an honest guard rather than a non-null assertion.
+            if (!saved.ok || !saved.value) return;
 
+            // `saved.value` is the actual persisted slot, not a manually
+            // reconstructed one — load-bearing when this was a "this day
+            // only" detach: `updateSlot` re-keys the slot to a fresh id in
+            // that case, and `slot.id` from this render's closure is stale.
             // Editing the start date re-files the slot under that day, so the
             // notification has to be scheduled against the new day, not the
             // one this screen was opened from.
             scheduleRainNotificationForSlot(
               toDateKey(new Date(values.startTime)),
-              {
-                ...slot,
-                ...values,
-                neaRegion: getRegionFromCoordinates(
-                  values.latitude,
-                  values.longitude,
-                ),
-                notificationId: undefined,
-              },
+              saved.value,
             );
             router.back();
           }}

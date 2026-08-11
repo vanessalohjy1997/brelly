@@ -1,14 +1,14 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
 
-import { mmkvStorage } from "@/store/mmkvStorage";
+import { generateDocId } from "@/services/firebase";
+import {
+  addExceptionField,
+  deleteRoutineDoc,
+  removeExceptionField,
+  writeRoutine,
+  writeRoutineFields,
+} from "@/services/routinesSync";
 import type { Routine } from "@/types/routine";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 9);
-}
 
 // ─── Store types ──────────────────────────────────────────────────────────────
 
@@ -48,73 +48,75 @@ type RoutineState = {
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-export const useRoutineStore = create<RoutineState>()(
-  persist(
-    (set) => ({
-      routines: [],
+// Firestore is now the source of truth (`useCloudBootstrap` hydrates this
+// store from the `users/{uid}/routines` collection's `onSnapshot`), so there
+// is no `persist` middleware here any more. Every action keeps its old
+// synchronous shape — `set()` first for an instant local update, then a
+// fire-and-forget cloud write underneath it. See FIREBASE_MIGRATION.md's
+// "keep every store action's public shape" section.
+export const useRoutineStore = create<RoutineState>()((set, get) => ({
+  routines: [],
 
-      addRoutine: (routineData) => {
-        const routine: Routine = {
-          ...routineData,
-          id: generateId(),
-          exceptions: [],
-        };
-        set((state) => ({ routines: [...state.routines, routine] }));
-        return routine;
-      },
+  addRoutine: (routineData) => {
+    const routine: Routine = {
+      ...routineData,
+      id: generateDocId(),
+      exceptions: [],
+    };
+    set((state) => ({ routines: [...state.routines, routine] }));
+    writeRoutine(routine);
+    return routine;
+  },
 
-      restoreRoutine: (routine) => {
-        set((state) => ({
-          routines: [
-            ...state.routines.filter((r) => r.id !== routine.id),
-            routine,
-          ],
-        }));
-        return routine;
-      },
+  restoreRoutine: (routine) => {
+    set((state) => ({
+      routines: [
+        ...state.routines.filter((r) => r.id !== routine.id),
+        routine,
+      ],
+    }));
+    writeRoutine(routine);
+    return routine;
+  },
 
-      updateRoutine: (id, updates) => {
-        set((state) => ({
-          routines: state.routines.map((r) =>
-            r.id === id ? { ...r, ...updates } : r,
-          ),
-        }));
-      },
+  updateRoutine: (id, updates) => {
+    if (!get().routines.some((r) => r.id === id)) return;
+    set((state) => ({
+      routines: state.routines.map((r) =>
+        r.id === id ? { ...r, ...updates } : r,
+      ),
+    }));
+    writeRoutineFields(id, updates);
+  },
 
-      deleteRoutine: (id) => {
-        set((state) => ({
-          routines: state.routines.filter((r) => r.id !== id),
-        }));
-      },
+  deleteRoutine: (id) => {
+    set((state) => ({
+      routines: state.routines.filter((r) => r.id !== id),
+    }));
+    deleteRoutineDoc(id);
+  },
 
-      addException: (id, date) => {
-        set((state) => ({
-          routines: state.routines.map((r) =>
-            r.id === id && !r.exceptions.includes(date)
-              ? { ...r, exceptions: [...r.exceptions, date] }
-              : r,
-          ),
-        }));
-      },
+  addException: (id, date) => {
+    const routine = get().routines.find((r) => r.id === id);
+    if (!routine || routine.exceptions.includes(date)) return;
+    set((state) => ({
+      routines: state.routines.map((r) =>
+        r.id === id ? { ...r, exceptions: [...r.exceptions, date] } : r,
+      ),
+    }));
+    addExceptionField(id, date);
+  },
 
-      removeException: (id, date) => {
-        set((state) => ({
-          routines: state.routines.map((r) =>
-            r.id === id
-              ? { ...r, exceptions: r.exceptions.filter((d) => d !== date) }
-              : r,
-          ),
-        }));
-      },
-    }),
-    {
-      name: "brelly-routines",
-      storage: createJSONStorage(() => mmkvStorage),
-      version: 1,
-      migrate: (persisted, version) => {
-        if (version === 0) return persisted as RoutineState;
-        return persisted as RoutineState;
-      },
-    },
-  ),
-);
+  removeException: (id, date) => {
+    const routine = get().routines.find((r) => r.id === id);
+    if (!routine || !routine.exceptions.includes(date)) return;
+    set((state) => ({
+      routines: state.routines.map((r) =>
+        r.id === id
+          ? { ...r, exceptions: r.exceptions.filter((d) => d !== date) }
+          : r,
+      ),
+    }));
+    removeExceptionField(id, date);
+  },
+}));

@@ -70,6 +70,182 @@ what makes requirement 2's merge a per-document union rather than a conflict.
   `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`. This belongs to phase 5; nothing else
   in phase 5 depends on phases 1–4, so it arriving early is fine — just
   don't wire it to a UI flow until the linking work lands.
+- **Phase 1 (anonymous auth bootstrap) — done, superseded by phase 2.**
+  `src/services/firebase.ts` exposes `getFirebaseAuth()` and
+  `ensureAnonymousUser()`, both written against the modular API (`getAuth()`,
+  `signInAnonymously()`). The original `useCloudAuthBootstrap()` hook that
+  only called `ensureAnonymousUser()` is gone — its one job is now the first
+  step of phase 2's `useCloudBootstrap()`, since nothing needs auth-only
+  bootstrap with no readiness flag any more. `jest.setup.js` gained a
+  structural fake for `@react-native-firebase/auth` (just
+  `getAuth`/`signInAnonymously`, the only two functions in use so far).
+- **Phase 2 (`settingsStore` → Firestore + the skeleton) — done.**
+  - `src/store/settingsStore.ts` no longer uses zustand `persist`. Every
+    setter keeps its synchronous shape (`set()` first, unchanged callers) and
+    now also fires `writeSettingsFields()` underneath it — a fire-and-forget
+    partial `setDoc` merge, from the new `src/services/settingsSync.ts`.
+    `setDigestNotificationId` is the one exception: it never calls
+    `writeSettingsFields`, because `digestNotificationId` is device-local and
+    excluded from `DEFAULT_SETTINGS` (now exported), which doubles as the
+    settings doc's merge target on every snapshot.
+  - `src/utils/migrateSettingsDoc.ts` holds `SETTINGS_SCHEMA_VERSION`, the
+    pure `migrateSettingsDoc(raw, schemaVersion)` (ported from the old
+    `persist` `migrate`, sets `hasSeenOnboarding: true` below version 2) and
+    `toCloudSettingsFields` (whitelists the fields that belong in the cloud
+    doc, i.e. excludes `digestNotificationId`). Both are unit-tested with no
+    Firestore involved.
+  - `src/services/settingsSync.ts` holds `writeSettingsFields` (the setters'
+    fire-and-forget write, no-ops before a uid exists, reports a background
+    failure via the new `notifyCloudSyncFailure` in `saveWithFeedback.ts`)
+    and `subscribeToSettingsDoc` (the `onSnapshot` listener; has no knowledge
+    of the zustand store on purpose — it hands migrated plain fields to a
+    callback, which is what keeps it independently testable).
+  - `src/services/localDataMigration.ts` holds the **settings-only slice** of
+    the one-time local→cloud migration: `enqueueLocalDataMigration` (reads
+    the raw `brelly-settings` MMKV blob, migrates it, writes it to the cloud
+    doc, returns the commit promise unawaited) and
+    `confirmLocalDataMigration` (awaits that promise off the boot path, sets
+    the uid-keyed `brelly-migration-complete:{uid}` flag on success, leaves
+    it unset on failure for a retry next launch). **This flag is shared
+    across all three stores per the design above, but only settings occupies
+    its gated block so far** — phases 3–4 must add routines'/slots' own
+    migration steps to this same file, inside the same `if (already
+    migrated) return` guard, *before* the flag is considered earned, not
+    replace it.
+  - `src/store/cloudSyncStore.ts` holds the readiness flag: `settingsReady`,
+    plus a `useCloudReady()` selector. Only `settingsReady` feeds it for now;
+    phases 3–4 add `slotsReady`/`routinesReady` and AND them together.
+  - `src/hooks/useCloudBootstrap.ts` replaces `useCloudAuthBootstrap` — signs
+    in anonymously, enqueues the migration, attaches the settings listener,
+    and returns the readiness boolean. Mounted once in `_layout.tsx`, ahead
+    of `useRoutineSync()`/`useNotificationSync()`, same as before. Nothing on
+    its path awaits a server round trip.
+  - `src/components/Skeleton.tsx` is the shared loading-placeholder primitive
+    named in the architecture section above. **Not wired into any screen
+    yet** — settings has no "not loaded vs. empty" ambiguity to protect (its
+    defaults are always valid to render), so there is no consumer in phase 2.
+    Phases 3–4 gate `index.tsx`/`plans.tsx`/`history.tsx`/`plan/[id].tsx` on
+    `useCloudReady()` and render this while `!ready`.
+  - `jest.setup.js` gained a structural fake for `@react-native-firebase/
+    firestore`, backed by `src/test/fakeFirestore.ts` — an in-memory doc
+    store keyed by path, faking `getFirestore`/`doc`/`setDoc`/`onSnapshot`
+    only (the functions actually in use). `@react-native-firebase/app` still
+    has no fake — nothing imports it directly yet.
+- **Phase 3 (`routineStore` → Firestore) — done.**
+  - `src/store/routineStore.ts` no longer uses zustand `persist`. Every
+    action keeps its synchronous shape (`set()` first, unchanged callers,
+    `addRoutine`/`restoreRoutine` still return the routine) and now also
+    fires a fire-and-forget Firestore write underneath it, from the new
+    `src/services/routinesSync.ts`. `addRoutine`/`restoreRoutine` write the
+    whole doc; `updateRoutine` writes only the changed fields; `deleteRoutine`
+    deletes the doc; `addException`/`removeException` use
+    `arrayUnion`/`arrayRemove` on the doc's `exceptions` field rather than a
+    full-doc rewrite, per the "multi-device is the goal" reasoning. Each of
+    `updateRoutine`/`addException`/`removeException` first checks the routine
+    is still present locally (via the store's new `get()` access) before
+    firing its cloud write, matching the existing local no-op semantics for a
+    routine that no longer exists. Ids still come from `generateId()` — the
+    `doc(collection(…)).id` swap is a phase 4 item alongside the itinerary
+    store's own `generateId()`.
+  - `src/services/routinesSync.ts` holds `writeRoutine`, `writeRoutineFields`,
+    `deleteRoutineDoc`, `addExceptionField`/`removeExceptionField`, and
+    `subscribeToRoutinesCollection` — the collection equivalent of
+    `settingsSync.ts`'s `subscribeToSettingsDoc`, with no knowledge of the
+    zustand store, handing a plain `Routine[]` to its callback.
+  - `src/services/localDataMigration.ts`'s `enqueueLocalDataMigration` now
+    enqueues settings **and** routines inside the same gated block, and
+    returns one combined commit promise (`Promise.all`) so
+    `confirmLocalDataMigration` sets the migration-complete flag only once
+    both have landed. The routines slice reads the raw `brelly-routines` MMKV
+    blob and writes each routine to its own doc via `writeBatch()`, chunked
+    to `MAX_BATCH_WRITES` (400) — headroom under Firestore's 500-write cap,
+    the same chunking phase 4's larger slots collection will reuse.
+  - `src/store/cloudSyncStore.ts` gained `routinesReady`/`setRoutinesReady`;
+    `useCloudReady()` is now `settingsReady && routinesReady` and will AND in
+    `slotsReady` when phase 4 lands.
+  - `src/hooks/useCloudBootstrap.ts` additionally subscribes to
+    `users/{uid}/routines` and hydrates `routineStore` with the plain array
+    on every snapshot (`useRoutineStore.setState({ routines })` — no
+    `{...defaults, ...fields}` merge needed, since a routine collection has no
+    "missing key" case the way a single settings doc does).
+  - `src/app/routines.tsx` now gates on `useCloudReady()`, rendering
+    `<Skeleton>` ahead of its existing empty-state branch — this list has the
+    same "not loaded vs. empty" ambiguity the empty-state screens have
+    (`routines.length === 0` renders a confident "No routines" CTA), which
+    settings never had (its defaults are always valid to render), so this is
+    the first screen actually wired to the shared skeleton component landed
+    in phase 2.
+  - `src/test/fakeFirestore.ts` gained `collection`, batched `writeBatch`,
+    `deleteDoc`, and the `arrayUnion`/`arrayRemove` field-value sentinels
+    (resolved against the existing array field inside `FakeDocRef.set`, same
+    as the real SDK). A collection's `onSnapshot` matches docs one path
+    segment deeper than the collection path and re-notifies on every write or
+    delete under it — still only the modular functions actually in use, per
+    the testing section below.
+- **Phase 4 (`itineraryStore` → Firestore + migration + the materialiser
+  fix) — done.**
+  - `src/services/itinerarySync.ts` is the new service, for the flat
+    `users/{uid}/slots/{slotId}` collection (`date` lives on the doc).
+    `writeSlot` (full-doc, for add/restore/detach-rekey) and `writeSlotFields`
+    (partial merge, for a non-detaching `updateSlot`) both exclude
+    `notificationId`/`notificationLeadMinutes` unconditionally. **Found while
+    building this, not in the original plan:** a real Firestore merge write
+    leaves an omitted field untouched rather than clearing it, and
+    `SlotForm` submits `notes: notes.trim() || undefined` when a note is
+    cleared — so `writeSlotFields` converts an `undefined`-valued key to the
+    `deleteField()` sentinel rather than dropping it. `routinesSync.ts`'s
+    `writeRoutineFields` has the same latent gap via
+    `routineUpdatesFromSlot`'s `kind: slot.kind` (often undefined) — **not
+    fixed**, flagged as a follow-up rather than folded into this phase.
+    `subscribeToSlotsCollection` hands `groupSlotsIntoPlans`'s output (new,
+    in `planSelectors.ts`) to its callback, same shape as the other two
+    subscribe functions.
+  - `src/services/firebase.ts` gained `generateDocId()`
+    (`doc(collection(getFirestore(), "_autoIds")).id`), replacing the
+    duplicated `generateId()` in both `itineraryStore.ts` and
+    `routineStore.ts` per the "IDs" section above.
+  - `src/store/itineraryStore.ts` lost `persist` the same way `routineStore`
+    did in phase 3. `addSlot` takes an optional third `id` param — the
+    routine materialiser's deterministic `r_{routineId}_{date}` ids are the
+    only caller that uses it. `updateSlot`'s return type changed from `void`
+    to `ItinerarySlot | undefined`: detaching a routine's stop ("this day
+    only" in the edit screen, `routineId` explicitly cleared on a slot that
+    had one) now re-keys the slot to a fresh `generateDocId()` id rather than
+    editing in place, per the "IDs" section's re-key rule, and the caller
+    needs the new id. `src/app/plan/[id].tsx`'s save handler now passes
+    `saved.value` to `scheduleRainNotificationForSlot` instead of manually
+    reconstructing the slot — the old reconstruction used the stale
+    pre-render `slot.id`, which a detach leaves pointing at nothing.
+  - `useRoutineMaterializer`'s add branch computes
+    `materializedSlotId(routine.id, date)` (new, in `routineOccurrences.ts`)
+    and passes it to `addSlot`. `useRoutineSync`'s mount effect is gated on
+    `useCloudReady()` — the cold-boot empty-state race the "IDs" and
+    materialiser sections above describe; the deterministic id makes a
+    second write idempotent rather than duplicating, but an ungated mount
+    effect still re-materialises every routine on every launch, which the
+    gate is the actual fix for.
+  - `src/store/cloudSyncStore.ts` gained `slotsReady`/`setSlotsReady`;
+    `useCloudReady()` is now the AND of all three stores.
+  - `src/services/localDataMigration.ts`'s `enqueueLocalDataMigration` now
+    enqueues settings, routines, **and** slots in the same gated block.
+    Slots are flattened out of `DayPlan.slots` via the existing
+    `allSlotsWithDates`, stripped of notification handles, chunked the same
+    way routines are.
+  - `src/hooks/useCloudBootstrap.ts` additionally subscribes to
+    `users/{uid}/slots` and hydrates `itineraryStore` on every snapshot.
+  - `src/app/(tabs)/index.tsx`, `plans.tsx`, `history.tsx`, and
+    `src/app/plan/[id].tsx` all gate on `useCloudReady()` now, rendering
+    `<Skeleton>` ahead of their existing empty-state (or, for `plan/[id]`,
+    "no longer exists") branch — same pattern `routines.tsx` used in phase 3.
+  - `src/services/backup.ts`'s `importBackup` keeps calling
+    `restoreSlot`/`restoreRoutine` unchanged, but additionally batches the
+    Firestore side directly via chunked `writeBatch()`. This is on top of,
+    not instead of, each `restoreSlot`/`restoreRoutine` call's own
+    individual write — the two are redundant (same final doc state) but the
+    explicit batch is what gives a large import atomicity within each chunk.
+  - Manual QA (offline add/edit/delete, offline cold boot, the local→cloud
+    migration, the two-device materialisation race) has **not** been run —
+    it needs a real device/simulator. Recommended before shipping.
 
 ## Two corrections to make before writing any Firestore code
 
@@ -94,17 +270,27 @@ linkWithCredential(getAuth().currentUser, cred)
 
 This also constrains the test double: fake the modular *functions*
 (`getFirestore`, `collection`, `doc`, `onSnapshot`, `writeBatch`,
-`runTransaction`, `setDoc`, `updateDoc`, `deleteDoc`), not a chained
+`setDoc`, `updateDoc`, `deleteDoc`), not a chained
 `collection().doc().set()` object, because that shape no longer exists.
 
-### `useFrameworks` must be `"static"`, not `"dynamic"` — **done**
+### `useFrameworks` must be `"dynamic"`, not `"static"` — **done, reverted**
 
-`app.json` set `ios.useFrameworks: "dynamic"`. rnfirebase.io's Expo
-installation page specifies `"static"` — `firebase-ios-sdk` requires
-`use_frameworks`, and static is the linkage it is built against. Nothing
-catches this until a prebuild and pod install fail. Changed to `"static"`;
-the next prebuild picks it up, and anyone holding a stale `ios/` folder needs
-`expo prebuild --clean`.
+This was originally written the other way round, from rnfirebase.io's Expo
+installation page, and it is wrong for the version we are on.
+`@react-native-firebase` 26 resolves `firebase-ios-sdk` through **SPM**, and
+that Swift Package only ships *dynamic* library products. With
+`use_frameworks! :linkage => :static` every react-native-firebase pod embeds
+its own copy of the same Firebase frameworks, so `pod install` now aborts
+outright:
+
+```
+[react-native-firebase] SPM + static linkage is not supported (target(s): Pods-brelly).
+```
+
+`app.json` is back to `ios.useFrameworks: "dynamic"`. The only way to keep
+static linkage would be `$RNFirebaseDisableSPM = true` in the Podfile before
+the target block, which we do not need. Anyone holding a stale `ios/` folder
+still needs `expo prebuild --clean`.
 
 ## Architecture: keep every store action's public shape, swap what backs it
 
@@ -113,16 +299,50 @@ today** (`addSlot` still returns the new slot immediately). Firestore writes
 become **fire-and-forget** underneath an optimistic local `set()`, and
 `onSnapshot` listeners keep the in-memory Zustand state as a live mirror.
 Screens keep reading via the same reactive selector hooks
-(`useItineraryStore((s) => s.plans)`) — this is what makes the migration
-invisible to `src/app/plan/new.tsx`, `plans.tsx`, `history.tsx`,
-`plan/[id].tsx`, `index.tsx`, `SlotForm.tsx`.
+(`useItineraryStore((s) => s.plans)`) — so no screen changes how it *reads*
+data: `src/app/plan/new.tsx`, `plans.tsx`, `history.tsx`, `plan/[id].tsx`,
+`index.tsx`, `SlotForm.tsx` all keep their existing selectors. The one screen
+change this migration does force is the loading skeleton, below.
 
-MMKV is **not removed** — it changes role from source of truth to
-"boot-time seed": on cold start, the store's initial state is read
-synchronously from the last-known MMKV blob (avoiding a blank-screen flash
-before the first Firestore snapshot arrives), then the `onSnapshot` listener
-takes over. That seed is also the source data for the one-time local→cloud
-migration.
+### No MMKV "boot-time seed" — a readiness gate and a skeleton instead
+
+**Decided.** An earlier draft kept MMKV as a synchronously-read boot seed so
+the first frame had data. That is dropped. Zustand's `persist` middleware
+comes off all three stores, and the cold-start gap is covered by a loading
+skeleton gated on a cloud-readiness flag instead.
+
+The reasoning: a seed is a *second source of truth* that has to be rewritten
+on every snapshot to stay useful, and a stale one is what makes the
+materialiser race (below) and the post-merge identity leak dangerous. A
+skeleton has none of that. The cost is that a cold boot shows a skeleton for
+a few hundred milliseconds instead of instant content — accepted.
+
+Note what the skeleton is *not* waiting for: it is not waiting on the
+network. It waits on Keychain auth restore plus the first cached `onSnapshot`
+delivery, both of which complete offline. An offline cold boot is skeleton →
+real plans from the Firestore cache → forecast badges served `source:
+"cached"` per `NOTES.md`. Nothing here degrades the offline path.
+
+What this leaves MMKV doing (`src/store/mmkvStorage.ts` stays):
+
+- the existing **forecast cache**, untouched by this migration;
+- the **raw pre-migration blobs** (`brelly-itinerary`, `brelly-routines`,
+  `brelly-settings`) — read-only source data for the one-time local→cloud
+  migration, never written again after it;
+- the uid-keyed **`brelly-migration-complete:{uid}` flag**;
+- the **resumable merge snapshot** in phase 5, which must survive an auth
+  identity switch and so cannot live in a uid-scoped Firestore cache.
+
+The readiness flag is the one `useCloudBootstrap()` already has to expose for
+the materialiser — one flag, two consumers, no extra machinery.
+
+**Screens must distinguish "not loaded" from "empty".** Without a seed the
+stores start at their defaults, so `index.tsx`, `plans.tsx`, `history.tsx`
+and `plan/[id].tsx` would otherwise render their empty states — with CTAs —
+confidently, then swap. Each needs a skeleton branch on `!ready` ahead of its
+existing empty-state branch. There is no shared skeleton component in the
+repo yet (`WeatherBadge` is the only thing with a loading affordance), so
+phase 2 should add one alongside the other primitives in `src/components/`.
 
 ### Firestore data model
 
@@ -217,18 +437,24 @@ thing here that would ship broken and look fine for a fortnight.
 (`src/hooks/useRoutineMaterializer.ts:68`), immediately, at cold boot, reading
 both stores through `getState()`. `planRoutineMaterialization` dedupes by
 `(routineId, date)` — it builds a `filled` set from the plans it is handed and
-skips dates already covered — so it is idempotent **given accurate state**. At
-cold boot the state is the MMKV seed, which does not yet include what the
-other device wrote.
+skips dates already covered — so it is idempotent **given accurate state**.
+With the seed dropped, the state at cold boot is not merely stale — it is
+**empty**, until the first snapshot lands.
 
 Concretely: device A materialises 14 days of a routine and writes them.
-Device B cold boots with a stale seed, the mount effect fires before the first
-snapshot lands, `filled` is empty, so it emits 14 `add` actions — each minting
-a *new* random id and writing a *new* document. The snapshot then arrives with
-device A's 14. Result: 28 slots, two per day, each with its own rain
-notification, permanently.
+Device B cold boots, the mount effect fires before the first snapshot lands,
+`filled` is empty, so it emits 14 `add` actions — each minting a *new* random
+id and writing a *new* document. The snapshot then arrives with device A's 14.
+Result: 28 slots, two per day, each with its own rain notification,
+permanently.
 
-Two changes, and they are complementary:
+Note this is now a **single-device** bug too, not just a two-device one: with
+an empty cold-boot state, one device re-materialises its own routine days on
+every launch. That makes the gating below mandatory rather than an
+optimisation — it is the primary fix, and it is the same readiness flag the
+skeleton uses.
+
+Two changes:
 
 1. **Deterministic ids for materialised slots** (`r_{routineId}_{date}`, as
    above). Both devices compute the same doc id, so the second write is an
@@ -249,28 +475,53 @@ window. Leave it alone; a one-line comment is genuinely enough there.
 
 New file `src/services/localDataMigration.ts`, run from a new
 `useCloudBootstrap()` hook mounted once in `src/app/_layout.tsx` alongside
-the existing `useRoutineSync()`/`useNotificationSync()`, and resolving before
-any `subscribeX(uid)` listener attaches:
+the existing `useRoutineSync()`/`useNotificationSync()`.
 
-1. `signInAnonymously()` if no current user.
-2. Check a local MMKV flag, **keyed by uid**
-   (`brelly-migration-complete:{uid}`) — instant, no network; skip straight to
-   attaching listeners if set. Keying by uid matters because phase 5's merge
-   changes which uid this device is on.
+**Nothing that waits on the server may gate the readiness flag.** This is the
+one place dropping the seed changes the design, and it would ship as a hang.
+`writeBatch().commit()` resolves on *server ack*, and `runTransaction()`
+cannot run offline at all — it has no local-cache path. An earlier draft
+attached listeners only after both had succeeded, and masked the wait behind
+the seed ("no visible flash regardless of how long steps 1–5 take"). With a
+skeleton instead of a seed, that same wait is a **skeleton that never
+resolves** for a user who upgrades and first launches in airplane mode.
+
+So the migration splits into an enqueue half that boot waits on, and a
+confirmation half that it does not:
+
+1. `signInAnonymously()` if no current user. Boot waits on this — it is
+   Keychain-local on a returning launch and cannot be skipped, since the uid
+   names every path.
+2. Check the uid-keyed MMKV flag `brelly-migration-complete:{uid}` — instant,
+   no network. If set, skip to step 5.
 3. If not set: read the raw MMKV blobs (`brelly-itinerary`,
-   `brelly-routines`, `brelly-settings`) directly, strip the device-local
-   notification fields, and upload via `writeBatch()`, chunked to ≤400 writes
-   (Firestore's cap is 500; a routine can generate ~260 archived slots/year
-   per `NOTES.md`, so long-lived installs need chunking).
-4. Guard against double-migration (reinstall, race) with a transactional
-   check against `users/{uid}/meta/migration` before committing.
-5. Set the local flag only after the remote commit succeeds, so a failure
-   retries next launch (idempotent via the sentinel doc).
-6. Only then attach the `onSnapshot` listeners and flip the readiness flag
-   the materialiser waits on.
+   `brelly-routines`, `brelly-settings`), strip the device-local notification
+   fields, and **enqueue** the writes via `writeBatch()`, chunked to ≤400
+   writes (Firestore's cap is 500; a routine can generate ~260 archived
+   slots/year per `NOTES.md`, so long-lived installs need chunking). Do not
+   await `commit()`. Firestore applies batched writes to the local cache
+   immediately, so the first `onSnapshot` delivery already contains the
+   migrated data whether or not the network exists.
+4. Attach the `onSnapshot` listeners and flip the readiness flag. Boot is
+   done here; the skeleton clears as soon as the first cached snapshot lands.
+5. Off the boot path, `await` the commit promises. On success set the local
+   flag and best-effort `setDoc` the `users/{uid}/meta/migration` sentinel
+   (`{ merge: true }`, `.catch()`ed). On failure leave the flag unset and
+   retry next launch.
 
-Because the MMKV read in step 3 is the same data the store's cold-boot seed
-already shows, there's no visible flash regardless of how long steps 1–5 take.
+**Re-running the migration is safe, which is what lets step 4 jump the
+queue.** Existing locally-persisted ids are reused verbatim (see "IDs"), so a
+re-upload is a same-doc-id overwrite, not a duplicate. That makes the
+blocking transactional guard unnecessary — the sentinel doc downgrades from a
+precondition to a diagnostic.
+
+**One exception, and it is a real hazard:** after phase 5's merge into an
+existing account the uid changes, so the step-2 flag is unset for the new uid
+and the migration re-runs — uploading the *frozen pre-migration blobs* into
+the joined account, resurrecting plans the user deleted months ago. With
+`persist` removed those blobs are never refreshed, so they only get staler.
+The merge must therefore set `brelly-migration-complete:{newUid}` itself as
+part of step 7; the merge has already written everything that should cross.
 
 ### Security rules
 
@@ -354,7 +605,9 @@ signal, not an error to surface.
 block us from reading the *anonymous* uid's documents. There is no window in
 which the client is authorised for both. So the merge cannot be a
 cloud-to-cloud copy — it must be driven from the **local** copy of the data,
-which we already hold in the Zustand stores and MMKV.
+which we already hold in the Zustand stores. (With `persist` removed the
+stores are the only live copy — the MMKV blobs are frozen pre-migration data
+and must **not** be used as the merge source.)
 
 Flow:
 
@@ -372,14 +625,18 @@ Flow:
    forever (rules), so this is the only chance to avoid orphaned, billed
    data.
 5. `signInWithCredential(credential)` — now authenticated as the existing uid.
-6. Tear down the old listeners and attach new ones for the new uid. Clear the
-   MMKV seed so a stale cold boot can't reintroduce the old identity's data.
+6. Drop the readiness flag back to false (the app shows the skeleton again
+   here — this is a deliberate, user-initiated wait, not a cold-boot one),
+   tear down the old listeners, and attach new ones for the new uid.
 7. If the user chose **Add**: write the snapshotted slots and routines as a
    chunked `writeBatch()` under the new uid, preserving ids — **except** where
    the id already exists in the target, where a fresh id must be minted rather
    than overwriting. Overwriting would silently destroy a plan that already
    lived in the account, which is the worst possible outcome of a merge.
    Strip the device-local notification fields on everything that crosses.
+   Then set `brelly-migration-complete:{newUid}` — see the migration section:
+   without it the next cold boot re-uploads the frozen pre-migration blobs
+   into the account the user just joined.
 8. **Settings do not merge.** They are scalar preferences and a union is
    meaningless — the account being joined is authoritative, so its settings
    win and the anonymous identity's are discarded. `digestNotificationId` is
@@ -399,7 +656,8 @@ step 7 commits, so the next launch can finish an interrupted merge.
 - `expo-apple-authentication` and `@react-native-google-signin/google-signin`
   for account linking — done in phase 0. No new id-generation package needed.
 - `app.json` plugin config and gitignored Google Service file paths — done in
-  phase 0. `ios.useFrameworks` corrected `"dynamic"` → `"static"`.
+  phase 0. `ios.useFrameworks` stays `"dynamic"` — RNFirebase 26 + SPM
+  rejects static linkage at `pod install`.
 - Since `ios`/`android` are gitignored/generated, config changes take effect
   on the next `expo prebuild` (which `expo run:ios`/`run:android` trigger) —
   anyone with a stale prebuilt folder needs `expo prebuild --clean`. Per
@@ -441,13 +699,19 @@ with a fake cannot honestly cover.
 
 New `src/services/firebase.ts`, `useCloudAuthBootstrap()` mounted in
 `_layout.tsx`, written against the modular API. Nothing reads/writes Firestore
-yet. Add the auth jest mock. (The `useFrameworks` correction is already done.)
+yet. Add the auth jest mock. (`useFrameworks` is settled — `"dynamic"`.)
 
-### Phase 2 — `settingsStore` → Firestore
+### Phase 2 — `settingsStore` → Firestore + the skeleton
 
 Simplest case (single doc, no grouping/id generation) — exercises the mirror
 pattern, the `DEFAULT_SETTINGS` merge, `migrateSettingsDoc`, and a
 settings-only slice of `localDataMigration.ts`. Strip `digestNotificationId`.
+
+Also lands the readiness plumbing the rest of the migration depends on, since
+this is the first phase where a store starts empty at boot: remove `persist`
+from `settingsStore`, expose the readiness flag from `useCloudBootstrap()`,
+and add the shared skeleton component. Phases 3–4 then only have to consume
+them.
 
 ### Phase 3 — `routineStore` → Firestore
 
@@ -493,10 +757,22 @@ verifiable against `npx tsc --noEmit`, `yarn lint`, `yarn test`.
 - After phase 4: **offline** — airplane mode, add/edit/delete a plan and a
   routine, confirm the UI reflects it immediately; reconnect and confirm the
   write appears in the Firestore console.
-- After phase 4: **the local→cloud migration** — seed MMKV with existing data
-  (or run a build predating this change), upgrade, confirm all
+- After phase 4: **offline cold boot** — the case the skeleton replaces the
+  seed for. Airplane mode, force-quit, relaunch: the skeleton must clear
+  within a beat and show real plans from the Firestore cache, with forecast
+  badges served `source: "cached"`. A skeleton that stays up means something
+  on the boot path is awaiting the server.
+- After phase 4: **offline first launch after upgrade** — the specific hang
+  this design avoids. Install a build predating the migration, create plans,
+  go into airplane mode, *then* upgrade and launch. The migration enqueues
+  but cannot commit; the app must still reach a usable screen. Reconnect and
+  confirm the writes land.
+- After phase 4: **the local→cloud migration** — populate MMKV with existing
+  data (or run a build predating this change), upgrade, confirm all
   plans/routines/settings appear under the new anonymous uid exactly once.
-  Relaunch several times to confirm no duplication.
+  Relaunch several times to confirm no duplication. Kill the app between the
+  enqueue and the commit and confirm the retry is an overwrite, not a
+  duplicate.
 - After phase 4: **the two-device materialisation race**, which is the one
   regression a single device cannot show you. Install on two devices sharing a
   uid, let device A materialise a routine, then cold-boot device B with a
@@ -509,6 +785,11 @@ verifiable against `npx tsc --noEmit`, `yarn lint`, `yarn test`.
   and confirm the app shows the union of both sets. Repeat taking "Don't add"
   and confirm the local plans are dropped and the account's own plans show.
   Kill the app mid-merge and confirm the next launch finishes it.
+- After phase 5: **no re-migration into the joined account.** After a
+  successful "Add" merge, delete one of the plans that came across, then cold
+  boot. It must stay deleted — if it returns, step 7 failed to set
+  `brelly-migration-complete:{newUid}` and the frozen pre-migration blobs are
+  being re-uploaded.
 - After phase 6: with the Local Emulator Suite running, confirm
   `firestore.rules` rejects a read/write for a uid that doesn't match
   `request.auth.uid`.

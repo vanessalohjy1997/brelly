@@ -1,3 +1,4 @@
+import { getAuth } from "@react-native-firebase/auth";
 import { File } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
@@ -5,9 +6,12 @@ import { exportBackup, importBackup } from "@/services/backup";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { fakeFirestoreDb } from "@/test/fakeFirestore";
 import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
 import type { Routine } from "@/types/routine";
 import { planRoutineMaterialization } from "@/utils/planRoutineMaterialization";
+
+const mockGetAuth = getAuth as jest.Mock;
 
 // An in-memory filesystem, so a test can write a file, hand its uri to
 // `importBackup`, and read back what `exportBackup` produced — the round trip
@@ -84,9 +88,11 @@ async function importFile(name: string, contents: unknown): Promise<void> {
 
 beforeEach(() => {
   mockShare.mockClear();
+  fakeFirestoreDb.reset();
   useItineraryStore.setState({ plans: [] });
   useRoutineStore.setState({ routines: [] });
   useSettingsStore.setState({ themePreference: "system" });
+  mockGetAuth.mockReturnValue({ currentUser: null });
 });
 
 describe("exportBackup", () => {
@@ -237,5 +243,43 @@ describe("importBackup", () => {
     await expect(importBackup("broken.json")).rejects.toThrow(
       "Not a valid Brelly backup file",
     );
+  });
+
+  describe("Firestore batching", () => {
+    beforeEach(() => {
+      mockGetAuth.mockReturnValue({ currentUser: { uid: "test-uid" } });
+    });
+
+    it("writes every imported slot and routine to its own cloud doc", async () => {
+      await importFile("backup.json", {
+        version: 1,
+        exportedAt: "2026-08-01T00:00:00.000Z",
+        itinerary: { plans: [plan] },
+        routines: { routines: [routine] },
+      });
+
+      expect(fakeFirestoreDb.docs.get("users/test-uid/slots/slot-1")).toEqual({
+        ...slot,
+        notificationId: undefined,
+        notificationLeadMinutes: undefined,
+        date: "2026-08-08",
+      });
+      expect(
+        fakeFirestoreDb.docs.get("users/test-uid/routines/routine-1"),
+      ).toEqual(routine);
+    });
+
+    it("does nothing before a uid exists", async () => {
+      mockGetAuth.mockReturnValue({ currentUser: null });
+
+      await importFile("backup.json", {
+        version: 1,
+        exportedAt: "2026-08-01T00:00:00.000Z",
+        itinerary: { plans: [plan] },
+        routines: { routines: [routine] },
+      });
+
+      expect(fakeFirestoreDb.docs.size).toBe(0);
+    });
   });
 });

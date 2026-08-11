@@ -1,5 +1,6 @@
 import type { Routine } from "@/types/routine";
 import {
+  materializedSlotId,
   routineOccurrenceDates,
   routineSlotForDate,
   routineUpdatesFromSlot,
@@ -181,5 +182,22 @@ describe("routineUpdatesFromSlot", () => {
 
     expect(updates).not.toHaveProperty("startDate");
     expect(updates).not.toHaveProperty("weekdays");
+  });
+});
+
+describe("materializedSlotId", () => {
+  it("is deterministic for the same routine and date", () => {
+    expect(materializedSlotId("r1", "2026-08-03")).toBe(
+      materializedSlotId("r1", "2026-08-03"),
+    );
+  });
+
+  it("differs across routines and across dates", () => {
+    expect(materializedSlotId("r1", "2026-08-03")).not.toBe(
+      materializedSlotId("r2", "2026-08-03"),
+    );
+    expect(materializedSlotId("r1", "2026-08-03")).not.toBe(
+      materializedSlotId("r1", "2026-08-04"),
+    );
   });
 });

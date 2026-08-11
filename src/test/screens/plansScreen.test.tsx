@@ -2,6 +2,7 @@ import { fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import PlansScreen from "@/app/(tabs)/plans";
+import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
@@ -62,9 +63,23 @@ beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
   useToastStore.setState({ toast: null, modalHosts: [] });
+  useCloudSyncStore.setState({
+    settingsReady: true,
+    routinesReady: true,
+    slotsReady: true,
+  });
 });
 
 describe("PlansScreen", () => {
+  it("shows a loading skeleton before the cloud data is ready", async () => {
+    useCloudSyncStore.setState({ slotsReady: false });
+
+    const view = await renderWithProviders(<PlansScreen />);
+
+    expect(view.getByText("Loading your plans…")).toBeTruthy();
+    expect(view.queryByText("Nothing planned")).toBeNull();
+  });
+
   it("shows the empty state when there are no plans", async () => {
     const view = await renderWithProviders(<PlansScreen />);
 

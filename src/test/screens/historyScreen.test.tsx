@@ -3,6 +3,7 @@ import { router } from "expo-router";
 
 import HistoryScreen from "@/app/(tabs)/history";
 import { getForecastForSlot } from "@/services/weather";
+import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
@@ -66,9 +67,23 @@ beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
   useToastStore.setState({ toast: null, modalHosts: [] });
+  useCloudSyncStore.setState({
+    settingsReady: true,
+    routinesReady: true,
+    slotsReady: true,
+  });
 });
 
 describe("HistoryScreen", () => {
+  it("shows a loading skeleton before the cloud data is ready", async () => {
+    useCloudSyncStore.setState({ slotsReady: false });
+
+    const view = await renderWithProviders(<HistoryScreen />);
+
+    expect(view.getByText("Loading your history…")).toBeTruthy();
+    expect(view.queryByText("Nothing here yet")).toBeNull();
+  });
+
   it("titles itself and explains when nothing has passed yet", async () => {
     const view = await renderWithProviders(<HistoryScreen />);
 

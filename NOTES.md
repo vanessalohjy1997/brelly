@@ -90,6 +90,16 @@ links back here.
   Info.plist and the iOS permission prompt silently fails. `expo-calendar` and
   `expo-notifications` now carry theirs too — the latter's `icon`/`color`, or
   Android falls back to a generic bell.
+- **`ios/` is gitignored, so anything you fix by hand in there is gone on the
+  next prebuild.** Three native build fixes live in `plugins/` as local config
+  plugins registered at the end of `app.json`'s `plugins` array — two patch
+  the generated `Podfile`, one patches the Xcode project. Each is anchored on
+  a specific bit of the Expo template and **throws** if that anchor moves,
+  rather than silently doing nothing; if a prebuild starts failing with a
+  `withXxx: no … found` error, an upstream template changed and the patch
+  needs re-anchoring. Each plugin's header comment names the upstream bug and
+  the condition under which it can be deleted. The three traps below are what
+  they exist for.
 - **`yarn add`ing a native package without running `expo install --check`
   crashes the app at launch, not at build time.** `expo`/`expo-modules-core`
   and every `expo-*` package have to be on versions that agree with each
@@ -105,6 +115,57 @@ links back here.
   restart Metro with `--clear`: Reanimated/Worklets bumps throw "[Worklets]
   Mismatch between JavaScript code version and Worklets Babel plugin version"
   from a cached transform that still embeds the old plugin version otherwise.
+- **`@expo/ui` can't see React's Objective-C headers, and the fix is a
+  Podfile patch.** Compiling `ExpoUITouchHandlerHelper.mm` fails with
+  `'React/RCTSurfaceTouchHandler.h' file not found`, which reads like an
+  `@expo/ui` version problem and is not one — the file is in 57.0.7 too, so
+  there is no patch release to move to. Because `RCT_USE_PREBUILT_RNCORE=1`,
+  React ships as a prebuilt `React.xcframework` whose headers live under
+  `React_Core/`, `React_RCTFabric/` etc. rather than `React/`. Clang resolves
+  `React` as a *framework*, doesn't find the header in it, and never falls
+  back to the `-I` paths that do contain it — the giveaway is the `note: did
+  not find header … in framework 'React'` under the error.
+  `ios/Pods/React-Core-prebuilt/React-VFS.yaml` overlays a virtual `React/`
+  directory onto `React.xcframework/Headers`, so **both** `-ivfsoverlay` and
+  an `-isystem` for that directory are needed; the overlay alone still fails.
+  `ExpoUI.podspec` declares `s.dependency 'React-RCTFabric'` but never calls
+  React Native's `add_rncore_dependency`, so it is the only Expo pod that
+  imports a React ObjC header with neither flag — its xcconfig has no
+  `OTHER_CFLAGS` line at all. `plugins/withExpoUiReactHeaderFix.js` adds them
+  in `post_install`.
+- **A freshly prebuilt `ios/` needs `pod install` to run twice, and one of
+  the plugins is why it no longer does.** `AppDelegate.swift` calls
+  `FirebaseApp.configure()`, so `FirebaseCore` has to be linked into the app
+  target; RNFirebase does that in `rnfirebase_add_spm_core_to_app_target`,
+  which skips any target lacking a `[CP] Embed Pods Frameworks` phase.
+  CocoaPods only adds that phase while "Integrating client project", *after*
+  `post_install` — so on a newly created `ios/` the linking is skipped and
+  the build dies at link time with `Undefined symbols … "_OBJC_CLASS_$_FIRApp",
+  referenced from: in AppDelegate.o`. A second `pod install` fixes it because
+  the phase now exists. `plugins/withFirebaseCoreSpmLink.js` re-runs
+  RNFirebase's own (idempotent) function from `post_integrate`, which runs
+  after integration, so one prebuild is enough.
+- **Xcode 26's explicit modules break Firebase's SPM targets, and neither
+  React Native nor RNFirebase turns them all the way off.** RNFirebase 26
+  resolves `firebase-ios-sdk` over SPM, and Firebase's internal SPM targets
+  aren't public products, so the Xcode 26 dependency scanner refuses them:
+  `'FirebaseCore' is missing a dependency on 'FirebaseCoreInternal'`. React
+  Native's `react_native_post_install` clears `SWIFT_ENABLE_EXPLICIT_MODULES`
+  project-wide but never the Clang half; RNFirebase's
+  `rnfirebase_apply_spm_build_settings` clears both halves but only walks
+  `project.native_targets`, so the *project-level* configurations keep
+  `CLANG_ENABLE_EXPLICIT_MODULES` — and Swift Package targets inherit from
+  the project. `plugins/withExplicitModulesDisabled.js` closes the gap by
+  setting both on every configuration. Don't delete it because the settings
+  "look already handled"; check `grep -c 'CLANG_ENABLE_EXPLICIT_MODULES = NO'
+  ios/brelly.xcodeproj/project.pbxproj` returns 4, not 2.
+- **`ios.useFrameworks` is `"dynamic"`, and rnfirebase.io's Expo page will
+  tell you otherwise.** That page says `"static"`; RNFirebase 26 pulls
+  `firebase-ios-sdk` through SPM, and that Swift Package only ships dynamic
+  products, so `pod install` now aborts with `SPM + static linkage is not
+  supported`. Static is only reachable via `$RNFirebaseDisableSPM = true` in
+  the Podfile, which we don't need. `FIREBASE_MIGRATION.md` carried the wrong
+  version of this for a while — the note there is corrected.
 - **A native picker's props are invisible when the mock drops them.** The
   `DateTimePicker` stub in `jest.setup.js` forwards `themeVariant`, `mode`,
   `value` and `onValueChange` on purpose: each was, at some point, the only
@@ -582,8 +643,14 @@ round needs to know.
   rain expected" or "Sunscreen — high UV". Rendered in the edit screen between
   the repeat note and the dry-window banner.
 - **Week strip** on Plans (`WeekStrip`). A horizontal row of 7 day cells
-  starting from today, each showing the day name, date number, and stop count.
-  Today's cell is distinguished with a primary border.
+  starting from today, each showing the day name and date number. Today's cell
+  is distinguished with a primary border. The stop count is a notification-
+  style badge overhanging the cell's top-right corner, not a third "N stops"
+  line — the strip sits above the list it summarises, so height there is
+  height taken from the list, and a badge inline beside the date read as
+  crowded. The badge is a bare number, so each cell carries an
+  `accessibilityLabel` ("Sat 8, 2 stops") and is `accessible` as one node; the
+  digit alone reads as nonsense otherwise.
 - **Routines screen** (`src/app/routines.tsx`) registered as a modal route.
   Lists all routines with `describeRoutine`, shows exception count, and has an
   empty state. Reachable from a repeat button in the Plans header.

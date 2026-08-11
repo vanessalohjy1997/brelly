@@ -8,6 +8,7 @@ import {
   PlanSearchField,
   SearchThreshold,
 } from "@/components/itinerary/PlanSearchField";
+import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useTheme } from "@/hooks/useTheme";
+import { useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { showToast } from "@/store/toastStore";
 import type { ItinerarySlot } from "@/types/itinerary";
@@ -39,6 +41,7 @@ import { splitPlansByTime } from "@/utils/splitPlansByTime";
  */
 export default function HistoryScreen() {
   const theme = useTheme();
+  const ready = useCloudReady();
   const plans = useItineraryStore((state) => state.plans);
   const deletePlan = useItineraryStore((state) => state.deletePlan);
   const deleteWithUndo = useDeleteSlotWithUndo();
@@ -128,7 +131,9 @@ export default function HistoryScreen() {
           </ThemedView>
         )}
 
-        {!hasPast ? (
+        {!ready ? (
+          <Skeleton label="Loading your history…" />
+        ) : !hasPast ? (
           <ThemedView style={styles.emptyState}>
             <Icon
               name={{ ios: "clock.arrow.circlepath", android: "history" }}

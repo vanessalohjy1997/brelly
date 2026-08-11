@@ -82,41 +82,51 @@ describe("WeekStrip", () => {
     expect(borderWidthOf(cell!)).toBe(1);
   });
 
-  it("shows the plan count for a day with one stop", async () => {
+  it("shows the plan count as a badge number, not a sentence", async () => {
     const today = todayKey();
-    const plans = [makePlan(today, 1)];
+    const plans = [makePlan(today, 3)];
 
     const view = await renderWithProviders(<WeekStrip plans={plans} />);
 
-    expect(view.getByText("1 stop")).toBeTruthy();
+    expect(view.getByText("3")).toBeTruthy();
+    expect(view.queryByText("3 stops")).toBeNull();
   });
 
-  it("pluralises the count for days with multiple stops", async () => {
+  it("does not render a badge for days without plans", async () => {
+    // The week of 2026-08-04 runs 4th–10th, so a "12" on screen can only be a
+    // badge — never a date number.
+    const empty = await renderWithProviders(<WeekStrip plans={[]} />);
+    expect(empty.queryByText("12")).toBeNull();
+
+    const plans = [makePlan(shiftDays(todayKey(), 1), 12)];
+    const filled = await renderWithProviders(<WeekStrip plans={plans} />);
+    expect(filled.getByText("12")).toBeTruthy();
+  });
+
+  it("shows badges for multiple days at once", async () => {
     const today = todayKey();
-    const dayTwo = shiftDays(today, 2);
-    const plans = [makePlan(dayTwo, 3)];
+    const plans = [makePlan(today, 2), makePlan(shiftDays(today, 3), 1)];
 
     const view = await renderWithProviders(<WeekStrip plans={plans} />);
 
-    expect(view.getByText("3 stops")).toBeTruthy();
+    // 2 and 1 are not date numbers in the week of 2026-08-04 (4th–10th).
+    expect(view.getByText("2")).toBeTruthy();
+    expect(view.getByText("1")).toBeTruthy();
   });
 
-  it("does not show a count for days without plans", async () => {
+  it("spells the count out for screen readers", async () => {
+    const today = todayKey();
+    const plans = [makePlan(today, 1), makePlan(shiftDays(today, 2), 3)];
+
+    const view = await renderWithProviders(<WeekStrip plans={plans} />);
+
+    expect(view.getByLabelText("Today 4, 1 stop")).toBeTruthy();
+    expect(view.getByLabelText("Thu 6, 3 stops")).toBeTruthy();
+  });
+
+  it("says so for a day with no stops", async () => {
     const view = await renderWithProviders(<WeekStrip plans={[]} />);
 
-    expect(view.queryByText(/stop/)).toBeNull();
-  });
-
-  it("shows counts for multiple days at once", async () => {
-    const today = todayKey();
-    const plans = [
-      makePlan(today, 2),
-      makePlan(shiftDays(today, 3), 1),
-    ];
-
-    const view = await renderWithProviders(<WeekStrip plans={plans} />);
-
-    expect(view.getByText("2 stops")).toBeTruthy();
-    expect(view.getByText("1 stop")).toBeTruthy();
+    expect(view.getByLabelText("Today 4, no stops")).toBeTruthy();
   });
 });

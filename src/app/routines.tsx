@@ -2,10 +2,12 @@ import { FlatList, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
+import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { useCloudReady } from "@/store/cloudSyncStore";
 import { useRoutineStore } from "@/store/routineStore";
 import type { Routine } from "@/types/routine";
 import { describeRoutine } from "@/utils/describeRoutine";
@@ -55,11 +57,14 @@ function RoutineRow({ routine }: { routine: Routine }) {
 export default function RoutinesScreen() {
   const theme = useTheme();
   const routines = useRoutineStore((state) => state.routines);
+  const ready = useCloudReady();
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-        {routines.length === 0 ? (
+        {!ready ? (
+          <Skeleton label="Loading your routines…" />
+        ) : routines.length === 0 ? (
           <ThemedView style={styles.emptyState}>
             <Icon
               name={{ ios: "repeat", android: "repeat" }}

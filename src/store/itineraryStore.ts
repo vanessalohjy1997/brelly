@@ -1,16 +1,12 @@
 import { getRegionFromCoordinates } from "@/constants/neaRegions";
-import { mmkvStorage } from "@/store/mmkvStorage";
+import { generateDocId } from "@/services/firebase";
+import { deleteSlotDoc, writeSlot, writeSlotFields } from "@/services/itinerarySync";
 import { DayPlan, ItinerarySlot } from "@/types/itinerary";
 import { toDateKey } from "@/utils/dateKeys";
 import { sortSlotsByStart } from "@/utils/planSelectors";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 9);
-}
 
 function applyUpdates(
   slot: ItinerarySlot,
@@ -42,7 +38,7 @@ function fileSlot(
           ? { ...p, slots: sortSlotsByStart([...p.slots, slot]) }
           : p,
       )
-    : [...plans, { id: generateId(), date, slots: [slot] }];
+    : [...plans, { id: date, date, slots: [slot] }];
 }
 
 function removeSlot(
@@ -74,12 +70,27 @@ type ItineraryState = {
   addSlot: (
     date: string,
     slot: Omit<ItinerarySlot, "id" | "neaRegion" | "notificationId">,
+    /** Overrides the minted id — the routine materialiser's deterministic
+     * `r_{routineId}_{date}` ids are the only caller that needs this. */
+    id?: string,
   ) => ItinerarySlot;
+  /**
+   * Returns the resulting slot, or `undefined` if it wasn't found (deleted,
+   * or already re-filed by an earlier edit).
+   *
+   * Detaching a routine's stop — clearing `routineId` on a slot that had one,
+   * "this day only" in the edit screen — re-keys the slot to a fresh id
+   * rather than editing in place; see FIREBASE_MIGRATION.md's "IDs" section
+   * for why (an exception lifted later would otherwise let the materialiser's
+   * deterministic id overwrite the detached stop). The return value is what
+   * lets a caller that scheduled a notification against the old id find the
+   * new one.
+   */
   updateSlot: (
     date: string,
     slotId: string,
     updates: Partial<Omit<ItinerarySlot, "id" | "neaRegion">>,
-  ) => void;
+  ) => ItinerarySlot | undefined;
   deleteSlot: (date: string, slotId: string) => void;
   /**
    * Puts a deleted slot back exactly as it was — same id, same derived region.
@@ -96,104 +107,117 @@ type ItineraryState = {
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-export const useItineraryStore = create<ItineraryState>()(
-  persist(
-    (set) => ({
-      plans: [],
+// Firestore is now the source of truth (`useCloudBootstrap` hydrates this
+// store from the `users/{uid}/slots` collection's `onSnapshot`), so there is
+// no `persist` middleware here any more. Every action keeps its old
+// synchronous shape — `set()` first for an instant local update, then a
+// fire-and-forget cloud write underneath it. See FIREBASE_MIGRATION.md's
+// "keep every store action's public shape" section.
+export const useItineraryStore = create<ItineraryState>()((set, get) => ({
+  plans: [],
 
-      // ── Actions ──────────────────────────────────────────────────────────────
+  // ── Actions ──────────────────────────────────────────────────────────────
 
-      addSlot: (date, slotData) => {
-        const newSlot: ItinerarySlot = {
-          ...slotData,
-          id: generateId(),
-          // Derive region from coordinates at creation time — stored on the
-          // slot so we never re-derive on every render or API call
-          neaRegion: getRegionFromCoordinates(
-            slotData.latitude,
-            slotData.longitude,
+  addSlot: (date, slotData, id) => {
+    const newSlot: ItinerarySlot = {
+      ...slotData,
+      id: id ?? generateDocId(),
+      // Derive region from coordinates at creation time — stored on the
+      // slot so we never re-derive on every render or API call
+      neaRegion: getRegionFromCoordinates(
+        slotData.latitude,
+        slotData.longitude,
+      ),
+    };
+
+    set((state) => ({ plans: fileSlot(state.plans, date, newSlot) }));
+    writeSlot(newSlot, date);
+
+    return newSlot;
+  },
+
+  updateSlot: (date, slotId, updates) => {
+    const current = get()
+      .plans.find((p) => p.date === date)
+      ?.slots.find((s) => s.id === slotId);
+    // The slot isn't where the caller thinks it is — most likely it was
+    // deleted, or already re-filed by an earlier edit. Nothing to update.
+    if (!current) return undefined;
+
+    // Detaching: the slot had a routine and this update explicitly clears
+    // it — currently only the edit screen's "this day only" branch.
+    const detaching =
+      current.routineId !== undefined &&
+      "routineId" in updates &&
+      updates.routineId === undefined;
+
+    const updated = applyUpdates(current, updates);
+    const finalSlot = detaching ? { ...updated, id: generateDocId() } : updated;
+    // A slot lives in the bucket matching its start date, so editing the
+    // date has to re-file it. Updating in place instead leaves the plan
+    // rendering under the day it used to be on.
+    const targetDate = toDateKey(new Date(finalSlot.startTime));
+
+    set((state) => {
+      if (targetDate === date) {
+        return {
+          plans: state.plans.map((p) =>
+            p.date === date
+              ? {
+                  ...p,
+                  slots: sortSlotsByStart(
+                    p.slots.map((s) => (s.id === slotId ? finalSlot : s)),
+                  ),
+                }
+              : p,
           ),
         };
+      }
 
-        set((state) => ({ plans: fileSlot(state.plans, date, newSlot) }));
+      return {
+        plans: fileSlot(
+          removeSlot(state.plans, date, slotId),
+          targetDate,
+          finalSlot,
+        ),
+      };
+    });
 
-        return newSlot;
-      },
+    if (detaching) {
+      deleteSlotDoc(slotId);
+      writeSlot(finalSlot, targetDate);
+    } else {
+      writeSlotFields(slotId, { ...updates, date: targetDate });
+    }
 
-      updateSlot: (date, slotId, updates) => {
-        set((state) => {
-          const current = state.plans
-            .find((p) => p.date === date)
-            ?.slots.find((s) => s.id === slotId);
-          // The slot isn't where the caller thinks it is — most likely it was
-          // deleted, or already re-filed by an earlier edit. Nothing to update.
-          if (!current) return state;
+    return finalSlot;
+  },
 
-          const updated = applyUpdates(current, updates);
-          // A slot lives in the bucket matching its start date, so editing the
-          // date has to re-file it. Updating in place instead leaves the plan
-          // rendering under the day it used to be on.
-          const targetDate = toDateKey(new Date(updated.startTime));
+  deleteSlot: (date, slotId) => {
+    set((state) => ({ plans: removeSlot(state.plans, date, slotId) }));
+    deleteSlotDoc(slotId);
+  },
 
-          if (targetDate === date) {
-            return {
-              plans: state.plans.map((p) =>
-                p.date === date
-                  ? {
-                      ...p,
-                      slots: sortSlotsByStart(
-                        p.slots.map((s) => (s.id === slotId ? updated : s)),
-                      ),
-                    }
-                  : p,
-              ),
-            };
-          }
+  restoreSlot: (date, slot) => {
+    set((state) => ({
+      // Deleting the last slot of a day removes the day too, so an undo
+      // often has to recreate the plan as well as the stop — which is
+      // exactly what `fileSlot` does when the date isn't there.
+      plans: fileSlot(removeSlot(state.plans, date, slot.id), date, slot),
+    }));
+    writeSlot(slot, date);
+    return slot;
+  },
 
-          return {
-            plans: fileSlot(
-              removeSlot(state.plans, date, slotId),
-              targetDate,
-              updated,
-            ),
-          };
-        });
-      },
-
-      deleteSlot: (date, slotId) => {
-        set((state) => ({ plans: removeSlot(state.plans, date, slotId) }));
-      },
-
-      restoreSlot: (date, slot) => {
-        set((state) => ({
-          // Deleting the last slot of a day removes the day too, so an undo
-          // often has to recreate the plan as well as the stop — which is
-          // exactly what `fileSlot` does when the date isn't there.
-          plans: fileSlot(
-            removeSlot(state.plans, date, slot.id),
-            date,
-            slot,
-          ),
-        }));
-        return slot;
-      },
-
-      // There is deliberately no `reorderSlots`. Slots are ordered by start
-      // time and nothing else — see `sortSlotsByStart`.
-      deletePlan: (date) => {
-        set((state) => ({
-          plans: state.plans.filter((p) => p.date !== date),
-        }));
-      },
-    }),
-    {
-      name: "brelly-itinerary",
-      storage: createJSONStorage(() => mmkvStorage),
-      version: 1,
-      migrate: (persisted, version) => {
-        if (version === 0) return persisted as ItineraryState;
-        return persisted as ItineraryState;
-      },
-    },
-  ),
-);
+  // There is deliberately no `reorderSlots`. Slots are ordered by start
+  // time and nothing else — see `sortSlotsByStart`.
+  deletePlan: (date) => {
+    const slotIds = get()
+      .plans.find((p) => p.date === date)
+      ?.slots.map((s) => s.id) ?? [];
+    set((state) => ({
+      plans: state.plans.filter((p) => p.date !== date),
+    }));
+    for (const id of slotIds) deleteSlotDoc(id);
+  },
+}));

@@ -1,6 +1,10 @@
-# Welcome to your Expo app 👋
+# Brelly ☔
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Brelly shows Singapore weather (via `data.gov.sg` NEA APIs) for your planned
+itinerary stops (via Google Places), so you know whether to bring an umbrella
+before you head out.
+
+Built with [Expo](https://expo.dev) and [Expo Router](https://docs.expo.dev/router/introduction).
 
 ## Get started
 
@@ -23,34 +27,48 @@ In the output, you'll find options to open the app in a
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+You can start developing by editing the files inside the **src/app** directory.
+This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Get a fresh project
+## Project docs
 
-When you're ready, run:
+Read the relevant one before implementing — do not work from memory of them.
+
+- [`PLAN.md`](PLAN.md) — the open task list and the verification gate
+  (`npx tsc --noEmit`, `yarn lint`, `yarn test` must all be clean).
+- [`NOTES.md`](NOTES.md) — the traps to read before writing code here, what is
+  already built, and the round-by-round history of why.
+- [`UX.md`](UX.md) — open UX issues with per-item status.
+
+## Verification gate
+
+Before checking off any task, and after every change:
 
 ```bash
-npm run reset-project
+npx tsc --noEmit
+yarn lint
+yarn test
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+All three must be clean — `yarn lint` runs with `--max-warnings 0`. All new
+features must come with tests.
 
-### Other setup steps
+## Other setup steps
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+- To set up ESLint for linting, run `npx expo lint`, or follow the guide on
+  ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
+- If you'd like to set up unit testing, follow the guide on
+  ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
+- Learn more about the TypeScript setup in this template in the guide on
+  ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
 
 ## Learn more
 
-To learn more about developing your project with Expo, look at the following resources:
+To learn more about developing with Expo, look at the following resources:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into
+  advanced topics with the [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): a
+  step-by-step tutorial where you'll create a project that runs on Android,
+  iOS, and the web.
+</content>

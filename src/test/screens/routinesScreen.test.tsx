@@ -1,4 +1,5 @@
 import RoutinesScreen from "@/app/routines";
+import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { Routine } from "@/types/routine";
@@ -21,9 +22,23 @@ function routine(overrides: Partial<Routine> = {}): Routine {
 
 beforeEach(() => {
   useRoutineStore.setState({ routines: [] });
+  useCloudSyncStore.setState({
+    settingsReady: true,
+    routinesReady: true,
+    slotsReady: true,
+  });
 });
 
 describe("RoutinesScreen", () => {
+  it("shows a loading skeleton before the cloud data is ready", async () => {
+    useCloudSyncStore.setState({ routinesReady: false });
+
+    const view = await renderWithProviders(<RoutinesScreen />);
+
+    expect(view.getByText("Loading your routines…")).toBeTruthy();
+    expect(view.queryByText("No routines")).toBeNull();
+  });
+
   it("renders the empty state when there are no routines", async () => {
     const view = await renderWithProviders(<RoutinesScreen />);
 

@@ -27,6 +27,10 @@ const PERMISSION_MESSAGE =
  * happens when both sides changed; a copy needs neither, and "I pressed the
  * button" is a far easier model to be right about than "something happened
  * overnight and now there are two of everything".
+ *
+ * Unlike `useRoutineMaterializer`, this never reads `getState()` from a mount
+ * effect — only from an explicit button press — so it's never exposed to the
+ * cold-boot empty-state window the materialiser had to be gated for.
  */
 export function useCalendarSync() {
   const plans = useItineraryStore((state) => state.plans);
