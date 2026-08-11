@@ -34,6 +34,20 @@ describe("useCloudSyncStore", () => {
 
     expect(useCloudSyncStore.getState().slotsReady).toBe(true);
   });
+
+  it("drops every flag back to false via resetReady", () => {
+    useCloudSyncStore.setState({
+      settingsReady: true,
+      routinesReady: true,
+      slotsReady: true,
+    });
+
+    useCloudSyncStore.getState().resetReady();
+
+    expect(useCloudSyncStore.getState().settingsReady).toBe(false);
+    expect(useCloudSyncStore.getState().routinesReady).toBe(false);
+    expect(useCloudSyncStore.getState().slotsReady).toBe(false);
+  });
 });
 
 describe("useCloudReady", () => {

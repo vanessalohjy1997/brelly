@@ -67,6 +67,10 @@ export default function TabLayout() {
               name="routines"
               options={{ presentation: "modal", title: "Routines" }}
             />
+            <Stack.Screen
+              name="account-link"
+              options={{ presentation: "modal", title: "Back up your data" }}
+            />
           </Stack>
           {/* After the Stack so it draws over the tab screens, and clear of
               the tab bar. Each modal above mounts its own — see `hosts` in
