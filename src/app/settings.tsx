@@ -14,6 +14,7 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { ToastHost } from "@/components/toast";
 import { Spacing } from "@/constants/theme";
+import { useAuthUser } from "@/hooks/useAuthUser";
 import { useCalendarSync } from "@/hooks/useCalendarSync";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useTheme } from "@/hooks/useTheme";
@@ -48,6 +49,11 @@ const QUIET_END_TIMES = ["06:00", "07:00", "08:00"];
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const authUser = useAuthUser();
+  const linkedAs =
+    authUser && !authUser.isAnonymous
+      ? (authUser.email ?? authUser.displayName ?? "your account")
+      : null;
   const themePreference = useSettingsStore((state) => state.themePreference);
   const setThemePreference = useSettingsStore(
     (state) => state.setThemePreference,
@@ -464,6 +470,26 @@ export default function SettingsScreen() {
               </Pressable>
               <ThemedText themeColor="textSecondary" style={styles.hint}>
                 Save all plans, routines, and settings as a JSON file.
+              </ThemedText>
+            </ThemedView>
+
+            <ThemedView style={styles.subSetting}>
+              <Pressable
+                onPress={() => router.push("/account-link")}
+                accessibilityRole="button"
+                style={[
+                  styles.testButton,
+                  { backgroundColor: theme.background },
+                ]}
+              >
+                <ThemedText style={styles.testButtonText}>
+                  {linkedAs ? `Backed up as ${linkedAs}` : "Back up your data"}
+                </ThemedText>
+              </Pressable>
+              <ThemedText themeColor="textSecondary" style={styles.hint}>
+                {linkedAs
+                  ? "Your plans, routines, and settings follow you to another device."
+                  : "Add an account so your plans survive a lost phone."}
               </ThemedText>
             </ThemedView>
           </ThemedView>

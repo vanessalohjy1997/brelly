@@ -30,14 +30,38 @@ jest.mock("react-native-mmkv", () => {
 });
 
 // @react-native-firebase/auth is native-backed the same way. Only the
-// modular functions src/services/firebase.ts actually calls are faked, per
-// FIREBASE_MIGRATION.md's testing section — the namespaced API doesn't exist
-// in the installed SDK, so there's nothing to fake beyond these.
-jest.mock("@react-native-firebase/auth", () => ({
-  getAuth: jest.fn(() => ({ currentUser: null })),
-  signInAnonymously: jest
+// modular functions src/services/firebase.ts and src/services/auth.ts
+// actually call are faked, per FIREBASE_MIGRATION.md's testing section — the
+// namespaced API doesn't exist in the installed SDK, so there's nothing to
+// fake beyond these. Stateful (a mutable `currentUser`, an
+// already-in-use registry) because phase 5's account linking needs to
+// simulate a credential swap mid-test — see src/test/fakeAuth.ts.
+jest.mock("@react-native-firebase/auth", () =>
+  require("./src/test/fakeAuth").createAuthMock(),
+);
+
+// GoogleSignin and expo-apple-authentication are native-backed too, and only
+// used from src/services/auth.ts's credential builders. auth.test.ts
+// overrides this locally for the one function it exercises directly.
+jest.mock("@react-native-google-signin/google-signin", () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn().mockResolvedValue(true),
+    signIn: jest.fn().mockResolvedValue({
+      type: "success",
+      data: { idToken: "test-google-id-token", user: {} },
+    }),
+  },
+  isSuccessResponse: jest.fn(
+    (response) => response?.type === "success",
+  ),
+}));
+
+jest.mock("expo-apple-authentication", () => ({
+  signInAsync: jest
     .fn()
-    .mockResolvedValue({ user: { uid: "test-uid", isAnonymous: true } }),
+    .mockResolvedValue({ identityToken: "test-apple-identity-token" }),
+  AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
 }));
 
 // @react-native-firebase/firestore is native-backed too, and — per

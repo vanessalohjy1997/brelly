@@ -246,6 +246,71 @@ what makes requirement 2's merge a per-document union rather than a conflict.
   - Manual QA (offline add/edit/delete, offline cold boot, the local→cloud
     migration, the two-device materialisation race) has **not** been run —
     it needs a real device/simulator. Recommended before shipping.
+- **Phase 5 (account linking, both requirements) — done.**
+  - `src/services/auth.ts` gained `getGoogleCredential()`,
+    `getAppleCredential()` (iOS-only, no nonce — `expo-crypto` isn't a
+    dependency and the SDK doesn't require one), and
+    `getEmailCredential(email, password)` — the same credential shape covers
+    both "new email" (linking creates the account) and "email already has an
+    account" (linking throws `credential-already-in-use`).
+  - `src/services/firebase.ts` gained `linkCurrentUser`,
+    `signInWithLinkedCredential`, and `subscribeToAuthUser` (backs the new
+    `src/hooks/useAuthUser.ts`, used by `settings.tsx` and
+    `account-link.tsx` to show "Backed up as {email}" once linked).
+  - `src/services/cloudListeners.ts` is new — `attachCloudListeners`/
+    `detachCloudListeners` extracted out of `useCloudBootstrap`'s mount
+    effect, so the merge flow can tear down and re-attach the three
+    `onSnapshot` mirrors under a new uid outside of React's effect
+    lifecycle. `useCloudBootstrap.ts` now just calls into it.
+    `cloudSyncStore.ts` gained `resetReady()` for the merge's skeleton-reset
+    step.
+  - `src/utils/mergeLocalIntoAccount.ts` holds `resolveMergeWrites` — the
+    one pure piece of the merge, given local items and the target account's
+    existing ids, mints a fresh id (via an injected `mintId`) only on
+    collision, and strips notification handles on every slot.
+  - `src/services/accountLinkService.ts` is the orchestrator:
+    `linkAnonymousAccount` (returns `"linked"` or `"merge-required"`),
+    `snapshotLocalData` (Zustand stores, not MMKV — settings excluded, they
+    never merge), `mergeIntoExistingAccount` (the 9-step flow: delete the
+    anonymous uid's docs, switch identity, set
+    `brelly-migration-complete:{newUid}` immediately post-switch — before
+    anything else — so a crash can't leave the next boot re-uploading frozen
+    pre-migration blobs into the joined account, then optionally write the
+    snapshot with collision resolution, reattach listeners), and
+    `resumePendingMergeIfNeeded` (called from `useCloudBootstrap`; resumes
+    only when the current user is already the non-anonymous target — there's
+    no credential left to resume an interrupted identity switch itself, so
+    that narrow crash window, matching the doc's own "crash between 5 and 7"
+    note, is accepted rather than further mitigated). The resumable snapshot
+    lives at MMKV key `brelly-pending-merge`, written before any deletion
+    and cleared only once the write commits. `localDataMigration.ts`'s
+    `migrationFlagKey` was exported (was private) for reuse here.
+  - `src/utils/promptMergeChoice.ts` is the three-button (`Add`/`Don't
+    add`/`Cancel`) `Alert.alert` wrapper for requirement 2's prompt, same
+    resolve-on-dismiss convention as the existing `askEditScope.ts`.
+  - `src/app/account-link.tsx` is the new modal screen (registered in
+    `_layout.tsx` next to `settings`/`routines`), reached from a new "Back
+    up your data" row in `settings.tsx`'s Backup section. Google, Apple
+    (iOS-only), and inline email/password rows, all funnelled through one
+    `handleLink` that calls `linkAnonymousAccount` then, on
+    `"merge-required"`, `snapshotLocalData` → (empty: merge quietly with no
+    prompt; non-empty: `promptMergeChoice` → `mergeIntoExistingAccount`).
+  - `firestore.rules` added at the repo root with the baseline
+    `request.auth.uid == uid` rule — field-validation hardening is still
+    phase 6.
+  - Testing: `src/test/fakeAuth.ts` is a new stateful double (mutable
+    `currentUser`, an `existingAccounts` registry for simulating
+    `credential-already-in-use`) backing a rewritten
+    `@react-native-firebase/auth` jest mock; `@react-native-google-signin/
+    google-signin` and `expo-apple-authentication` also gained global
+    structural mocks. `fakeFirestore.ts`'s `FakeWriteBatch` gained
+    `.delete()` for the anonymous-uid cleanup. Every new function/hook/
+    component has a co-located test; the account-link screen test drives it
+    through the mocked service layer rather than the fakes directly.
+  - Manual QA (both requirements, kill-mid-merge resumption, no
+    re-migration into the joined account) has **not** been run — needs a
+    real device/simulator with two real Google/Apple/email identities.
+    Recommended before shipping.
 
 ## Two corrections to make before writing any Firestore code
 

@@ -13,6 +13,10 @@ type CloudSyncState = {
   setRoutinesReady: (ready: boolean) => void;
   slotsReady: boolean;
   setSlotsReady: (ready: boolean) => void;
+  /** Drops every flag back to false — the account-link merge flow's step 6,
+   * so the skeleton reappears while listeners are torn down and reattached
+   * under the new uid. */
+  resetReady: () => void;
 };
 
 export const useCloudSyncStore = create<CloudSyncState>()((set) => ({
@@ -22,6 +26,8 @@ export const useCloudSyncStore = create<CloudSyncState>()((set) => ({
   setRoutinesReady: (ready) => set({ routinesReady: ready }),
   slotsReady: false,
   setSlotsReady: (ready) => set({ slotsReady: ready }),
+  resetReady: () =>
+    set({ settingsReady: false, routinesReady: false, slotsReady: false }),
 }));
 
 /** One flag, several eventual consumers — the skeleton and the materialiser. */

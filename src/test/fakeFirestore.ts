@@ -127,6 +127,13 @@ class FakeWriteBatch {
     return this;
   }
 
+  delete(ref: FakeDocRef): this {
+    this.ops.push(() => {
+      ref.delete();
+    });
+    return this;
+  }
+
   commit(): Promise<void> {
     this.ops.forEach((op) => op());
     return Promise.resolve();

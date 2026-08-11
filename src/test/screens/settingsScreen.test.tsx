@@ -1,10 +1,12 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { Linking } from "react-native";
 
 import SettingsScreen from "@/app/settings";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useToastStore } from "@/store/toastStore";
+import { fakeAuth } from "@/test/fakeAuth";
 
 const getPermissions = Notifications.getPermissionsAsync as jest.Mock;
 const requestPermissions = Notifications.requestPermissionsAsync as jest.Mock;
@@ -24,6 +26,7 @@ const DEFAULTS = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  fakeAuth.reset();
   useSettingsStore.setState(DEFAULTS);
   useToastStore.setState({ toast: null, modalHosts: [] });
   getPermissions.mockResolvedValue({ granted: true, canAskAgain: false });
@@ -313,5 +316,33 @@ describe("SettingsScreen — checking your alerts", () => {
       }),
     );
     expect(scheduleNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe("SettingsScreen — back up your data", () => {
+  it("offers to back up while still anonymous", async () => {
+    const view = await render(<SettingsScreen />);
+
+    expect(view.getByText("Back up your data")).toBeTruthy();
+  });
+
+  it("shows who it's backed up as once linked", async () => {
+    fakeAuth.setCurrentUser({
+      uid: "linked-uid",
+      isAnonymous: false,
+      email: "person@example.com",
+    });
+    const view = await render(<SettingsScreen />);
+
+    expect(view.getByText("Backed up as person@example.com")).toBeTruthy();
+    expect(view.queryByText("Back up your data")).toBeNull();
+  });
+
+  it("opens the account-link screen", async () => {
+    const view = await render(<SettingsScreen />);
+
+    await fireEvent.press(view.getByText("Back up your data"));
+
+    expect(router.push).toHaveBeenCalledWith("/account-link");
   });
 });

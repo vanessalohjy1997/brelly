@@ -19,7 +19,10 @@ const ITINERARY_MMKV_KEY = "brelly-itinerary";
 /** Firestore's own per-batch cap is 500; chunking below it leaves headroom. */
 const MAX_BATCH_WRITES = 400;
 
-function migrationFlagKey(uid: string): string {
+/** Exported for `accountLinkService.ts` — a successful merge into an
+ * existing account must set this for the *new* uid, or the next cold boot
+ * re-uploads the frozen pre-migration blobs into the account just joined. */
+export function migrationFlagKey(uid: string): string {
   return `brelly-migration-complete:${uid}`;
 }
 

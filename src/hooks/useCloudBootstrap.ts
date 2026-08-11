@@ -1,17 +1,13 @@
 import { useEffect } from "react";
 
+import { resumePendingMergeIfNeeded } from "@/services/accountLinkService";
+import { attachCloudListeners, detachCloudListeners } from "@/services/cloudListeners";
 import { ensureAnonymousUser, getFirebaseAuth } from "@/services/firebase";
-import { subscribeToSlotsCollection } from "@/services/itinerarySync";
 import {
   confirmLocalDataMigration,
   enqueueLocalDataMigration,
 } from "@/services/localDataMigration";
-import { subscribeToRoutinesCollection } from "@/services/routinesSync";
-import { subscribeToSettingsDoc } from "@/services/settingsSync";
-import { useCloudReady, useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
+import { useCloudReady } from "@/store/cloudSyncStore";
 
 /**
  * Mounted once, at the root, ahead of `useRoutineSync()`/
@@ -29,9 +25,6 @@ import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
 export function useCloudBootstrap(): boolean {
   useEffect(() => {
     let cancelled = false;
-    let unsubscribeSettings: (() => void) | undefined;
-    let unsubscribeRoutines: (() => void) | undefined;
-    let unsubscribeSlots: (() => void) | undefined;
 
     ensureAnonymousUser()
       .then(() => {
@@ -41,25 +34,17 @@ export function useCloudBootstrap(): boolean {
 
         const commit = enqueueLocalDataMigration(uid);
 
-        unsubscribeSettings = subscribeToSettingsDoc(uid, (fields) => {
-          useSettingsStore.setState({ ...DEFAULT_SETTINGS, ...fields });
-          useCloudSyncStore.getState().setSettingsReady(true);
-        });
-
-        unsubscribeRoutines = subscribeToRoutinesCollection(
-          uid,
-          (routines) => {
-            useRoutineStore.setState({ routines });
-            useCloudSyncStore.getState().setRoutinesReady(true);
-          },
-        );
-
-        unsubscribeSlots = subscribeToSlotsCollection(uid, (plans) => {
-          useItineraryStore.setState({ plans });
-          useCloudSyncStore.getState().setSlotsReady(true);
-        });
+        attachCloudListeners(uid);
 
         if (commit) confirmLocalDataMigration(uid, commit);
+
+        // No-ops unless a previous launch was killed mid account-link merge
+        // (FIREBASE_MIGRATION.md's crash-safety note) — the identity switch
+        // already happened before the crash window closes, so this resumes
+        // from the current, already-linked uid.
+        resumePendingMergeIfNeeded().catch(() => {
+          // Left for the next launch to retry, same as the migration above.
+        });
       })
       .catch(() => {
         // Backgrounded on purpose: a failure here leaves the readiness flags
@@ -68,9 +53,7 @@ export function useCloudBootstrap(): boolean {
 
     return () => {
       cancelled = true;
-      unsubscribeSettings?.();
-      unsubscribeRoutines?.();
-      unsubscribeSlots?.();
+      detachCloudListeners();
     };
   }, []);
 
