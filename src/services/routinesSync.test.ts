@@ -1,4 +1,5 @@
 import { getAuth } from "@react-native-firebase/auth";
+import { onSnapshot } from "@react-native-firebase/firestore";
 
 import {
   addExceptionField,
@@ -50,6 +51,17 @@ describe("writeRoutine", () => {
 
     expect(fakeFirestoreDb.docs.get(DOC_PATH)).toEqual(office);
   });
+
+  it("does not throw for a routine built with an explicit undefined endDate", () => {
+    // plan/new.tsx builds `addRoutine({ ..., endDate: repeat.endDate, ... })`
+    // — an "ongoing" routine (no end date chosen) means `repeat.endDate` is
+    // `undefined`, not omitted. Firestore rejects a literal `undefined`
+    // outright, so this used to throw on every ongoing routine's creation.
+    const ongoing: Routine = { ...office, endDate: undefined };
+
+    expect(() => writeRoutine(ongoing)).not.toThrow();
+    expect(fakeFirestoreDb.docs.get(DOC_PATH)).toEqual(office);
+  });
 });
 
 describe("writeRoutineFields", () => {
@@ -62,6 +74,14 @@ describe("writeRoutineFields", () => {
       ...office,
       startTime: "10:00",
     });
+  });
+
+  it("clears a field via deleteField when the update sets it to undefined", () => {
+    writeRoutine({ ...office, endDate: "2026-12-31" });
+
+    writeRoutineFields("r1", { endDate: undefined });
+
+    expect(fakeFirestoreDb.docs.get(DOC_PATH)).toEqual(office);
   });
 });
 
@@ -152,6 +172,21 @@ describe("subscribeToRoutinesCollection", () => {
     writeRoutine(office);
 
     expect(onData).not.toHaveBeenCalled();
+  });
+
+  it("hands a listener failure to onError rather than throwing", () => {
+    const mockOnSnapshot = onSnapshot as jest.Mock;
+    const failure = new Error("permission-denied");
+    mockOnSnapshot.mockImplementationOnce((_ref, _onNext, onErrorCb) => {
+      onErrorCb(failure);
+      return () => {};
+    });
+    const onData = jest.fn();
+    const onError = jest.fn();
+
+    subscribeToRoutinesCollection("test-uid", onData, onError);
+
+    expect(onError).toHaveBeenCalledWith(failure);
   });
 });
 

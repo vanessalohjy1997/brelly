@@ -113,9 +113,14 @@ export function deleteSlotDoc(id: string): void {
 export function subscribeToSlotsCollection(
   uid: string,
   onData: (plans: DayPlan[]) => void,
+  onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(slotsCollectionRef(uid), (snapshot) => {
-    const slots = snapshot.docs.map((d) => d.data() as CloudSlot);
-    onData(groupSlotsIntoPlans(slots));
-  });
+  return onSnapshot(
+    slotsCollectionRef(uid),
+    (snapshot) => {
+      const slots = snapshot.docs.map((d) => d.data() as CloudSlot);
+      onData(groupSlotsIntoPlans(slots));
+    },
+    (error) => onError?.(error),
+  );
 }

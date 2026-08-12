@@ -1,11 +1,16 @@
 # Firebase migration — phases 0–6
 
-This is the working plan for moving brelly's storage off MMKV onto Firebase
-(Firestore + Auth). **Phase 0 is done** — see "Progress so far" below. This
-document exists so the remaining phases survive across sessions; it is not
-one of the three docs `AGENTS.md` tracks (`PLAN.md`/`NOTES.md`/`UX.md`) — fold
-the relevant pieces into those once the migration ships, per their usual
-"move finished work out" convention.
+This was the working plan for moving brelly's storage off MMKV onto Firebase
+(Firestore + Auth). **All six phases are done** — see "Progress so far" below.
+It is not one of the three docs `AGENTS.md` tracks (`PLAN.md`/`NOTES.md`/
+`UX.md`); the condensed version is folded into
+[`NOTES.md`'s round 16](NOTES.md#round-16--off-mmkv-onto-firestore) and the
+outstanding manual QA lives in `PLAN.md`'s "Cloud sync" section, per their
+usual "move finished work out" convention. This document stays on disk rather
+than being deleted, though: dozens of comments across `src/` cite its section
+names directly (`grep -rn FIREBASE_MIGRATION.md src/` to find them), so it now
+serves as the permanent detailed design-rationale record for anyone who needs
+more than the round-16 summary.
 
 ## Context
 
@@ -311,6 +316,34 @@ what makes requirement 2's merge a per-document union rather than a conflict.
     re-migration into the joined account) has **not** been run — needs a
     real device/simulator with two real Google/Apple/email identities.
     Recommended before shipping.
+- **Phase 6 (security rules hardening + cleanup) — done.**
+  - `firestore.rules` now validates field shapes per collection, not just the
+    owner check. Slots and routines require their non-optional fields present
+    with the right type (`date`/`startTime`/`endTime` as strings, `latitude`/
+    `longitude` as numbers, `neaRegion`/`kind`/`themePreference` as one of
+    their known values, `weekdays` as a list of `0`–`6`), with `label`,
+    `location` and `notes` length-capped. `notificationId`,
+    `notificationLeadMinutes` and `digestNotificationId` are explicitly
+    rejected — a server-side backstop to the client-side stripping in
+    `stripNotificationHandles.ts`/`itinerarySync.ts`/`toCloudSettingsFields`,
+    not a replacement for it. Settings' fields are all optional-if-present
+    rather than required, unlike slots/routines: a slot or routine doc always
+    starts life as a full-doc write, but settings' first write for a
+    brand-new install can be a single setter's partial merge onto a doc that
+    doesn't exist yet, and requiring every field would reject it. Verified by
+    loading the rules file into the Firestore Local Emulator Suite and
+    confirming a clean compile (no `firebase.json` checked in for this — a
+    throwaway one pointed at the rules file, run via `firebase
+    emulators:exec`, then discarded). Exercising the actual allow/deny
+    decisions against real reads/writes needs the emulator running
+    interactively against seeded data and is tracked as the last item in
+    `PLAN.md`'s "Cloud sync" section instead.
+  - The materialiser's deterministic-id rule and the device-local-field rule
+    are now documented as traps in `NOTES.md`'s "read this before writing
+    code here", per this phase's own instruction — see round 16 there for the
+    condensed version of everything else in this document, and `PLAN.md`'s
+    "Cloud sync" section for the outstanding manual QA carried over from the
+    "Verification" section below.
 
 ## Two corrections to make before writing any Firestore code
 

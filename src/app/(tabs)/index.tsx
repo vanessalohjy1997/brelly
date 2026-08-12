@@ -26,7 +26,8 @@ import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useTheme } from "@/hooks/useTheme";
 import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
-import { useCloudReady } from "@/store/cloudSyncStore";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
+import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { todayKey } from "@/utils/dateKeys";
@@ -40,6 +41,7 @@ import { splitPlansByTime } from "@/utils/splitPlansByTime";
 export default function TodayScreen() {
   const colors = useTheme();
   const ready = useCloudReady();
+  const bootstrapError = useCloudBootstrapError();
   // Subscribing to `plans` (not to a getter, whose identity never changes) is
   // what makes this screen re-render when a plan is added or edited.
   const plans = useItineraryStore((state) => state.plans);
@@ -161,7 +163,11 @@ export default function TodayScreen() {
         </ThemedView>
 
         {!ready ? (
-          <Skeleton label="Loading your plans…" />
+          <Skeleton
+            label="Loading your plans…"
+            error={bootstrapError}
+            onRetry={retryCloudBootstrap}
+          />
         ) : onboardingStep ? (
           <ThemedView style={styles.emptyState}>
             <OnboardingPermissionPrimer

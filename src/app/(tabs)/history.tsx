@@ -19,7 +19,8 @@ import {
 } from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useTheme } from "@/hooks/useTheme";
-import { useCloudReady } from "@/store/cloudSyncStore";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
+import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { showToast } from "@/store/toastStore";
 import type { ItinerarySlot } from "@/types/itinerary";
@@ -42,6 +43,7 @@ import { splitPlansByTime } from "@/utils/splitPlansByTime";
 export default function HistoryScreen() {
   const theme = useTheme();
   const ready = useCloudReady();
+  const bootstrapError = useCloudBootstrapError();
   const plans = useItineraryStore((state) => state.plans);
   const deletePlan = useItineraryStore((state) => state.deletePlan);
   const deleteWithUndo = useDeleteSlotWithUndo();
@@ -132,7 +134,11 @@ export default function HistoryScreen() {
         )}
 
         {!ready ? (
-          <Skeleton label="Loading your history…" />
+          <Skeleton
+            label="Loading your history…"
+            error={bootstrapError}
+            onRetry={retryCloudBootstrap}
+          />
         ) : !hasPast ? (
           <ThemedView style={styles.emptyState}>
             <Icon

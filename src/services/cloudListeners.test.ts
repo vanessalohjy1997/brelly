@@ -1,4 +1,4 @@
-import { doc, setDoc } from "@react-native-firebase/firestore";
+import { doc, onSnapshot, setDoc } from "@react-native-firebase/firestore";
 
 import { attachCloudListeners, detachCloudListeners } from "@/services/cloudListeners";
 import { getFirebaseFirestore } from "@/services/firebase";
@@ -17,6 +17,7 @@ beforeEach(() => {
     settingsReady: false,
     routinesReady: false,
     slotsReady: false,
+    bootstrapError: null,
   });
   useSettingsStore.setState({ ...DEFAULT_SETTINGS, digestNotificationId: null });
   useRoutineStore.setState({ routines: [] });
@@ -55,6 +56,25 @@ describe("attachCloudListeners", () => {
     });
 
     expect(useSettingsStore.getState().themePreference).not.toBe("dark");
+  });
+});
+
+describe("attachCloudListeners error handling", () => {
+  it("records a listener failure in bootstrapError instead of hanging ready forever", () => {
+    const mockOnSnapshot = onSnapshot as jest.Mock;
+    mockOnSnapshot.mockImplementationOnce((_ref, _onNext, onError) => {
+      onError(new Error("permission-denied"));
+      return () => {};
+    });
+
+    attachCloudListeners(UID);
+
+    expect(useCloudSyncStore.getState().bootstrapError).toBe(
+      "We couldn't load your plans. Check your connection and try again.",
+    );
+    // The other two listeners still attached and reported ready normally.
+    expect(useCloudSyncStore.getState().routinesReady).toBe(true);
+    expect(useCloudSyncStore.getState().slotsReady).toBe(true);
   });
 });
 

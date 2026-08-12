@@ -26,6 +26,8 @@ import {
   type ExistingAccountIds,
   type LocalSnapshot,
 } from "@/utils/mergeLocalIntoAccount";
+import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
+import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 
 /** Firestore's own per-batch cap is 500; chunking below it leaves headroom —
  * same rationale as `localDataMigration.ts`'s constant of the same name. */
@@ -176,7 +178,13 @@ async function writeMergeSnapshot(
   for (let i = 0; i < writes.slots.length; i += MAX_BATCH_WRITES) {
     const batch = writeBatch(db);
     for (const { date, slot } of writes.slots.slice(i, i + MAX_BATCH_WRITES)) {
-      batch.set(doc(db, "users", uid, "slots", slot.id), { ...slot, date });
+      // Crossing an account boundary, same as the local→cloud migration and
+      // the backup import — see `stripNotificationHandles`'s doc comment for
+      // what carrying a device-local handle onto another account costs.
+      batch.set(
+        doc(db, "users", uid, "slots", slot.id),
+        omitUndefinedFields({ ...stripNotificationHandles(slot), date }),
+      );
     }
     commits.push(batch.commit());
   }
@@ -184,7 +192,10 @@ async function writeMergeSnapshot(
   for (let i = 0; i < writes.routines.length; i += MAX_BATCH_WRITES) {
     const batch = writeBatch(db);
     for (const routine of writes.routines.slice(i, i + MAX_BATCH_WRITES)) {
-      batch.set(doc(db, "users", uid, "routines", routine.id), routine);
+      batch.set(
+        doc(db, "users", uid, "routines", routine.id),
+        omitUndefinedFields(routine),
+      );
     }
     commits.push(batch.commit());
   }

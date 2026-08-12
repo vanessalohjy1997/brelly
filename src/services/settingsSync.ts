@@ -42,13 +42,18 @@ export function writeSettingsFields(fields: Record<string, unknown>): void {
 export function subscribeToSettingsDoc(
   uid: string,
   onData: (fields: Record<string, unknown>) => void,
+  onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(settingsDocRef(uid), (snapshot) => {
-    const raw = snapshot.data() as Record<string, unknown> | undefined;
-    const schemaVersion =
-      typeof raw?.schemaVersion === "number"
-        ? raw.schemaVersion
-        : SETTINGS_SCHEMA_VERSION;
-    onData(migrateSettingsDoc(raw, schemaVersion));
-  });
+  return onSnapshot(
+    settingsDocRef(uid),
+    (snapshot) => {
+      const raw = snapshot.data() as Record<string, unknown> | undefined;
+      const schemaVersion =
+        typeof raw?.schemaVersion === "number"
+          ? raw.schemaVersion
+          : SETTINGS_SCHEMA_VERSION;
+      onData(migrateSettingsDoc(raw, schemaVersion));
+    },
+    (error) => onError?.(error),
+  );
 }

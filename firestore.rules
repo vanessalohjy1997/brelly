@@ -1,8 +1,100 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isDateKey(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isTimeOfDay(v) {
+      return v is string && v.matches('^[0-9]{2}:[0-9]{2}$');
+    }
+
+    // users/{uid}/slots/{slotId} — one doc per ItinerarySlot (src/types/itinerary.ts).
+    // notificationId/notificationLeadMinutes are device-local handles that must
+    // never reach Firestore — see FIREBASE_MIGRATION.md's "Device-local fields
+    // must never sync" and stripNotificationHandles.ts.
+    function isValidSlot(data) {
+      return data.label is string && data.label.size() > 0 && data.label.size() <= 200
+        && data.location is string && data.location.size() > 0 && data.location.size() <= 300
+        && data.neaRegion in ['north', 'south', 'east', 'west', 'central']
+        && data.latitude is number
+        && data.longitude is number
+        && isDateKey(data.date)
+        && data.startTime is string && data.startTime.size() > 0
+        && data.endTime is string && data.endTime.size() > 0
+        && (!('kind' in data) || data.kind in ['outdoor', 'indoor'])
+        && (!('notificationsMuted' in data) || data.notificationsMuted is bool)
+        && (!('routineId' in data) || data.routineId is string)
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000))
+        && !('notificationId' in data)
+        && !('notificationLeadMinutes' in data);
+    }
+
+    // users/{uid}/routines/{routineId} — one doc per Routine (src/types/routine.ts).
+    function isValidRoutine(data) {
+      return data.label is string && data.label.size() > 0 && data.label.size() <= 200
+        && data.location is string && data.location.size() > 0 && data.location.size() <= 300
+        && data.latitude is number
+        && data.longitude is number
+        && data.weekdays is list && data.weekdays.hasOnly([0, 1, 2, 3, 4, 5, 6])
+        && isTimeOfDay(data.startTime)
+        && isTimeOfDay(data.endTime)
+        && isDateKey(data.startDate)
+        && (!('endDate' in data) || isDateKey(data.endDate))
+        && (!('kind' in data) || data.kind in ['outdoor', 'indoor'])
+        && (!('notificationsMuted' in data) || data.notificationsMuted is bool)
+        && data.exceptions is list;
+    }
+
+    // users/{uid}/settings/app — single doc for SettingsState (src/store/settingsStore.ts).
+    // Every field is optional here, unlike slots/routines: a slot or routine doc
+    // always starts life as a full-doc write (addSlot/addRoutine), but settings'
+    // first write can be a single setter's partial merge onto a doc that doesn't
+    // exist yet — so requiring every field on every write would reject a brand
+    // new install's first settings change. digestNotificationId is device-local
+    // (settingsSync.ts never writes it) and rejected the same way the slot's
+    // notification handles are.
+    function isValidSettings(data) {
+      return (!('themePreference' in data) || data.themePreference in ['system', 'light', 'dark'])
+        && (!('rainAlertsEnabled' in data) || data.rainAlertsEnabled is bool)
+        && (!('rainLeadMinutes' in data) || data.rainLeadMinutes in [15, 30, 45, 60])
+        && (!('quietHours' in data) || (
+          data.quietHours is map
+          && data.quietHours.enabled is bool
+          && isTimeOfDay(data.quietHours.start)
+          && isTimeOfDay(data.quietHours.end)
+        ))
+        && (!('digest' in data) || (
+          data.digest is map
+          && data.digest.enabled is bool
+          && isTimeOfDay(data.digest.time)
+        ))
+        && (!('hasSeenOnboarding' in data) || data.hasSeenOnboarding is bool)
+        && (!('schemaVersion' in data) || data.schemaVersion is number)
+        && !('digestNotificationId' in data);
+    }
+
     match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if isOwner(uid);
+    }
+
+    match /users/{uid}/slots/{slotId} {
+      allow create, update: if isOwner(uid) && isValidSlot(request.resource.data);
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/routines/{routineId} {
+      allow create, update: if isOwner(uid) && isValidRoutine(request.resource.data);
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/settings/{settingsId} {
+      allow create, update: if isOwner(uid) && isValidSettings(request.resource.data);
+      allow delete: if isOwner(uid);
     }
   }
 }

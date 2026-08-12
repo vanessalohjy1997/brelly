@@ -1,5 +1,5 @@
 import { getAuth } from "@react-native-firebase/auth";
-import { setDoc } from "@react-native-firebase/firestore";
+import { onSnapshot, setDoc } from "@react-native-firebase/firestore";
 
 import { subscribeToSettingsDoc, writeSettingsFields } from "@/services/settingsSync";
 import { useToastStore } from "@/store/toastStore";
@@ -104,5 +104,20 @@ describe("subscribeToSettingsDoc", () => {
     writeSettingsFields({ themePreference: "light" });
 
     expect(onData).not.toHaveBeenCalled();
+  });
+
+  it("hands a listener failure to onError rather than throwing", () => {
+    const mockOnSnapshot = onSnapshot as jest.Mock;
+    const failure = new Error("permission-denied");
+    mockOnSnapshot.mockImplementationOnce((_ref, _onNext, onErrorCb) => {
+      onErrorCb(failure);
+      return () => {};
+    });
+    const onData = jest.fn();
+    const onError = jest.fn();
+
+    subscribeToSettingsDoc("test-uid", onData, onError);
+
+    expect(onError).toHaveBeenCalledWith(failure);
   });
 });

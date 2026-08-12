@@ -1,4 +1,5 @@
 import { getAuth } from "@react-native-firebase/auth";
+import { onSnapshot } from "@react-native-firebase/firestore";
 
 import {
   deleteSlotDoc,
@@ -154,6 +155,21 @@ describe("subscribeToSlotsCollection", () => {
     writeSlot(lunch, "2026-07-31");
 
     expect(onData).not.toHaveBeenCalled();
+  });
+
+  it("hands a listener failure to onError rather than throwing", () => {
+    const mockOnSnapshot = onSnapshot as jest.Mock;
+    const failure = new Error("permission-denied");
+    mockOnSnapshot.mockImplementationOnce((_ref, _onNext, onErrorCb) => {
+      onErrorCb(failure);
+      return () => {};
+    });
+    const onData = jest.fn();
+    const onError = jest.fn();
+
+    subscribeToSlotsCollection("test-uid", onData, onError);
+
+    expect(onError).toHaveBeenCalledWith(failure);
   });
 });
 

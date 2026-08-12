@@ -3,6 +3,7 @@ import {
   arrayUnion,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   setDoc,
@@ -10,6 +11,7 @@ import {
 } from "@react-native-firebase/firestore";
 
 import { getFirebaseAuth, getFirebaseFirestore } from "@/services/firebase";
+import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
 import { notifyCloudSyncFailure } from "@/utils/saveWithFeedback";
 import type { Routine } from "@/types/routine";
 
@@ -26,16 +28,36 @@ function currentUid(): string | undefined {
 }
 
 /**
+ * Payload for a partial merge write — mirrors `itinerarySync.ts`'s
+ * `toCloudMergeFields`. Omitting a key here leaves whatever Firestore already
+ * has for it untouched, so a field the caller explicitly cleared to
+ * `undefined` (e.g. removing a routine's end date to make it run
+ * indefinitely again) has to become `deleteField()`, or the stale value
+ * survives in the cloud doc and comes right back on the next snapshot.
+ */
+function toCloudMergeFields(
+  fields: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    result[key] = value === undefined ? deleteField() : value;
+  }
+  return result;
+}
+
+/**
  * Fire-and-forget full-doc write for a brand-new or restored routine, called
  * from the store's `addRoutine`/`restoreRoutine` underneath their optimistic
  * local `set()`. No-ops before anonymous sign-in resolves, same as
- * `writeSettingsFields`.
+ * `writeSettingsFields`. `omitUndefinedFields` matters here specifically
+ * because a routine with no end date is built with `endDate: undefined`
+ * (see `plan/new.tsx`) — Firestore rejects a literal `undefined` outright.
  */
 export function writeRoutine(routine: Routine): void {
   const uid = currentUid();
   if (!uid) return;
-  setDoc(routineDocRef(uid, routine.id), routine).catch(() =>
-    notifyCloudSyncFailure(),
+  setDoc(routineDocRef(uid, routine.id), omitUndefinedFields(routine)).catch(
+    () => notifyCloudSyncFailure(),
   );
 }
 
@@ -46,9 +68,9 @@ export function writeRoutineFields(
 ): void {
   const uid = currentUid();
   if (!uid) return;
-  setDoc(routineDocRef(uid, id), fields, { merge: true }).catch(() =>
-    notifyCloudSyncFailure(),
-  );
+  setDoc(routineDocRef(uid, id), toCloudMergeFields(fields), {
+    merge: true,
+  }).catch(() => notifyCloudSyncFailure());
 }
 
 export function deleteRoutineDoc(id: string): void {
@@ -90,8 +112,13 @@ export function removeExceptionField(id: string, date: string): void {
 export function subscribeToRoutinesCollection(
   uid: string,
   onData: (routines: Routine[]) => void,
+  onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(routinesCollectionRef(uid), (snapshot) => {
-    onData(snapshot.docs.map((d) => d.data() as Routine));
-  });
+  return onSnapshot(
+    routinesCollectionRef(uid),
+    (snapshot) => {
+      onData(snapshot.docs.map((d) => d.data() as Routine));
+    },
+    (error) => onError?.(error),
+  );
 }

@@ -6,9 +6,10 @@ itinerary stops (via Google Places). This file is the task list only.
 ## Before you start
 
 - `NOTES.md` — [the traps](NOTES.md#read-this-before-writing-code-here) (tests,
-  the zustand store, date keys, NEA response shapes, Expo config plugins) and
-  [what is already built](NOTES.md#built-so-far). Read the traps before touching
-  any of those areas; read the round history for why something is the way it is.
+  the zustand store, date keys, NEA response shapes, Expo config plugins,
+  Firestore/cloud sync) and [what is already built](NOTES.md#built-so-far). Read
+  the traps before touching any of those areas; read the round history for why
+  something is the way it is.
 - `UX.md` — open UX issues with per-item status. Check before changing a screen,
   and tick the item when you address it.
 
@@ -101,3 +102,53 @@ Each names the seam it hangs off — none of them need new architecture.
       stays small — but `countScheduledNotifications` already exists in
       Settings, and nothing yet fails loudly if the OS starts dropping
       schedules.
+
+### Cloud sync — manual QA
+
+Itinerary, routines and settings now sync through Firestore instead of MMKV
+(anonymous auth, account linking, multi-device merge — see
+[NOTES.md round 16](NOTES.md#round-16--off-mmkv-onto-firestore)). None of the
+items below are reachable through `tsc`/`lint`/`test`; each needs a real
+device or simulator, and the last needs the Firebase Local Emulator Suite
+running. Tick as run, not as coded — the code for all of these has shipped.
+
+- [ ] **Offline add/edit/delete.** Airplane mode, add/edit/delete a plan and a
+      routine, confirm the UI reflects it immediately; reconnect and confirm
+      the write appears in the Firestore console.
+- [ ] **Offline cold boot.** Airplane mode, force-quit, relaunch: the skeleton
+      must clear within a beat and show real plans from the Firestore cache,
+      with forecast badges served `source: "cached"`. A skeleton that stays up
+      means something on the boot path is awaiting the server.
+- [ ] **Offline first launch after upgrade.** Install a build predating the
+      migration, create plans, go into airplane mode, *then* upgrade and
+      launch. The migration enqueues but cannot commit; the app must still
+      reach a usable screen. Reconnect and confirm the writes land.
+- [ ] **The local→cloud migration.** Populate MMKV with existing data (or run
+      a build predating this change), upgrade, confirm all plans/routines/
+      settings appear under the new anonymous uid exactly once. Relaunch
+      several times to confirm no duplication. Kill the app between the
+      enqueue and the commit and confirm the retry is an overwrite, not a
+      duplicate.
+- [ ] **The two-device materialisation race.** Install on two devices sharing
+      a uid, let device A materialise a routine, then cold-boot device B with
+      a stale cache and confirm you end with one slot per routine day, not
+      two.
+- [ ] **Account linking, requirement 1.** Create plans anonymously, link to a
+      brand-new Google account, confirm every plan is still there and the uid
+      is unchanged.
+- [ ] **Account linking, requirement 2.** Create plans anonymously on a second
+      device, sign in to the account from requirement 1, take the "Add"
+      option, and confirm the app shows the union of both sets. Repeat taking
+      "Don't add" and confirm the local plans are dropped and the account's
+      own plans show. Kill the app mid-merge and confirm the next launch
+      finishes it.
+- [ ] **No re-migration into the joined account.** After a successful "Add"
+      merge, delete one of the plans that came across, then cold boot. It must
+      stay deleted — if it returns, the merge failed to set
+      `brelly-migration-complete:{newUid}` and the frozen pre-migration blobs
+      are being re-uploaded.
+- [ ] **`firestore.rules` under the Local Emulator Suite.** Confirm a
+      read/write is rejected for a uid that doesn't match `request.auth.uid`,
+      and that a write with a malformed field (wrong type, missing
+      `date`/`startTime`/`endTime`, an over-length `label`/`notes`, a
+      `notificationId`/`digestNotificationId` key) is rejected too.

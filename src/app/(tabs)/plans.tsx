@@ -25,7 +25,8 @@ import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
-import { useCloudReady } from "@/store/cloudSyncStore";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
+import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import type { ItinerarySlot } from "@/types/itinerary";
 import { todayKey } from "@/utils/dateKeys";
@@ -51,6 +52,7 @@ function toSections(
 export default function PlansScreen() {
   const theme = useTheme();
   const ready = useCloudReady();
+  const bootstrapError = useCloudBootstrapError();
   const plans = useItineraryStore((state) => state.plans);
   const deleteWithUndo = useDeleteSlotWithUndo();
   const { isRefreshing, refresh } = useWeatherRefresh();
@@ -150,7 +152,11 @@ export default function PlansScreen() {
         )}
 
         {!ready ? (
-          <Skeleton label="Loading your plans…" />
+          <Skeleton
+            label="Loading your plans…"
+            error={bootstrapError}
+            onRetry={retryCloudBootstrap}
+          />
         ) : !hasUpcoming ? (
           <>
             {hasWeatherNearby ? (

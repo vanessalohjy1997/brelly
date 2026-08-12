@@ -22,11 +22,15 @@ import type { ItinerarySlot } from "@/types/itinerary";
  * strip and `backup.ts`'s import did not, so every restored stop silently lost
  * its rain alert. Anything that moves a slot across a device or account
  * boundary goes through here.
+ *
+ * Omits the keys entirely rather than setting them to `undefined` — both
+ * fields are optional on `ItinerarySlot`, and "absent" is their documented
+ * "never scheduled" state. It also matters mechanically: a key present with
+ * a literal `undefined` value type-checks and passes local state around
+ * fine, but Firestore's SDK rejects it outright ("Unsupported field value:
+ * undefined") the moment a caller writes the result to a doc.
  */
 export function stripNotificationHandles(slot: ItinerarySlot): ItinerarySlot {
-  return {
-    ...slot,
-    notificationId: undefined,
-    notificationLeadMinutes: undefined,
-  };
+  const { notificationId, notificationLeadMinutes, ...rest } = slot;
+  return rest;
 }
