@@ -1,4 +1,4 @@
-import { fireEvent } from "@testing-library/react-native";
+import { act, fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import TodayScreen from "@/app/(tabs)/index";
@@ -235,15 +235,6 @@ describe("TodayScreen", () => {
     });
   });
 
-  it("reaches settings without going via the Plans tab", async () => {
-    // The app opens here, so this is where a settings button is discoverable.
-    const view = await renderWithProviders(<TodayScreen />);
-
-    await fireEvent.press(view.getByLabelText("Settings"));
-
-    expect(router.push).toHaveBeenCalledWith("/settings");
-  });
-
   it("says how soon the next stop is, not only when it is", async () => {
     useItineraryStore.setState({
       plans: [todaysPlan([slot("s1", "Morning run", 40.5)])],
@@ -262,6 +253,33 @@ describe("TodayScreen", () => {
     const view = await renderWithProviders(<TodayScreen />);
 
     expect(view.getByText("Now")).toBeTruthy();
+  });
+
+  it("does not replay onboarding once cloud sync catches up, even though it mounted before that", async () => {
+    // `hasSeenOnboarding` already flipped to `true` in a previous session,
+    // but the Firestore-backed settings doc hasn't rehydrated into the store
+    // yet on this cold start — `settingsReady` (and therefore `useCloudReady`)
+    // is still false at mount, same as it briefly is on every real launch.
+    useCloudSyncStore.setState({
+      settingsReady: false,
+      routinesReady: false,
+      slotsReady: false,
+    });
+    useSettingsStore.setState({ hasSeenOnboarding: true });
+
+    const view = await renderWithProviders(<TodayScreen />);
+    expect(view.getByText("Loading your plans…")).toBeTruthy();
+
+    await act(async () => {
+      useCloudSyncStore.setState({
+        settingsReady: true,
+        routinesReady: true,
+        slotsReady: true,
+      });
+    });
+
+    expect(view.queryByText("Know where you are")).toBeNull();
+    expect(view.getByText("No plans yet")).toBeTruthy();
   });
 
   it("re-renders when a plan is added to the store", async () => {

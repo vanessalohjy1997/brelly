@@ -60,10 +60,6 @@ export default function TabLayout() {
               options={{ presentation: "modal", title: "Edit plan" }}
             />
             <Stack.Screen
-              name="settings"
-              options={{ presentation: "modal", title: "Settings" }}
-            />
-            <Stack.Screen
               name="routines"
               options={{ presentation: "modal", title: "Routines" }}
             />

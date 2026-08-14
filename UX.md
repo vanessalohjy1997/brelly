@@ -504,6 +504,11 @@ system settings) when the status is denied.
   neutral fill rather than the primary one, so the two don't read as a pair of
   equal actions.
 
+  Superseded: Settings is now its own tab
+  ([appTabs.tsx](src/components/appTabs.tsx)) rather than a modal reached
+  through a gear button, which is strictly more discoverable than a button on
+  two of three tabs — the gear buttons on Today and Plans are gone.
+
 - [x] **No search or filter** once the list exceeds a screen or two.
 
   [filterPlans](src/utils/filterPlans.ts) matches every term against label,

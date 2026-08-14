@@ -113,21 +113,6 @@ export default function PlansScreen() {
               />
             </Pressable>
             <Pressable
-              style={[
-                styles.addButton,
-                { backgroundColor: theme.backgroundElement },
-              ]}
-              onPress={() => router.push("/settings")}
-              hitSlop={8}
-              accessibilityLabel="Settings"
-            >
-              <Icon
-                name={{ ios: "gearshape.fill", android: "settings" }}
-                size={18}
-                tintColor={theme.text}
-              />
-            </Pressable>
-            <Pressable
               style={[styles.addButton, { backgroundColor: theme.primary }]}
               onPress={() => router.push("/plan/new")}
               accessibilityRole="button"

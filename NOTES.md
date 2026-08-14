@@ -335,8 +335,10 @@ links back here.
   which is what stops the next top-up refilling it. Nothing downstream knows
   routines exist. A dedicated routines screen (`src/app/routines.tsx`, modal
   route) lists all rules with `describeRoutine` and exception counts.
-- **Routing.** `(tabs)` group (Today, Plans, History) + root `Stack` with
-  `plan/new`, `plan/[id]`, `settings` and `routines` as modals.
+- **Routing.** `(tabs)` group (Today, Plans, History, Settings) + root `Stack`
+  with `plan/new`, `plan/[id]`, `routines` and `account-link` as modals.
+  Settings moved from a modal reached via a header gear button to a tab of its
+  own — see [round 18](#round-18--settings-becomes-a-tab).
 - **Notifications.** Rain alerts scheduled a user-set lead time ahead
   (`rainLeadMinutes`, default 45) via `useRainNotificationScheduler`;
   `cancelAndDeleteSlot` cancels the pending notification at every delete site
@@ -966,12 +968,8 @@ plan. What follows is the condensed version, folded in per this file's usual
   required, unlike slots/routines: a slot or routine doc always starts life as
   a full-doc write, but settings' very first write for a brand-new install can
   be a single setter's partial merge onto a doc that doesn't exist yet, and
-  requiring every field would reject it. Verified by loading the rules file
-  into the Firestore Local Emulator Suite and confirming a clean compile;
-  exercising the allow/deny paths against real data needs the emulator running
-  interactively and is tracked as open manual QA in `PLAN.md`, per
-  `FIREBASE_MIGRATION.md`'s own testing section — a fake can't honestly cover
-  security-rule behaviour.
+  requiring every field would reject it. The allow/deny paths against real
+  data are now exercised automatically — see [round 17](#round-17--the-rules-check-stops-being-manual).
 - **Testing follows the existing structural-fake pattern**, extended rather
   than replaced: `src/test/fakeFirestore.ts` fakes the modular functions in
   use (`getFirestore`, `collection`, `doc`, `onSnapshot`, `writeBatch`,
@@ -989,9 +987,95 @@ plan. What follows is the condensed version, folded in per this file's usual
   cold boot, the local→cloud migration surviving a kill mid-commit, and the
   two-device materialisation race from phase 4; both account-linking
   requirements, kill-mid-merge resumption, and no re-migration into a joined
-  account from phase 5; and the emulator-driven rules check from phase 6. All
-  tracked as open items in `PLAN.md` rather than left only in this paragraph.
+  account from phase 5. Tracked as open items in `PLAN.md` rather than left
+  only in this paragraph. (The phase 6 rules check is no longer on this list —
+  see [round 17](#round-17--the-rules-check-stops-being-manual).)
 - **Testing.** 1049 tests across 100 suites.
+
+### Round 17 — the rules check stops being manual
+
+Round 16's phase 6 left one item on `PLAN.md`'s QA list that didn't actually
+need a person: "exercising the allow/deny paths against real data needs the
+emulator running interactively." That's true of a human clicking through the
+emulator UI, but `@firebase/rules-unit-testing` drives the same emulator
+programmatically — no device, no account, nothing a fake can fudge, since it
+talks to the real rules engine.
+
+- `firebase.json` (new, root) points the Firestore emulator at
+  `firestore.rules`, fixed to port 8080. `demo-brelly` as the project id
+  (rather than the real one) is what makes this fully local — the Firestore
+  emulator treats any `demo-`-prefixed id as synthetic and never touches a
+  real project, so this needed no credentials and nothing gitignored.
+- `src/test/emulator/firestoreRules.emulator.test.ts` is the suite:
+  owner-vs-non-owner-vs-unauthenticated read/write/delete, and one rejected
+  case per validation branch in `firestore.rules` (missing required field,
+  wrong type, out-of-enum value, over-length string, an out-of-range weekday,
+  the device-local `notificationId`/`notificationLeadMinutes`/
+  `digestNotificationId` keys). `testEnv.withSecurityRulesDisabled()` seeds
+  fixture docs directly where a test needs one to already exist (e.g. to then
+  assert a *different* user can't read or delete it) — the only place rules
+  are bypassed on purpose, since seeding through the rules themselves would
+  make the seed itself part of what's under test.
+- This suite is deliberately **not** part of `yarn test`: it needs a running
+  emulator process, which `yarn test:emulator` (new script) provides via
+  `firebase emulators:exec --only firestore`, and it needs its own
+  `jest.emulator.config.js` — `jest.setup.js` mocks
+  `@react-native-firebase/firestore` out entirely for every other test, which
+  is exactly what this suite must *not* have happen, so it can't share the
+  main `jest` config in `package.json`. It also runs against the `firebase`
+  web SDK, not `@react-native-firebase`, since `@firebase/rules-unit-testing`
+  only speaks the web SDK's modular API — irrelevant to what's under test
+  (the rules, not the client), but worth knowing if the two ever seem to
+  disagree on an edge case.
+- `PLAN.md`'s "Cloud sync" QA list has this item checked off now, with the
+  rest of the list — real-device offline behaviour, the two-device
+  materialisation race, account linking with real Google/Apple/email
+  identities — still open exactly as round 16 left them. Nothing about this
+  round touches those; they still need a person and real accounts.
+
+### Round 18 — Settings becomes a tab
+
+Settings was a `presentation: "modal"` screen reached by a gear button in the
+Today and Plans headers. Moved to `src/app/(tabs)/settings.tsx`, a fourth
+`NativeTabs.Trigger` in `appTabs.tsx` alongside Today/Plans/History.
+
+- **The gear buttons are gone**, from both headers — a persistent tab is
+  strictly more discoverable than a button duplicated across two screens, so
+  keeping either would only add a second, redundant way in.
+- **No more per-modal `ToastHost`.** The comment in `toastStore.ts` explains
+  why `plan/new`, `plan/[id]` and `settings` used to each mount their own
+  host: a modal is a real view controller presented over the window, so the
+  root host (behind it) never draws. A tab has no such stacking problem — it
+  sits in the same layer as Today/Plans/History, none of which mount their
+  own host either — so Settings now relies on the root `<ToastHost root />`
+  in `_layout.tsx` like every other tab. `settingsScreen.test.tsx` used to
+  assert on rendered toast text for exactly this reason; it now asserts on
+  `useToastStore.getState().toast`, matching how `todayScreen.test.tsx` and
+  `plansScreen.test.tsx` already checked saves on their own screens.
+- **The padding bug this surfaced.** Two `subSetting` rows — Calendar's
+  "Add my plans to the calendar" and Backup's "Export data" — are the first
+  element inside their `optionGroup`. Every other `subSetting` sits below a
+  `switchRow`, whose own bottom padding is what visually separates it from
+  the row before; `subSetting` itself carries no top padding because it was
+  never designed to open a group. Those two buttons therefore sat flush
+  against the group's rounded top edge with no gap at all. Fixed with a
+  `firstInGroup` style (`paddingTop: Spacing.three`) applied only to those
+  two rows, rather than adding top padding to `subSetting` generally — that
+  would have doubled the gap everywhere a `subSetting` follows a `switchRow`.
+- **`BottomTabInset` (50 on iOS) was stale.** Settings' Backup section is the
+  screen most likely to hit the bottom of the scroll, and it surfaced that the
+  constant no longer cleared the tab bar: content's last few points rendered
+  *behind* it. Confirmed on a real iOS 26.5 simulator (`xcrun simctl` install
+  + `openurl` deep link to drive it, since there's no touch-input path
+  available headlessly) that the gap between content and the pill's top edge
+  was ~4pt — visually indistinguishable from zero. iOS 26's tab bar floats
+  clear of the edge (the "Liquid Glass" pill) rather than docking flush like
+  the tab bar `BottomTabInset` was originally tuned against in
+  [round 14](#round-14--the-archive-becomes-a-tab), so it needs more
+  clearance than a standard bar. Raised to 84 — measured against a
+  screenshot, so it's a real number rather than a guess — which every tab
+  shares via the one constant, so Today/Plans/History got the same fix for
+  free.
 
 ## Shipped from the feature-idea list
 
