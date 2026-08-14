@@ -137,7 +137,13 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+// iOS 26's tab bar floats clear of the bottom edge (the "Liquid Glass" pill,
+// not a docked bar), so it takes noticeably more clearance than a standard
+// tab bar — 50 measured flush against a real device leaves scrollable
+// content's last few points rendering *behind* the pill. 84 (+ Spacing.three
+// wherever this is used) clears the pill with the same breathing room every
+// other section gets, measured against a screenshot on iOS 26.5.
+export const BottomTabInset = Platform.select({ ios: 84, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
 
 // Fixed so the Today/Plans tab headers are the same height regardless of

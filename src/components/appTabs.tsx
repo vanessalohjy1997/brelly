@@ -41,6 +41,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="clock.arrow.circlepath" md="history" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="gearshape.fill" md="settings" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

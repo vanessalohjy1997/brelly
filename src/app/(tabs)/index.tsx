@@ -48,30 +48,41 @@ export default function TodayScreen() {
   const deleteWithUndo = useDeleteSlotWithUndo();
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
   const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
+  // Tracks progress *through* the two-step flow once it's underway. It
+  // starts out `null` and stays that way until the user acts on the first
+  // step below — it does not by itself decide whether the flow should
+  // start, since `hasSeenOnboarding` is `false` (the store's default)
+  // until the Firestore-backed settings doc is rehydrated, and this
+  // component can render before that happens.
   const [onboardingStep, setOnboardingStep] = useState<
     "location" | "notification" | null
-  >(() => (hasSeenOnboarding ? null : "location"));
+  >(null);
   const { request: requestNotification } = useNotificationPermission();
 
+  // Only once `ready` (settings are rehydrated) do we trust
+  // `hasSeenOnboarding` enough to decide the flow should start.
+  const activeOnboardingStep =
+    onboardingStep ?? (ready && !hasSeenOnboarding ? "location" : null);
+
   const handleOnboardingAllow = useCallback(async () => {
-    if (onboardingStep === "location") {
+    if (activeOnboardingStep === "location") {
       await Location.requestForegroundPermissionsAsync();
       setOnboardingStep("notification");
-    } else if (onboardingStep === "notification") {
+    } else if (activeOnboardingStep === "notification") {
       await requestNotification();
       setOnboardingStep(null);
       setHasSeenOnboarding(true);
     }
-  }, [onboardingStep, requestNotification, setHasSeenOnboarding]);
+  }, [activeOnboardingStep, requestNotification, setHasSeenOnboarding]);
 
   const handleOnboardingSkip = useCallback(() => {
-    if (onboardingStep === "location") {
+    if (activeOnboardingStep === "location") {
       setOnboardingStep("notification");
     } else {
       setOnboardingStep(null);
       setHasSeenOnboarding(true);
     }
-  }, [onboardingStep, setHasSeenOnboarding]);
+  }, [activeOnboardingStep, setHasSeenOnboarding]);
 
   const now = new Date();
   const todaysDate = todayKey(now);
@@ -131,23 +142,6 @@ export default function TodayScreen() {
             </ThemedText>
           </ThemedView>
           <ThemedView style={styles.headerActions}>
-            {/* Settings used to be reachable only from the Plans header, which
-                is not where anyone spends their time — the app opens here. */}
-            <Pressable
-              style={[
-                styles.addButton,
-                { backgroundColor: colors.backgroundElement },
-              ]}
-              onPress={() => router.push("/settings")}
-              hitSlop={8}
-              accessibilityLabel="Settings"
-            >
-              <Icon
-                name={{ ios: "gearshape.fill", android: "settings" }}
-                size={18}
-                tintColor={colors.text}
-              />
-            </Pressable>
             <Pressable
               style={[styles.addButton, { backgroundColor: colors.primary }]}
               onPress={() => router.push("/plan/new")}
@@ -168,10 +162,10 @@ export default function TodayScreen() {
             error={bootstrapError}
             onRetry={retryCloudBootstrap}
           />
-        ) : onboardingStep ? (
+        ) : activeOnboardingStep ? (
           <ThemedView style={styles.emptyState}>
             <OnboardingPermissionPrimer
-              kind={onboardingStep}
+              kind={activeOnboardingStep}
               onAllow={handleOnboardingAllow}
               onSkip={handleOnboardingSkip}
             />
