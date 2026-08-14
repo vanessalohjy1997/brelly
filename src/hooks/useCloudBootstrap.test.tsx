@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react-native";
 
-import { useCloudBootstrap } from "@/hooks/useCloudBootstrap";
+import { retryCloudBootstrap, useCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { ensureAnonymousUser, getFirebaseAuth } from "@/services/firebase";
 import { subscribeToSlotsCollection } from "@/services/itinerarySync";
 import {
@@ -46,6 +46,7 @@ beforeEach(() => {
     settingsReady: false,
     routinesReady: false,
     slotsReady: false,
+    bootstrapError: null,
   });
   useSettingsStore.setState({
     ...DEFAULT_SETTINGS,
@@ -75,14 +76,17 @@ describe("useCloudBootstrap", () => {
       expect(mockSubscribeSettings).toHaveBeenCalledWith(
         "test-uid",
         expect.any(Function),
+        expect.any(Function),
       ),
     );
     expect(mockSubscribeRoutines).toHaveBeenCalledWith(
       "test-uid",
       expect.any(Function),
+      expect.any(Function),
     );
     expect(mockSubscribeSlots).toHaveBeenCalledWith(
       "test-uid",
+      expect.any(Function),
       expect.any(Function),
     );
     expect(mockEnsure).toHaveBeenCalledTimes(1);
@@ -161,13 +165,63 @@ describe("useCloudBootstrap", () => {
     expect(mockConfirm).not.toHaveBeenCalled();
   });
 
-  it("does not throw and stays not ready when sign-in fails", async () => {
-    mockEnsure.mockRejectedValue(new Error("offline"));
+  it("does not throw, stays not ready, and records a friendly error when sign-in fails", async () => {
+    mockEnsure.mockRejectedValue(new Error("auth/unknown"));
 
     const { result } = await renderHook(() => useCloudBootstrap());
 
     await waitFor(() => expect(mockEnsure).toHaveBeenCalled());
     expect(result.current).toBe(false);
+    await waitFor(() =>
+      expect(useCloudSyncStore.getState().bootstrapError).toBe(
+        "We couldn't load your plans. Check your connection and try again.",
+      ),
+    );
+  });
+
+  it("does not touch bootstrapError for a sign-in that resolves after unmount", async () => {
+    let resolveEnsure: () => void = () => {};
+    mockEnsure.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveEnsure = resolve;
+      }),
+    );
+
+    const { unmount } = await renderHook(() => useCloudBootstrap());
+    await unmount();
+    resolveEnsure();
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(mockSubscribeSettings).not.toHaveBeenCalled();
+    expect(useCloudSyncStore.getState().bootstrapError).toBe(null);
+  });
+
+  describe("retryCloudBootstrap", () => {
+    it("clears a previous error and re-runs sign-in and listener attachment", async () => {
+      mockEnsure.mockRejectedValueOnce(new Error("auth/unknown"));
+
+      await renderHook(() => useCloudBootstrap());
+
+      await waitFor(() =>
+        expect(useCloudSyncStore.getState().bootstrapError).toBe(
+          "We couldn't load your plans. Check your connection and try again.",
+        ),
+      );
+
+      mockEnsure.mockResolvedValueOnce(undefined);
+      retryCloudBootstrap();
+
+      await waitFor(() => expect(mockEnsure).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(useCloudSyncStore.getState().bootstrapError).toBe(null),
+      );
+      expect(mockSubscribeSettings).toHaveBeenCalledWith(
+        "test-uid",
+        expect.any(Function),
+        expect.any(Function),
+      );
+    });
   });
 
   it("does nothing further when sign-in resolves without a uid", async () => {

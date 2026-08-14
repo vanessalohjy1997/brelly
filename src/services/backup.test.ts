@@ -281,5 +281,21 @@ describe("importBackup", () => {
 
       expect(fakeFirestoreDb.docs.size).toBe(0);
     });
+
+    it("writes a routine carrying an explicit undefined endDate rather than failing the whole batch", async () => {
+      // Firestore rejects a literal `undefined` outright — a routine that
+      // predates an end date being set (or had one cleared) can carry the key
+      // this way, same as the ongoing-routine case in routinesSync.test.ts.
+      await importFile("backup.json", {
+        version: 1,
+        exportedAt: "2026-08-01T00:00:00.000Z",
+        itinerary: { plans: [] },
+        routines: { routines: [{ ...routine, endDate: undefined }] },
+      });
+
+      expect(
+        fakeFirestoreDb.docs.get("users/test-uid/routines/routine-1"),
+      ).toEqual(routine);
+    });
   });
 });

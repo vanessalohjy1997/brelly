@@ -10,6 +10,7 @@ import {
   SETTINGS_SCHEMA_VERSION,
   toCloudSettingsFields,
 } from "@/utils/migrateSettingsDoc";
+import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
 import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 
 const SETTINGS_MMKV_KEY = "brelly-settings";
@@ -57,7 +58,10 @@ function enqueueSettingsMigration(uid: string): Promise<void> | null {
 
   return setDoc(
     settingsDocRef(uid),
-    { ...toCloudSettingsFields(migrated), schemaVersion: SETTINGS_SCHEMA_VERSION },
+    omitUndefinedFields({
+      ...toCloudSettingsFields(migrated),
+      schemaVersion: SETTINGS_SCHEMA_VERSION,
+    }),
     { merge: true },
   );
 }
@@ -85,7 +89,7 @@ function enqueueRoutinesMigration(uid: string): Promise<void> | null {
   for (let i = 0; i < routines.length; i += MAX_BATCH_WRITES) {
     const batch = writeBatch(getFirebaseFirestore());
     for (const routine of routines.slice(i, i + MAX_BATCH_WRITES)) {
-      batch.set(routineDocRef(uid, routine.id), routine);
+      batch.set(routineDocRef(uid, routine.id), omitUndefinedFields(routine));
     }
     commits.push(batch.commit());
   }
@@ -121,10 +125,10 @@ function enqueueSlotsMigration(uid: string): Promise<void> | null {
   for (let i = 0; i < slots.length; i += MAX_BATCH_WRITES) {
     const batch = writeBatch(getFirebaseFirestore());
     for (const { date, slot } of slots.slice(i, i + MAX_BATCH_WRITES)) {
-      batch.set(slotDocRef(uid, slot.id), {
-        ...stripNotificationHandles(slot),
-        date,
-      });
+      batch.set(
+        slotDocRef(uid, slot.id),
+        omitUndefinedFields({ ...stripNotificationHandles(slot), date }),
+      );
     }
     commits.push(batch.commit());
   }

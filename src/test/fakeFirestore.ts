@@ -54,6 +54,20 @@ class FakeDocRef {
     data: Record<string, unknown>,
     options?: { merge?: boolean },
   ): Promise<void> {
+    // The real SDK throws "Unsupported field value: undefined" for any key
+    // present with a literal `undefined` — a bug this fake used to hide,
+    // since a plain JS object happily holds one. Any caller that hasn't run
+    // its payload through `omitUndefinedFields`/`toCloudDoc` fails here the
+    // same way it would against the live backend.
+    for (const [key, value] of Object.entries(data)) {
+      if (value === undefined) {
+        return Promise.reject(
+          new Error(
+            `Unsupported field value: undefined (found in field ${key})`,
+          ),
+        );
+      }
+    }
     const existing = this.db.docs.get(this.path);
     const base = options?.merge && existing ? { ...existing } : {};
     const next: Record<string, unknown> = { ...base };
@@ -112,7 +126,11 @@ class FakeCollectionRef {
 }
 
 class FakeWriteBatch {
-  private readonly ops: (() => void)[] = [];
+  // Each op returns its own promise now — `commit` awaits all of them via
+  // `Promise.all` rather than firing-and-forgetting via `forEach`, so a
+  // rejection from one (e.g. `FakeDocRef.set`'s undefined-field check) fails
+  // the batch's commit instead of vanishing silently.
+  private readonly ops: (() => Promise<void>)[] = [];
 
   constructor(private readonly db: FakeFirestoreDb) {}
 
@@ -121,22 +139,17 @@ class FakeWriteBatch {
     data: Record<string, unknown>,
     options?: { merge?: boolean },
   ): this {
-    this.ops.push(() => {
-      ref.set(data, options);
-    });
+    this.ops.push(() => ref.set(data, options));
     return this;
   }
 
   delete(ref: FakeDocRef): this {
-    this.ops.push(() => {
-      ref.delete();
-    });
+    this.ops.push(() => ref.delete());
     return this;
   }
 
   commit(): Promise<void> {
-    this.ops.forEach((op) => op());
-    return Promise.resolve();
+    return Promise.all(this.ops.map((op) => op())).then(() => undefined);
   }
 }
 

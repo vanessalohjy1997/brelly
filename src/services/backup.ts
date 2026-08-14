@@ -6,6 +6,7 @@ import { getFirebaseAuth, getFirebaseFirestore } from "@/services/firebase";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
 import { notifyCloudSyncFailure } from "@/utils/saveWithFeedback";
 import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 import type { DayPlan } from "@/types/itinerary";
@@ -36,7 +37,7 @@ function batchWriteImportedData(plans: DayPlan[], routines: Routine[]): void {
   for (let i = 0; i < slots.length; i += MAX_BATCH_WRITES) {
     const batch = writeBatch(db);
     for (const slot of slots.slice(i, i + MAX_BATCH_WRITES)) {
-      batch.set(doc(db, "users", uid, "slots", slot.id), slot);
+      batch.set(doc(db, "users", uid, "slots", slot.id), omitUndefinedFields(slot));
     }
     commits.push(batch.commit());
   }
@@ -44,7 +45,10 @@ function batchWriteImportedData(plans: DayPlan[], routines: Routine[]): void {
   for (let i = 0; i < routines.length; i += MAX_BATCH_WRITES) {
     const batch = writeBatch(db);
     for (const routine of routines.slice(i, i + MAX_BATCH_WRITES)) {
-      batch.set(doc(db, "users", uid, "routines", routine.id), routine);
+      batch.set(
+        doc(db, "users", uid, "routines", routine.id),
+        omitUndefinedFields(routine),
+      );
     }
     commits.push(batch.commit());
   }

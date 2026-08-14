@@ -21,7 +21,8 @@ import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useWeatherForSlot } from "@/hooks/useWeatherForSlot";
 import { cancelNotification } from "@/services/notifications";
 import { getUpcomingForecast } from "@/services/weather";
-import { useCloudReady } from "@/store/cloudSyncStore";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
+import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { askEditScope } from "@/utils/askEditScope";
@@ -59,6 +60,7 @@ export default function EditSlotScreen() {
   const confirmDiscard = useUnsavedChangesGuard(dirty);
   const theme = useTheme();
   const ready = useCloudReady();
+  const bootstrapError = useCloudBootstrapError();
 
   const { data: weather } = useWeatherForSlot({
     region: found?.slot.neaRegion ?? ("" as any),
@@ -88,7 +90,13 @@ export default function EditSlotScreen() {
   }, [found, upcomingPeriods]);
 
   if (!ready) {
-    return <Skeleton label="Loading your plan…" />;
+    return (
+      <Skeleton
+        label="Loading your plan…"
+        error={bootstrapError}
+        onRetry={retryCloudBootstrap}
+      />
+    );
   }
 
   if (!found) {

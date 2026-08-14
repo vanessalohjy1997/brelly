@@ -185,6 +185,44 @@ describe("mergeIntoExistingAccount", () => {
     ).toMatchObject({ id: "r1" });
   });
 
+  it("strips notification handles from a merged slot, same as every other write path that crosses a device or account boundary", async () => {
+    const credential = credentialForExistingAccount();
+    const snapshot = {
+      slots: [
+        {
+          date: "2025-06-01",
+          slot: slot({
+            id: "s1",
+            notificationId: "device-a-alert",
+            notificationLeadMinutes: 45,
+          }),
+        },
+      ],
+      routines: [],
+    };
+
+    await mergeIntoExistingAccount(credential, snapshot, true);
+
+    const doc = fakeFirestoreDb.docs.get(`users/${EXISTING_UID}/slots/s1`);
+    expect(doc?.notificationId).toBeUndefined();
+    expect(doc?.notificationLeadMinutes).toBeUndefined();
+  });
+
+  it("does not throw merging a routine built with an explicit undefined endDate", async () => {
+    const credential = credentialForExistingAccount();
+    const snapshot = {
+      slots: [],
+      routines: [routine({ id: "r1", endDate: undefined })],
+    };
+
+    await expect(
+      mergeIntoExistingAccount(credential, snapshot, true),
+    ).resolves.toBeUndefined();
+    expect(
+      fakeFirestoreDb.docs.get(`users/${EXISTING_UID}/routines/r1`),
+    ).toEqual(routine({ id: "r1" }));
+  });
+
   it("writes nothing into the target account when not adding", async () => {
     const credential = credentialForExistingAccount();
     const snapshot = {

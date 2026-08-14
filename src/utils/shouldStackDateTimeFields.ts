@@ -1,11 +1,13 @@
 /**
- * Width a single `mode="datetime"` `DateTimePicker` needs to render without
- * clipping. The native picker draws a date capsule ("30 Jul 2026") next to a
- * time capsule ("7:00 PM") at its own intrinsic size — it does *not* shrink to
- * fit its container, so a container narrower than this makes the two pickers
- * visually overlap instead of wrapping.
+ * Width a single `mode="time"` `DateTimePicker` needs to render without
+ * clipping. The native picker draws a time capsule ("7:00 PM") at its own
+ * intrinsic size — it does *not* shrink to fit its container, so a container
+ * narrower than this makes two of them side by side visually overlap instead
+ * of wrapping. Starts and Ends are both `mode="time"` — the day they share
+ * lives in its own `mode="date"` picker above them — so this only has to fit
+ * a time capsule, not a date-and-time pair.
  */
-export const MinDateTimePickerWidth = 240;
+export const MinTimePickerWidth = 110;
 
 /**
  * Width to render the pickers at.
@@ -31,5 +33,5 @@ export function shouldStackDateTimeFields(
   availableWidth: number,
   gap: number,
 ): boolean {
-  return availableWidth < MinDateTimePickerWidth * 2 + gap;
+  return availableWidth < MinTimePickerWidth * 2 + gap;
 }

@@ -151,6 +151,26 @@ describe("enqueueLocalDataMigration — routines", () => {
     ).toEqual(office);
   });
 
+  it("migrates a locally-persisted routine with an undefined endDate", async () => {
+    // An "ongoing" routine (no end date) is built with `endDate: undefined`
+    // rather than the key simply being absent — see routinesSync.test.ts.
+    // Firestore rejects a literal `undefined` outright, so a pre-Firestore
+    // install's ongoing routines used to fail the whole migration commit.
+    mmkvStorage.setItem(
+      "brelly-routines",
+      JSON.stringify({
+        state: { routines: [{ ...office, endDate: undefined }] },
+        version: 1,
+      }),
+    );
+
+    const commit = enqueueLocalDataMigration(UID);
+    await expect(commit).resolves.toBeUndefined();
+    expect(fakeFirestoreDb.docs.get(`users/${UID}/routines/routine-1`)).toEqual(
+      office,
+    );
+  });
+
   it("chunks writes across multiple batches for a large routine list", () => {
     const routines = Array.from({ length: 450 }, (_, i) => ({
       ...office,
@@ -206,7 +226,7 @@ describe("enqueueLocalDataMigration — slots", () => {
     });
   });
 
-  it("strips notification handles so they never reach the cloud", () => {
+  it("strips notification handles so they never reach the cloud", async () => {
     mmkvStorage.setItem(
       "brelly-itinerary",
       JSON.stringify({
@@ -229,9 +249,16 @@ describe("enqueueLocalDataMigration — slots", () => {
       }),
     );
 
-    enqueueLocalDataMigration(UID);
+    // Awaited, not just fired: a literal `notificationId: undefined` left in
+    // the write payload makes Firestore reject the whole write, which the
+    // synchronous doc-property check below couldn't have told apart from a
+    // clean strip — both read as `undefined` whether the key is a stripped
+    // absence or the doc never landed at all.
+    const commit = enqueueLocalDataMigration(UID);
+    await expect(commit).resolves.toBeUndefined();
 
     const doc = fakeFirestoreDb.docs.get(`users/${UID}/slots/slot-1`);
+    expect(doc).toEqual({ ...lunch, date: "2026-07-31" });
     expect(doc?.notificationId).toBeUndefined();
     expect(doc?.notificationLeadMinutes).toBeUndefined();
   });

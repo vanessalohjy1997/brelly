@@ -7,7 +7,8 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import { useCloudReady } from "@/store/cloudSyncStore";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
+import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useRoutineStore } from "@/store/routineStore";
 import type { Routine } from "@/types/routine";
 import { describeRoutine } from "@/utils/describeRoutine";
@@ -58,12 +59,17 @@ export default function RoutinesScreen() {
   const theme = useTheme();
   const routines = useRoutineStore((state) => state.routines);
   const ready = useCloudReady();
+  const bootstrapError = useCloudBootstrapError();
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
         {!ready ? (
-          <Skeleton label="Loading your routines…" />
+          <Skeleton
+            label="Loading your routines…"
+            error={bootstrapError}
+            onRetry={retryCloudBootstrap}
+          />
         ) : routines.length === 0 ? (
           <ThemedView style={styles.emptyState}>
             <Icon
