@@ -264,6 +264,44 @@ describe("TodayScreen", () => {
     expect(view.getByText("Now")).toBeTruthy();
   });
 
+  it("does not re-show the location primer once it was already dismissed", async () => {
+    // Regression test: `hasSeenOnboarding` starts `false` (the store's
+    // default) and only reflects the real, previously-saved value once the
+    // Firestore settings snapshot lands — asynchronously, after this
+    // screen's first render. Deciding whether to show the primer before
+    // that snapshot arrives used to lock in "show it", so the prompt
+    // reappeared on every launch even for users who had already dismissed
+    // it. Here `settingsReady` starts false and only flips true once the
+    // (already-true) `hasSeenOnboarding` value has "arrived", mirroring the
+    // real cloud-hydration race.
+    useSettingsStore.setState({ hasSeenOnboarding: false });
+    useCloudSyncStore.setState({ settingsReady: false });
+
+    const view = await renderWithProviders(<TodayScreen />);
+    expect(view.getByText("Loading your plans…")).toBeTruthy();
+
+    useSettingsStore.setState({ hasSeenOnboarding: true });
+    useCloudSyncStore.setState({ settingsReady: true });
+
+    expect(await view.findByText("No plans yet")).toBeTruthy();
+    expect(view.queryByText("Know where you are")).toBeNull();
+  });
+
+  it("shows the location primer for a first-time user and hides it once dismissed", async () => {
+    useSettingsStore.setState({ hasSeenOnboarding: false });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(await view.findByText("Know where you are")).toBeTruthy();
+
+    await fireEvent.press(view.getByText("Not now"));
+    expect(await view.findByText("Get rain alerts")).toBeTruthy();
+
+    await fireEvent.press(view.getByText("Not now"));
+    expect(await view.findByText("No plans yet")).toBeTruthy();
+    expect(useSettingsStore.getState().hasSeenOnboarding).toBe(true);
+  });
+
   it("re-renders when a plan is added to the store", async () => {
     // The screen previously subscribed to a store *getter*, whose identity
     // never changes — so it never re-rendered when plans did.

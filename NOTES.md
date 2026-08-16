@@ -751,9 +751,11 @@ round needs to know.
   Today screen (`OnboardingPermissionPrimer`), gated by `hasSeenOnboarding`
   in the settings store. Location first (enables nearby weather), notification
   second (enables rain alerts). Each step offers "Allow" and "Not now"; either
-  advances. The flow is a `useState` initialised from MMKV (synchronous read,
-  so the value is correct on the first render — no flash). Existing users get
-  `hasSeenOnboarding: true` from the version-2 migration and never see it.
+  advances. Existing users get `hasSeenOnboarding: true` from the version-2
+  migration and never see it. *(Originally a `useState` initialised from MMKV,
+  correct on the first render because that read was synchronous — see
+  [round 17](#round-17--the-onboarding-primer-stopped-trusting-a-stale-first-render)
+  for why the move off MMKV broke this and how it was fixed.)*
 - **Gap and overlap warnings** are a pure util (`detectScheduleConflicts`) that
   returns time overlaps and implausible-distance gaps (Haversine at 60 km/h
   threshold). Wired into the Plans screen above the SectionList as amber
@@ -992,6 +994,49 @@ plan. What follows is the condensed version, folded in per this file's usual
   account from phase 5; and the emulator-driven rules check from phase 6. All
   tracked as open items in `PLAN.md` rather than left only in this paragraph.
 - **Testing.** 1049 tests across 100 suites.
+
+### Round 17 — the onboarding primer stopped trusting a stale first render
+
+A user-reported bug: the location/notification permission primer
+(`OnboardingPermissionPrimer`, gated by `hasSeenOnboarding`) kept reappearing
+on every app launch even after being dismissed. Not an OS-level permission
+reset — `hasSeenOnboarding: true` really was persisted to Firestore each time.
+
+- **Root cause: a `useState` lazy initializer racing the cloud snapshot.**
+  Round 16 (above) moved `settingsStore` off MMKV's synchronous `persist`
+  rehydrate onto an async Firestore `onSnapshot` listener
+  (`src/services/cloudListeners.ts`), but `src/app/(tabs)/index.tsx` still
+  decided `onboardingStep` with `useState(() => hasSeenOnboarding ? null :
+  "location")` — a lazy initializer that runs exactly once, on the very first
+  render, before the listener has delivered anything. `hasSeenOnboarding` is
+  `false` at that instant regardless of what's saved, so the step locked to
+  `"location"` every launch; nothing ever re-derived it once the real value
+  arrived a moment later. The round-13 note above (this file) still described
+  the flow as reading synchronously from MMKV, which is exactly the assumption
+  that no longer held — a stale note pointing at code that had changed under
+  it.
+- **Fix:** `onboardingStep` now starts `null` unconditionally, and a
+  `useState`-backed gate (not a `useRef`, and not a `useEffect`) decides once,
+  during render, after `ready` flips true: `if (ready && !onboardingDecided) {
+  setOnboardingDecided(true); if (!hasSeenOnboarding) setOnboardingStep(...) }`.
+  This is React's documented "adjust state during render" pattern for state
+  that depends on a value arriving after mount — calling `setState`
+  conditionally, guarded so it only fires once, catches the *actual* value
+  instead of the mount-time default. A `useRef` read during render and a
+  `setState` inside a `useEffect` were both tried first and both rejected by
+  this repo's lint config (`react-hooks/refs`, `react-hooks/set-state-in-effect`
+  respectively) — the render-time `useState` guard is the only one of the
+  three the linter accepts for this shape.
+- **Testing.** The existing Today-screen test suite pre-seeded
+  `hasSeenOnboarding: true` and `settingsReady: true` in `beforeEach` *before*
+  ever rendering — which is precisely the synchronous-arrival condition that
+  doesn't hold in the real app, so the suite passed while the bug shipped.
+  Two new cases in `todayScreen.test.tsx` cover the actual race: one starts
+  `settingsReady: false` with `hasSeenOnboarding: false`, then flips both to
+  `true` together (mirroring the snapshot's arrival) and asserts the primer
+  never renders; the other is a genuine first-time user (`hasSeenOnboarding:
+  false` throughout) confirming the primer still shows and dismissing it via
+  "Not now" through both steps sets the flag.
 
 ## Shipped from the feature-idea list
 

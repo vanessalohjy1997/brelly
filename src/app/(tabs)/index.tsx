@@ -50,8 +50,24 @@ export default function TodayScreen() {
   const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
   const [onboardingStep, setOnboardingStep] = useState<
     "location" | "notification" | null
-  >(() => (hasSeenOnboarding ? null : "location"));
+  >(null);
   const { request: requestNotification } = useNotificationPermission();
+
+  // hasSeenOnboarding starts false and only reflects the real, previously
+  // saved value once the Firestore settings snapshot lands (see
+  // settingsStore.ts) — which happens after this component's first render.
+  // Deciding on mount (a useState initializer) would catch that stale
+  // default and show the primer on every launch, so this waits for `ready`
+  // and decides exactly once, adjusting state during render rather than in
+  // an effect (react.dev's pattern for state that depends on a value that
+  // "arrives" later — avoids an extra committed frame with the wrong step).
+  const [onboardingDecided, setOnboardingDecided] = useState(false);
+  if (ready && !onboardingDecided) {
+    setOnboardingDecided(true);
+    if (!hasSeenOnboarding) {
+      setOnboardingStep("location");
+    }
+  }
 
   const handleOnboardingAllow = useCallback(async () => {
     if (onboardingStep === "location") {
