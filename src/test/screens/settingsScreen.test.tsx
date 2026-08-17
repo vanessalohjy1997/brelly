@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { Linking } from "react-native";
 
-import SettingsScreen from "@/app/settings";
+import SettingsScreen from "@/app/(tabs)/settings";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useToastStore } from "@/store/toastStore";
 import { fakeAuth } from "@/test/fakeAuth";
@@ -122,15 +122,19 @@ describe("SettingsScreen", () => {
 });
 
 describe("SettingsScreen — save feedback", () => {
-  it("confirms a change inside the modal, where it can be seen", async () => {
-    // Settings has no Save button and never closes on a change, so the toast
-    // is the only acknowledgement — and it has to render from this screen's
-    // own host, not the one at the root behind it.
+  // Settings has no Save button and never closes on a change, so the toast
+  // is the only acknowledgement. Settings is a tab now, not a modal with its
+  // own host, so — like the other tabs — these check the store the root
+  // `ToastHost` renders from rather than rendered toast text.
+  it("confirms a change", async () => {
     const view = await render(<SettingsScreen />);
 
     await fireEvent.press(view.getByText("Dark"));
 
-    expect(view.getByText("Appearance set to Dark")).toBeTruthy();
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Appearance set to Dark",
+      variant: "success",
+    });
   });
 
   it("says which way a switch went", async () => {
@@ -138,7 +142,9 @@ describe("SettingsScreen — save feedback", () => {
 
     await fireEvent(view.getByLabelText("Rain alerts"), "valueChange", false);
 
-    expect(view.getByText("Rain alerts off")).toBeTruthy();
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Rain alerts off",
+    });
   });
 
   it("confirms a new lead time in the same words as the setting", async () => {
@@ -146,7 +152,9 @@ describe("SettingsScreen — save feedback", () => {
 
     await fireEvent.press(view.getByText("15 min"));
 
-    expect(view.getByText("Warning 15 minutes ahead")).toBeTruthy();
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Warning 15 minutes ahead",
+    });
   });
 
   it("confirms a digest time", async () => {
@@ -155,7 +163,9 @@ describe("SettingsScreen — save feedback", () => {
 
     await fireEvent.press(view.getByText("06:30"));
 
-    expect(view.getByText("Digest at 06:30")).toBeTruthy();
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Digest at 06:30",
+    });
   });
 
   it("confirms a quiet-hours bound", async () => {
@@ -166,7 +176,9 @@ describe("SettingsScreen — save feedback", () => {
 
     await fireEvent.press(view.getByText("23:00"));
 
-    expect(view.getByText("Quiet from 23:00")).toBeTruthy();
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Quiet from 23:00",
+    });
   });
 
   it("reports a change that failed to save instead of implying it worked", async () => {
@@ -179,8 +191,10 @@ describe("SettingsScreen — save feedback", () => {
 
     await fireEvent(view.getByLabelText("Rain alerts"), "valueChange", false);
 
-    expect(view.getByText("Couldn't save that setting. Try again.")).toBeTruthy();
-    expect(useToastStore.getState().toast?.variant).toBe("error");
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Couldn't save that setting. Try again.",
+      variant: "error",
+    });
 
     failing.mockRestore();
   });

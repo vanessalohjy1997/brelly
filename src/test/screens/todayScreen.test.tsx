@@ -1,4 +1,4 @@
-import { fireEvent } from "@testing-library/react-native";
+import { act, fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import TodayScreen from "@/app/(tabs)/index";
@@ -45,7 +45,11 @@ jest.mock("@/services/airQuality", () => ({
  * upcoming stop before breakfast and an archived one after it — the test would
  * pass or fail depending on when it ran.
  */
-function slot(id: string, label: string, minutesFromNow: number): ItinerarySlot {
+function slot(
+  id: string,
+  label: string,
+  minutesFromNow: number,
+): ItinerarySlot {
   const start = new Date(Date.now() + minutesFromNow * 60 * 1000);
   const end = new Date(start.getTime() + 30 * 60 * 1000);
 
@@ -142,7 +146,10 @@ describe("TodayScreen", () => {
   it("drops a stop from the list the moment it has ended", async () => {
     useItineraryStore.setState({
       plans: [
-        todaysPlan([slot("done", "Shopping", -120), slot("next", "Dinner", 60)]),
+        todaysPlan([
+          slot("done", "Shopping", -120),
+          slot("next", "Dinner", 60),
+        ]),
       ],
     });
 
@@ -235,15 +242,6 @@ describe("TodayScreen", () => {
     });
   });
 
-  it("reaches settings without going via the Plans tab", async () => {
-    // The app opens here, so this is where a settings button is discoverable.
-    const view = await renderWithProviders(<TodayScreen />);
-
-    await fireEvent.press(view.getByLabelText("Settings"));
-
-    expect(router.push).toHaveBeenCalledWith("/settings");
-  });
-
   it("says how soon the next stop is, not only when it is", async () => {
     useItineraryStore.setState({
       plans: [todaysPlan([slot("s1", "Morning run", 40.5)])],
@@ -275,13 +273,23 @@ describe("TodayScreen", () => {
     // (already-true) `hasSeenOnboarding` value has "arrived", mirroring the
     // real cloud-hydration race.
     useSettingsStore.setState({ hasSeenOnboarding: false });
-    useCloudSyncStore.setState({ settingsReady: false });
+    useCloudSyncStore.setState({
+      settingsReady: false,
+      routinesReady: false,
+      slotsReady: false,
+    });
 
     const view = await renderWithProviders(<TodayScreen />);
     expect(view.getByText("Loading your plans…")).toBeTruthy();
 
     useSettingsStore.setState({ hasSeenOnboarding: true });
-    useCloudSyncStore.setState({ settingsReady: true });
+    await act(async () => {
+      useCloudSyncStore.setState({
+        settingsReady: true,
+        routinesReady: true,
+        slotsReady: true,
+      });
+    });
 
     expect(await view.findByText("No plans yet")).toBeTruthy();
     expect(view.queryByText("Know where you are")).toBeNull();

@@ -9,11 +9,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { HeaderDismissButton } from "@/components/headerDismissButton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { ToastHost } from "@/components/toast";
-import { Spacing } from "@/constants/theme";
+import { BottomTabInset, HeaderHeight, MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { useCalendarSync } from "@/hooks/useCalendarSync";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
@@ -120,9 +118,11 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ThemedView style={{ flex: 1 }}>
-      <HeaderDismissButton label="Done" onPress={() => router.back()} />
-      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <ThemedView style={styles.header}>
+          <ThemedText type="title">Settings</ThemedText>
+        </ThemedView>
         <ScrollView contentContainerStyle={styles.content}>
           <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
             Appearance
@@ -395,7 +395,7 @@ export default function SettingsScreen() {
                 a shared identity for every event and a rule for what happens
                 when both sides changed; "I pressed the button" needs neither
                 and is far easier to be right about. */}
-            <ThemedView style={styles.subSetting}>
+            <ThemedView style={[styles.subSetting, styles.firstInGroup]}>
               <Pressable
                 onPress={exportUpcoming}
                 disabled={isExporting || !hasUpcoming}
@@ -448,7 +448,7 @@ export default function SettingsScreen() {
             Backup
           </ThemedText>
           <ThemedView type="backgroundElement" style={styles.optionGroup}>
-            <ThemedView style={styles.subSetting}>
+            <ThemedView style={[styles.subSetting, styles.firstInGroup]}>
               <Pressable
                 onPress={async () => {
                   try {
@@ -495,7 +495,6 @@ export default function SettingsScreen() {
           </ThemedView>
         </ScrollView>
       </SafeAreaView>
-      <ToastHost />
     </ThemedView>
   );
 }
@@ -553,9 +552,25 @@ function ChoiceRow({
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: "center",
+  },
+  safeArea: {
+    flex: 1,
+    width: "100%",
+    maxWidth: MaxContentWidth,
+    paddingHorizontal: Spacing.three,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    height: HeaderHeight,
+  },
   content: {
-    padding: Spacing.three,
     gap: Spacing.two,
+    paddingBottom: BottomTabInset + Spacing.three,
   },
   fieldLabel: {
     fontSize: 12,
@@ -596,6 +611,14 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.three,
     gap: Spacing.one,
     backgroundColor: "transparent",
+  },
+  // Every other `subSetting` sits below a `switchRow` (or another
+  // `subSetting`) whose own bottom padding is what separates it from the
+  // element above — but Calendar and Backup open their group with a
+  // `subSetting` directly, so without this the button sits flush against the
+  // group's top edge.
+  firstInGroup: {
+    paddingTop: Spacing.three,
   },
   choiceRow: {
     flexDirection: "row",

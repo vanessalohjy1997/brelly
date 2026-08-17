@@ -1,7 +1,12 @@
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet } from "react-native";
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
@@ -19,6 +24,7 @@ import {
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useLiveConditions } from "@/hooks/useLiveConditions";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
@@ -26,7 +32,6 @@ import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useTheme } from "@/hooks/useTheme";
 import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
-import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -48,6 +53,12 @@ export default function TodayScreen() {
   const deleteWithUndo = useDeleteSlotWithUndo();
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
   const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
+  // Tracks progress *through* the two-step flow once it's underway. It
+  // starts out `null` and stays that way until the user acts on the first
+  // step below — it does not by itself decide whether the flow should
+  // start, since `hasSeenOnboarding` is `false` (the store's default)
+  // until the Firestore-backed settings doc is rehydrated, and this
+  // component can render before that happens.
   const [onboardingStep, setOnboardingStep] = useState<
     "location" | "notification" | null
   >(null);
@@ -70,24 +81,24 @@ export default function TodayScreen() {
   }
 
   const handleOnboardingAllow = useCallback(async () => {
-    if (onboardingStep === "location") {
+    if (activeOnboardingStep === "location") {
       await Location.requestForegroundPermissionsAsync();
       setOnboardingStep("notification");
-    } else if (onboardingStep === "notification") {
+    } else if (activeOnboardingStep === "notification") {
       await requestNotification();
       setOnboardingStep(null);
       setHasSeenOnboarding(true);
     }
-  }, [onboardingStep, requestNotification, setHasSeenOnboarding]);
+  }, [activeOnboardingStep, requestNotification, setHasSeenOnboarding]);
 
   const handleOnboardingSkip = useCallback(() => {
-    if (onboardingStep === "location") {
+    if (activeOnboardingStep === "location") {
       setOnboardingStep("notification");
     } else {
       setOnboardingStep(null);
       setHasSeenOnboarding(true);
     }
-  }, [onboardingStep, setHasSeenOnboarding]);
+  }, [activeOnboardingStep, setHasSeenOnboarding]);
 
   const now = new Date();
   const todaysDate = todayKey(now);
@@ -147,23 +158,6 @@ export default function TodayScreen() {
             </ThemedText>
           </ThemedView>
           <ThemedView style={styles.headerActions}>
-            {/* Settings used to be reachable only from the Plans header, which
-                is not where anyone spends their time — the app opens here. */}
-            <Pressable
-              style={[
-                styles.addButton,
-                { backgroundColor: colors.backgroundElement },
-              ]}
-              onPress={() => router.push("/settings")}
-              hitSlop={8}
-              accessibilityLabel="Settings"
-            >
-              <Icon
-                name={{ ios: "gearshape.fill", android: "settings" }}
-                size={18}
-                tintColor={colors.text}
-              />
-            </Pressable>
             <Pressable
               style={[styles.addButton, { backgroundColor: colors.primary }]}
               onPress={() => router.push("/plan/new")}
@@ -184,10 +178,10 @@ export default function TodayScreen() {
             error={bootstrapError}
             onRetry={retryCloudBootstrap}
           />
-        ) : onboardingStep ? (
+        ) : activeOnboardingStep ? (
           <ThemedView style={styles.emptyState}>
             <OnboardingPermissionPrimer
-              kind={onboardingStep}
+              kind={activeOnboardingStep}
               onAllow={handleOnboardingAllow}
               onSkip={handleOnboardingSkip}
             />
@@ -274,10 +268,7 @@ export default function TodayScreen() {
               />
             }
           >
-            <LiveConditionsCard
-              conditions={liveConditions}
-              uvIndex={uvIndex}
-            />
+            <LiveConditionsCard conditions={liveConditions} uvIndex={uvIndex} />
             {/* Start time first, always — a day is read as a timeline, and
                 the drag-to-reorder this replaces produced an order that
                 contradicted the clock and the Plans tab both. */}

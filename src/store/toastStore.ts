@@ -34,10 +34,10 @@ type ToastState = {
    * The ids of the mounted *modal* `ToastHost`s, innermost last. The root host
    * renders only while this is empty; otherwise the last entry wins.
    *
-   * This exists because of how modals are presented. `plan/new`, `plan/[id]`
-   * and `settings` are all `presentation: "modal"`, which on iOS is a real
-   * view controller presented over the window: a host sitting at the root is
-   * *behind* it, so a toast raised by Settings would never be seen. Each modal
+   * This exists because of how modals are presented. `plan/new` and
+   * `plan/[id]` are `presentation: "modal"`, which on iOS is a real view
+   * controller presented over the window: a host sitting at the root is
+   * *behind* it, so a toast raised there would never be seen. Each modal
    * therefore mounts its own host and takes over while it is open, handing
    * back on dismiss. Because the toast itself lives here and not in the host,
    * one raised just before `router.back()` survives the modal that raised it

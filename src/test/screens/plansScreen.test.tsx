@@ -103,14 +103,6 @@ describe("PlansScreen", () => {
     expect(router.push).toHaveBeenCalledWith("/plan/new");
   });
 
-  it("navigates to settings from the header", async () => {
-    const view = await renderWithProviders(<PlansScreen />);
-
-    await fireEvent.press(view.getByLabelText("Settings"));
-
-    expect(router.push).toHaveBeenCalledWith("/settings");
-  });
-
   it("lists upcoming plans", async () => {
     useItineraryStore.setState({ plans: [dayPlan(1, [slot("s1", "Picnic", 1)])] });
     const view = await renderWithProviders(<PlansScreen />);
