@@ -18,6 +18,12 @@ jobs:
 
       - run: yarn install --frozen-lockfile
 
+      # expo-env.d.ts is gitignored and normally written by `expo start`;
+      # it declares the `*.css` module type theme.ts's side-effect import
+      # needs. Write it here so tsc sees the same types a local run does.
+      - name: Generate Expo env types
+        run: printf '/// <reference types="expo/types" />\n\n// NOTE: This file should not be edited and should be in your git ignore\n' > expo-env.d.ts
+
       - name: Typecheck
         run: npx tsc --noEmit
 
