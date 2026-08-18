@@ -2,6 +2,7 @@ import { StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { WeatherIcon } from "@/components/weather/WeatherIcon";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { UvIndex } from "@/hooks/useUvIndex";
@@ -9,6 +10,9 @@ import type { LiveConditions } from "@/types/weather";
 import { describeUv } from "@/utils/describeUv";
 import { formatRelativeTimestamp } from "@/utils/formatRelativeTimestamp";
 import { formatWindSpeedKnots } from "@/utils/formatWind";
+
+const DAY_START_HOUR = 6;
+const DAY_END_HOUR = 19;
 
 type Props = {
   conditions: LiveConditions | null | undefined;
@@ -28,15 +32,25 @@ export function LiveConditionsCard({ conditions, uvIndex }: Props) {
   if (readings.length === 0) return null;
 
   const observedAgo = formatRelativeTimestamp(conditions?.observedAt);
+  const liveForecast = deriveLiveForecastText(conditions);
 
   return (
     <ThemedView
       style={[styles.card, { backgroundColor: theme.backgroundElement }]}
     >
       <ThemedView style={styles.headingRow}>
-        <ThemedText style={[styles.heading, { color: theme.textSecondary }]}>
-          Right now
-        </ThemedText>
+        <ThemedView style={styles.headingLeft}>
+          {liveForecast && (
+            <WeatherIcon
+              forecast={liveForecast}
+              size={18}
+              tintColor={theme.textSecondary}
+            />
+          )}
+          <ThemedText style={[styles.heading, { color: theme.textSecondary }]}>
+            Right now
+          </ThemedText>
+        </ThemedView>
         {conditions?.stationName && (
           <ThemedText
             style={[styles.station, { color: theme.textSecondary }]}
@@ -62,6 +76,25 @@ export function LiveConditionsCard({ conditions, uvIndex }: Props) {
       </ThemedView>
     </ThemedView>
   );
+}
+
+/**
+ * A live rain reading is the one signal this card has that a forecast
+ * doesn't — sensor rainfall right now beats a forecast's "chance of showers".
+ * Reused as `WeatherIcon`'s `forecast` prop, so the string has to stay in its
+ * vocabulary (`forecastToSymbol` matches on "rain"/"fair"/"(night)").
+ * Returns null rather than guessing when there's no rainfall reading at all.
+ */
+export function deriveLiveForecastText(
+  conditions: LiveConditions | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (conditions?.rainfallMm === undefined) return null;
+  if (conditions.rainfallMm > 0) return "Rain";
+
+  const hour = now.getHours();
+  const isDaytime = hour >= DAY_START_HOUR && hour < DAY_END_HOUR;
+  return isDaytime ? "Fair (Day)" : "Fair (Night)";
 }
 
 type Reading = { label: string; value: string };
@@ -123,8 +156,14 @@ const styles = StyleSheet.create({
   headingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "baseline",
+    alignItems: "center",
     gap: Spacing.two,
+    backgroundColor: "transparent",
+  },
+  headingLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.one,
     backgroundColor: "transparent",
   },
   heading: {

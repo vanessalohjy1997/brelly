@@ -18,6 +18,17 @@ Read the relevant one before implementing — do not work from memory of them.
 Keep all three current as you work: a stale plan gets acted on as if it were
 true.
 
+# Branch naming
+
+Prefix every branch with the kind of change it makes:
+
+- `feat/` — a feature implementation, e.g. `feat/open-meteo-integration`
+- `fix/` — a bug fix
+- `chore/` — a refactor or pipeline/workflow change
+
+After the prefix, name the branch for what it does, e.g.
+`fix/weather-icon-crash` — never a timestamp or generic label.
+
 # Tests
 
 All new features must come with tests.

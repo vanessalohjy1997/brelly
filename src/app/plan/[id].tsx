@@ -73,7 +73,11 @@ export default function EditSlotScreen() {
   });
 
   const packingItems = useMemo(() => {
-    if (!weather || weather.source === "error" || weather.source === "unavailable")
+    if (
+      !weather ||
+      weather.source === "error" ||
+      weather.source === "unavailable"
+    )
       return [];
     return derivePackingList(weather.forecast);
   }, [weather]);
@@ -83,8 +87,7 @@ export default function EditSlotScreen() {
   // explicit v1 scope cut for overseas slots rather than a silent gap.
   const { data: upcomingPeriods } = useQuery({
     queryKey: ["upcoming-periods", found?.slot.neaRegion],
-    queryFn: () =>
-      getUpcomingForecast(found!.slot.neaRegion, 24),
+    queryFn: () => getUpcomingForecast(found!.slot.neaRegion, 24),
     staleTime: 1000 * 60 * 10,
     enabled: !!found && resolveSlotProvider(found.slot.provider) === "nea",
   });
@@ -299,14 +302,20 @@ export default function EditSlotScreen() {
               {packingItems.map((item) => (
                 <ThemedView key={item.item} style={styles.packingRow}>
                   <Icon
-                    name={{ ios: "checkmark.circle", android: "check_circle_outline" }}
+                    name={{
+                      ios: "checkmark.circle",
+                      android: "check_circle_outline",
+                    }}
                     size={14}
                     tintColor={theme.textSecondary}
                   />
                   <ThemedText style={styles.packingItem}>
                     {item.item}
                   </ThemedText>
-                  <ThemedText themeColor="textSecondary" style={styles.packingReason}>
+                  <ThemedText
+                    themeColor="textSecondary"
+                    style={styles.packingReason}
+                  >
                     {item.reason}
                   </ThemedText>
                 </ThemedView>
@@ -315,7 +324,10 @@ export default function EditSlotScreen() {
           )}
           {dryWindow && (
             <Pressable
-              style={[styles.dryWindowBanner, { borderColor: theme.umbrellaSun }]}
+              style={[
+                styles.dryWindowBanner,
+                { borderColor: theme.umbrellaSun },
+              ]}
               onPress={() => {
                 const target = new Date(dryWindow.suggestedPeriod.start);
                 const endOffset =

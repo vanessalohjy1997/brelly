@@ -83,7 +83,10 @@ export default function NewSlotScreen() {
             if (!saved.ok) return;
 
             if (saved.value) {
-              scheduleRainNotificationForSlot(saved.value.date, saved.value.slot);
+              scheduleRainNotificationForSlot(
+                saved.value.date,
+                saved.value.slot,
+              );
             } else {
               // Fills in the next fortnight straight away, so the Plans tab
               // shows the routine on the way back rather than after a relaunch.

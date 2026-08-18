@@ -1,5 +1,11 @@
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Pressable,
   ScrollView,
@@ -134,7 +140,9 @@ export function SlotForm({
     isLocating,
     error: locationError,
   } = useCurrentLocation();
-  const rainAlertsEnabled = useSettingsStore((state) => state.rainAlertsEnabled);
+  const rainAlertsEnabled = useSettingsStore(
+    (state) => state.rainAlertsEnabled,
+  );
   const rainLeadMinutes = useSettingsStore((state) => state.rainLeadMinutes);
 
   const [label, setLabel] = useState(initialValues?.label ?? "");
@@ -342,384 +350,412 @@ export function SlotForm({
     locationFocused && suggestions.length > 0 && !selectedPlace;
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* Location first. It used to come second, under a Label field that had
+    <ThemedView style={styles.screen}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Location first. It used to come second, under a Label field that had
           nothing to prefill it — so the app asked for a name before it knew
           the one thing that could supply one. */}
-      <ThemedView
-        style={[styles.field, styles.locationField]}
-        onLayout={(e) => handleFieldLayout("location", e.nativeEvent.layout.y)}
-      >
-        <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
-          Location
-        </ThemedText>
+        <ThemedView
+          style={[styles.field, styles.locationField]}
+          onLayout={(e) =>
+            handleFieldLayout("location", e.nativeEvent.layout.y)
+          }
+        >
+          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            Location
+          </ThemedText>
 
-        {selectedPlace ? (
-          // A picked place used to render as ordinary text in the same input,
-          // so "typed but not chosen" and "resolved to real coordinates" were
-          // indistinguishable — and only the second one can be submitted.
-          <ThemedView
-            type="backgroundElement"
-            style={[styles.chip, { borderColor: theme.primary }]}
-            accessibilityLabel={`Location set to ${selectedPlace.location}`}
-          >
-            <Icon
-              name={{ ios: "checkmark.circle.fill", android: "check_circle" }}
-              size={16}
-              tintColor={theme.primary}
-            />
-            <ThemedText style={styles.chipText} numberOfLines={2}>
-              {selectedPlace.location}
-            </ThemedText>
-            <Pressable
-              onPress={clearPlace}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Clear location"
+          {selectedPlace ? (
+            // A picked place used to render as ordinary text in the same input,
+            // so "typed but not chosen" and "resolved to real coordinates" were
+            // indistinguishable — and only the second one can be submitted.
+            <ThemedView
+              type="backgroundElement"
+              style={[styles.chip, { borderColor: theme.primary }]}
+              accessibilityLabel={`Location set to ${selectedPlace.location}`}
             >
               <Icon
-                name={{ ios: "xmark.circle.fill", android: "cancel" }}
+                name={{ ios: "checkmark.circle.fill", android: "check_circle" }}
                 size={16}
-                tintColor={theme.textSecondary}
+                tintColor={theme.primary}
               />
-            </Pressable>
-          </ThemedView>
-        ) : (
-          <>
-            {/* The input and its dropdown are one unit: the list is absolutely
+              <ThemedText style={styles.chipText} numberOfLines={2}>
+                {selectedPlace.location}
+              </ThemedText>
+              <Pressable
+                onPress={clearPlace}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Clear location"
+              >
+                <Icon
+                  name={{ ios: "xmark.circle.fill", android: "cancel" }}
+                  size={16}
+                  tintColor={theme.textSecondary}
+                />
+              </Pressable>
+            </ThemedView>
+          ) : (
+            <>
+              {/* The input and its dropdown are one unit: the list is absolutely
                 positioned against this wrapper so it hangs over whatever is
                 below rather than pushing the rest of the form down the screen
                 every time someone types. */}
-            <View style={styles.inputAnchor}>
-              <TextInput
-                value={locationQuery}
-                onChangeText={handleLocationChange}
-                onFocus={() => setLocationFocused(true)}
-                onBlur={() => setLocationFocused(false)}
-                placeholder="Search for a place"
-                placeholderTextColor={theme.textSecondary}
-                accessibilityLabel="Location"
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    backgroundColor: theme.backgroundElement,
-                  },
-                  errors.location ? { borderColor: theme.danger } : null,
-                  errors.location ? styles.inputInvalid : null,
-                ]}
-              />
+              <View style={styles.inputAnchor}>
+                <TextInput
+                  value={locationQuery}
+                  onChangeText={handleLocationChange}
+                  onFocus={() => setLocationFocused(true)}
+                  onBlur={() => setLocationFocused(false)}
+                  placeholder="Search for a place"
+                  placeholderTextColor={theme.textSecondary}
+                  accessibilityLabel="Location"
+                  style={[
+                    styles.input,
+                    {
+                      color: theme.text,
+                      backgroundColor: theme.backgroundElement,
+                    },
+                    errors.location ? { borderColor: theme.danger } : null,
+                    errors.location ? styles.inputInvalid : null,
+                  ]}
+                />
 
-              {showSuggestions && (
-                <ThemedView
-                  type="backgroundElement"
-                  style={[styles.suggestionsList, { borderColor: theme.border }]}
-                  accessibilityLabel="Location suggestions"
-                >
-                  {suggestions.map((s) => (
-                    <Pressable
-                      key={s.placeId}
-                      onPress={() => handleSelectSuggestion(s.placeId)}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [
-                        styles.suggestionRow,
-                        pressed && {
-                          backgroundColor: theme.backgroundSelected,
-                        },
-                      ]}
-                    >
-                      <ThemedText numberOfLines={1}>{s.displayName}</ThemedText>
-                      <ThemedText
-                        themeColor="textSecondary"
-                        style={styles.suggestionSecondary}
-                        numberOfLines={1}
+                {showSuggestions && (
+                  <ThemedView
+                    type="backgroundElement"
+                    style={[
+                      styles.suggestionsList,
+                      { borderColor: theme.border },
+                    ]}
+                    accessibilityLabel="Location suggestions"
+                  >
+                    {suggestions.map((s) => (
+                      <Pressable
+                        key={s.placeId}
+                        onPress={() => handleSelectSuggestion(s.placeId)}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [
+                          styles.suggestionRow,
+                          pressed && {
+                            backgroundColor: theme.backgroundSelected,
+                          },
+                        ]}
                       >
-                        {s.secondaryText}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                </ThemedView>
-              )}
-            </View>
-            {/* "Searching…" rides in this row rather than on a line of its
+                        <ThemedText numberOfLines={1}>
+                          {s.displayName}
+                        </ThemedText>
+                        <ThemedText
+                          themeColor="textSecondary"
+                          style={styles.suggestionSecondary}
+                          numberOfLines={1}
+                        >
+                          {s.secondaryText}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </ThemedView>
+                )}
+              </View>
+              {/* "Searching…" rides in this row rather than on a line of its
                 own. It is the one message that appears on nearly every
                 keystroke, and a line that comes and goes under the field is a
                 line that shifts the form — which is what a reserved blank was
                 previously holding 16pt open to prevent, on every form, forever,
                 for a message most of them never show. */}
-            <ThemedView style={styles.assistRow}>
-              <Pressable
-                onPress={handleUseCurrentLocation}
-                disabled={isLocating}
-                style={styles.useLocationRow}
-                accessibilityRole="button"
-                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-              >
-                {!isLocating && (
-                  <Icon
-                    name={{ ios: "location.fill", android: "my_location" }}
-                    size={12}
-                    tintColor={theme.textSecondary}
-                  />
-                )}
-                <ThemedText
-                  themeColor="textSecondary"
-                  style={[styles.hint, styles.useLocationLink]}
+              <ThemedView style={styles.assistRow}>
+                <Pressable
+                  onPress={handleUseCurrentLocation}
+                  disabled={isLocating}
+                  style={styles.useLocationRow}
+                  accessibilityRole="button"
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                 >
-                  {isLocating ? "Finding you…" : "Use my location"}
-                </ThemedText>
-              </Pressable>
-              {isSearching && (
-                <ThemedText themeColor="textSecondary" style={styles.hint}>
-                  Searching…
-                </ThemedText>
-              )}
-            </ThemedView>
-          </>
-        )}
+                  {!isLocating && (
+                    <Icon
+                      name={{ ios: "location.fill", android: "my_location" }}
+                      size={12}
+                      tintColor={theme.textSecondary}
+                    />
+                  )}
+                  <ThemedText
+                    themeColor="textSecondary"
+                    style={[styles.hint, styles.useLocationLink]}
+                  >
+                    {isLocating ? "Finding you…" : "Use my location"}
+                  </ThemedText>
+                </Pressable>
+                {isSearching && (
+                  <ThemedText themeColor="textSecondary" style={styles.hint}>
+                    Searching…
+                  </ThemedText>
+                )}
+              </ThemedView>
+            </>
+          )}
 
-        {/* Errors, and only when there are errors. They render as a group
+          {/* Errors, and only when there are errors. They render as a group
             rather than one at a time because `error ?? locationError` hid one
             of the two whenever both were real — but they are rare enough that
             reserving a line against them cost more space than the shift they
             cause is worth. */}
-        {locationMessages.length > 0 && (
-          <ThemedView style={styles.status}>
-            {locationMessages.map((message) => (
-              <ThemedText
-                key={message}
-                style={[styles.hint, { color: theme.danger }]}
-              >
-                {message}
-              </ThemedText>
-            ))}
-          </ThemedView>
-        )}
-      </ThemedView>
-
-      <ThemedView style={styles.field} onLayout={(e) => handleFieldLayout("label", e.nativeEvent.layout.y)}>
-        <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
-          Label
-        </ThemedText>
-        <TextInput
-          value={label}
-          onChangeText={(text) => {
-            setLabel(text);
-            // From here the label is theirs, and picking another place must
-            // not overwrite it.
-            setLabelIsMine(false);
-            if (text.trim()) {
-              setErrors((current) => ({ ...current, label: undefined }));
-            }
-          }}
-          placeholder="e.g. Lunch with Sam"
-          placeholderTextColor={theme.textSecondary}
-          accessibilityLabel="Label"
-          style={[
-            styles.input,
-            { color: theme.text, backgroundColor: theme.backgroundElement },
-            errors.label ? { borderColor: theme.danger } : null,
-            errors.label ? styles.inputInvalid : null,
-          ]}
-        />
-        {errors.label && (
-          <ThemedText style={[styles.hint, { color: theme.danger }]}>
-            {errors.label}
-          </ThemedText>
-        )}
-      </ThemedView>
-
-      <ThemedView style={styles.field} onLayout={(e) => handleFieldLayout("time", e.nativeEvent.layout.y)}>
-        <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
-          Day
-        </ThemedText>
-        {/* One date, then two times. Both fields used to be `mode="datetime"`,
-            so moving a plan to another day meant editing the same date twice
-            and the two could silently end up on different days. */}
-        <DateTimePicker
-          value={range.start}
-          mode="date"
-          style={styles.datePicker}
-          themeVariant={colorScheme}
-          accentColor={theme.primary}
-          onValueChange={(_, day) => setRange((r) => applyDayToRange(r, day))}
-        />
-      </ThemedView>
-
-      <View style={[styles.row, stackDateTimeFields && styles.rowStacked]}>
-        <ThemedView
-          style={[styles.field, !stackDateTimeFields && styles.flex1]}
-        >
-          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
-            Starts
-          </ThemedText>
-          <DateTimePicker
-            value={range.start}
-            mode="time"
-            style={styles.timePicker}
-            themeVariant={colorScheme}
-            accentColor={theme.primary}
-            onValueChange={(_, time) =>
-              setRange((r) => applyStartTime(r, time))
-            }
-          />
+          {locationMessages.length > 0 && (
+            <ThemedView style={styles.status}>
+              {locationMessages.map((message) => (
+                <ThemedText
+                  key={message}
+                  style={[styles.hint, { color: theme.danger }]}
+                >
+                  {message}
+                </ThemedText>
+              ))}
+            </ThemedView>
+          )}
         </ThemedView>
 
         <ThemedView
-          style={[styles.field, !stackDateTimeFields && styles.flex1]}
+          style={styles.field}
+          onLayout={(e) => handleFieldLayout("label", e.nativeEvent.layout.y)}
         >
           <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
-            Ends
+            Label
           </ThemedText>
-          <DateTimePicker
-            value={range.end}
-            mode="time"
-            style={styles.timePicker}
-            themeVariant={colorScheme}
-            accentColor={theme.primary}
-            onValueChange={(_, time) => setRange((r) => applyEndTime(r, time))}
+          <TextInput
+            value={label}
+            onChangeText={(text) => {
+              setLabel(text);
+              // From here the label is theirs, and picking another place must
+              // not overwrite it.
+              setLabelIsMine(false);
+              if (text.trim()) {
+                setErrors((current) => ({ ...current, label: undefined }));
+              }
+            }}
+            placeholder="e.g. Lunch with Sam"
+            placeholderTextColor={theme.textSecondary}
+            accessibilityLabel="Label"
+            style={[
+              styles.input,
+              { color: theme.text, backgroundColor: theme.backgroundElement },
+              errors.label ? { borderColor: theme.danger } : null,
+              errors.label ? styles.inputInvalid : null,
+            ]}
           />
-          {endsOnAnotherDay(range) && (
-            <ThemedText themeColor="textSecondary" style={styles.hint}>
-              Next day
+          {errors.label && (
+            <ThemedText style={[styles.hint, { color: theme.danger }]}>
+              {errors.label}
             </ThemedText>
           )}
         </ThemedView>
-      </View>
-      {errors.time && (
-        <ThemedText style={[styles.hint, { color: theme.danger }]}>
-          {errors.time}
-        </ThemedText>
-      )}
 
-      {allowRepeat && (
         <ThemedView
           style={styles.field}
-          onLayout={(event) =>
-            handleFieldLayout("repeat", event.nativeEvent.layout.y)
-          }
+          onLayout={(e) => handleFieldLayout("time", e.nativeEvent.layout.y)}
         >
-          <RepeatField
-            value={repeat}
-            onChange={setRepeat}
-            anchor={range.start}
-            error={errors.repeat}
+          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            Day
+          </ThemedText>
+          {/* One date, then two times. Both fields used to be `mode="datetime"`,
+            so moving a plan to another day meant editing the same date twice
+            and the two could silently end up on different days. */}
+          <DateTimePicker
+            value={range.start}
+            mode="date"
+            style={styles.datePicker}
+            themeVariant={colorScheme}
+            accentColor={theme.primary}
+            onValueChange={(_, day) => setRange((r) => applyDayToRange(r, day))}
           />
         </ThemedView>
-      )}
 
-      {/* Directly above the switch it seeds, so pressing a chip and the switch
+        <View style={[styles.row, stackDateTimeFields && styles.rowStacked]}>
+          <ThemedView
+            style={[styles.field, !stackDateTimeFields && styles.flex1]}
+          >
+            <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+              Starts
+            </ThemedText>
+            <DateTimePicker
+              value={range.start}
+              mode="time"
+              style={styles.timePicker}
+              themeVariant={colorScheme}
+              accentColor={theme.primary}
+              onValueChange={(_, time) =>
+                setRange((r) => applyStartTime(r, time))
+              }
+            />
+          </ThemedView>
+
+          <ThemedView
+            style={[styles.field, !stackDateTimeFields && styles.flex1]}
+          >
+            <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+              Ends
+            </ThemedText>
+            <DateTimePicker
+              value={range.end}
+              mode="time"
+              style={styles.timePicker}
+              themeVariant={colorScheme}
+              accentColor={theme.primary}
+              onValueChange={(_, time) =>
+                setRange((r) => applyEndTime(r, time))
+              }
+            />
+            {endsOnAnotherDay(range) && (
+              <ThemedText themeColor="textSecondary" style={styles.hint}>
+                Next day
+              </ThemedText>
+            )}
+          </ThemedView>
+        </View>
+        {errors.time && (
+          <ThemedText style={[styles.hint, { color: theme.danger }]}>
+            {errors.time}
+          </ThemedText>
+        )}
+
+        {allowRepeat && (
+          <ThemedView
+            style={styles.field}
+            onLayout={(event) =>
+              handleFieldLayout("repeat", event.nativeEvent.layout.y)
+            }
+          >
+            <RepeatField
+              value={repeat}
+              onChange={setRepeat}
+              anchor={range.start}
+              error={errors.repeat}
+            />
+          </ThemedView>
+        )}
+
+        {/* Directly above the switch it seeds, so pressing a chip and the switch
           moving are one thing seen at once rather than a change somewhere off
           screen. Unlike Repeat this renders on the edit screen too — a stop can
           turn out to be indoor after it was added. */}
-      <ThemedView style={styles.field}>
-        <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
-          Indoor or outdoor
-        </ThemedText>
-        <ThemedView
-          style={styles.repeatRow}
-          accessibilityRole="radiogroup"
-          accessibilityLabel="Indoor or outdoor"
-        >
-          {SLOT_KINDS.map((option) => {
-            const isSelected = option === kind;
-            return (
-              <Pressable
-                key={option}
-                onPress={() => handleKindChange(option)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                style={[
-                  styles.repeatChip,
-                  {
-                    backgroundColor: isSelected
-                      ? theme.backgroundSelected
-                      : theme.backgroundElement,
-                  },
-                ]}
-              >
-                <ThemedText
-                  style={[styles.hint, isSelected && styles.repeatChipSelected]}
+        <ThemedView style={styles.field}>
+          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            Indoor or outdoor
+          </ThemedText>
+          <ThemedView
+            style={styles.repeatRow}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Indoor or outdoor"
+          >
+            {SLOT_KINDS.map((option) => {
+              const isSelected = option === kind;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => handleKindChange(option)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  style={[
+                    styles.repeatChip,
+                    {
+                      backgroundColor: isSelected
+                        ? theme.backgroundSelected
+                        : theme.backgroundElement,
+                    },
+                  ]}
                 >
-                  {SLOT_KIND_LABELS[option]}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </ThemedView>
-        {/* Says what the tag is *for*. Without it the two chips look like
+                  <ThemedText
+                    style={[
+                      styles.hint,
+                      isSelected && styles.repeatChipSelected,
+                    ]}
+                  >
+                    {SLOT_KIND_LABELS[option]}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ThemedView>
+          {/* Says what the tag is *for*. Without it the two chips look like
             filing, and nothing on screen connects them to the switch below. */}
-        <ThemedText themeColor="textSecondary" style={styles.hint}>
-          {SLOT_KIND_HINTS[kind]}
-        </ThemedText>
-      </ThemedView>
-
-      <ThemedView style={styles.muteRow}>
-        <ThemedView style={styles.muteLabel}>
-          <ThemedText>Rain alerts</ThemedText>
           <ThemedText themeColor="textSecondary" style={styles.hint}>
-            {/* Rain matters for a park and not for a mall — muting per stop is
-                what keeps the alerts worth reading. */}
-            Get a heads-up if this stop looks wet
+            {SLOT_KIND_HINTS[kind]}
           </ThemedText>
         </ThemedView>
-        <Switch
-          value={!notificationsMuted}
-          onValueChange={(enabled) => setNotificationsMuted(!enabled)}
-          accessibilityLabel="Rain alerts for this stop"
-        />
-      </ThemedView>
 
-      {tooSoonToWarn && (
-        <ThemedText themeColor="textSecondary" style={styles.hint}>
-          This starts too soon for a rain alert — they go out{" "}
-          {formatLeadTime(rainLeadMinutes)} ahead.
-        </ThemedText>
-      )}
+        <ThemedView style={styles.muteRow}>
+          <ThemedView style={styles.muteLabel}>
+            <ThemedText>Rain alerts</ThemedText>
+            <ThemedText themeColor="textSecondary" style={styles.hint}>
+              {/* Rain matters for a park and not for a mall — muting per stop is
+                what keeps the alerts worth reading. */}
+              Get a heads-up if this stop looks wet
+            </ThemedText>
+          </ThemedView>
+          <Switch
+            value={!notificationsMuted}
+            onValueChange={(enabled) => setNotificationsMuted(!enabled)}
+            accessibilityLabel="Rain alerts for this stop"
+          />
+        </ThemedView>
 
-      <ThemedView style={styles.field}>
-        <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
-          Notes
-        </ThemedText>
-        <TextInput
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Anything to remember for this stop"
-          placeholderTextColor={theme.textSecondary}
-          multiline
-          accessibilityLabel="Notes"
-          style={[
-            styles.input,
-            styles.notesInput,
-            { color: theme.text, backgroundColor: theme.backgroundElement },
-          ]}
-        />
-      </ThemedView>
+        {tooSoonToWarn && (
+          <ThemedText themeColor="textSecondary" style={styles.hint}>
+            This starts too soon for a rain alert — they go out{" "}
+            {formatLeadTime(rainLeadMinutes)} ahead.
+          </ThemedText>
+        )}
 
-      <Pressable
-        onPress={handleSubmit}
-        style={[styles.submitButton, { backgroundColor: theme.primary }]}
-        accessibilityRole="button"
-      >
-        <ThemedText
-          style={[styles.submitButtonText, { color: theme.onPrimary }]}
+        <ThemedView style={styles.field}>
+          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            Notes
+          </ThemedText>
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Anything to remember for this stop"
+            placeholderTextColor={theme.textSecondary}
+            multiline
+            accessibilityLabel="Notes"
+            style={[
+              styles.input,
+              styles.notesInput,
+              { color: theme.text, backgroundColor: theme.backgroundElement },
+            ]}
+          />
+        </ThemedView>
+
+        {children}
+
+        {onDelete && (
+          <Pressable onPress={onDelete} style={styles.deleteButton}>
+            <ThemedText style={{ color: theme.danger }}>Delete plan</ThemedText>
+          </Pressable>
+        )}
+      </ScrollView>
+
+      {/* Fixed below the scroll rather than the last thing in it — a form this
+          long could otherwise leave the primary action scrolled out of view.
+          Left at the plain screen background rather than `backgroundElement`
+          — a tinted footer would end at the screen's own SafeAreaView inset
+          and leave a mismatched strip of plain background below its border. */}
+      <ThemedView style={[styles.footer, { borderTopColor: theme.border }]}>
+        <Pressable
+          onPress={handleSubmit}
+          style={[styles.submitButton, { backgroundColor: theme.primary }]}
+          accessibilityRole="button"
         >
-          {submitLabel}
-        </ThemedText>
-      </Pressable>
-
-      {children}
-
-      {onDelete && (
-        <Pressable onPress={onDelete} style={styles.deleteButton}>
-          <ThemedText style={{ color: theme.danger }}>Delete plan</ThemedText>
+          <ThemedText
+            style={[styles.submitButtonText, { color: theme.onPrimary }]}
+          >
+            {submitLabel}
+          </ThemedText>
         </Pressable>
-      )}
-    </ScrollView>
+      </ThemedView>
+    </ThemedView>
   );
 }
 
@@ -772,9 +808,21 @@ const FormPadding = Spacing.three;
 const FormGap = Spacing.three;
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
   container: {
     padding: FormPadding,
     gap: Spacing.four,
+  },
+  // Sits below the scroll rather than inside it, so the primary action stays
+  // reachable without scrolling to the bottom of a long form.
+  footer: {
+    padding: FormPadding,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   field: {
     gap: Spacing.one,

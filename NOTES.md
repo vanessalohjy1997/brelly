@@ -1168,6 +1168,28 @@ WeatherAPI.com/OpenWeatherMap/Tomorrow.io/Apple WeatherKit).
   equivalent yet and is gated off for overseas slots rather than silently
   never firing for a reason no one could see.
 
+### Round 20 — tap a week-strip cell to prefill a new plan's date
+
+`WeekStrip`'s 7 day cells were display-only, even though `/plan/new` already
+accepts a `date` param (the section-header "+" button on Plans has used it
+since [round 12](#round-12--a-repeat-becomes-a-routine)) — reaching a specific
+day beyond the strip's own week meant opening the form and hand-scrolling a
+datetime picker instead.
+
+- Each cell is now a `Pressable` wrapping the existing `ThemedView`/text/badge
+  markup unchanged, so the "today cell has a border" test (which walks up
+  from the `Text` node one level) still passes: the `Pressable` sits *outside*
+  that parent, not between it and the text.
+- `WeekStrip` takes a new required `onSelectDate(dateKey)` prop instead of
+  reading `router` itself, matching how the component took `plans` as a prop
+  rather than reading the store — `plans.tsx` wires it to the same
+  `router.push({ pathname: "/plan/new", params: { date } })` call the
+  section-header button already used.
+- `accessibilityHint` ("Adds a plan on this day") was added alongside the
+  existing `accessibilityLabel` (the stop-count sentence) — the label alone
+  doesn't say what tapping does, and the hint doesn't need to repeat the stop
+  count.
+
 ## Shipped from the feature-idea list
 
 The feature ideas were derived from what was already built — each named the seam

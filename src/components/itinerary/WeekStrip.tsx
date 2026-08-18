@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
@@ -40,9 +40,10 @@ function buildWeek(
 }
 
 /**
- * What a screen reader says for one cell. The badge is a bare number, which
- * reads as "8, 2" out of context — the label spells the count back out so the
- * compact form costs nothing in speech.
+ * What a screen reader says for one cell (the accessibilityHint separately
+ * covers what tapping it does). The badge is a bare number, which reads as
+ * "8, 2" out of context — the label spells the count back out so the compact
+ * form costs nothing in speech.
  */
 function describeCell(cell: DayCell): string {
   const day = `${cell.dayLabel} ${cell.dateLabel}`;
@@ -50,7 +51,13 @@ function describeCell(cell: DayCell): string {
   return `${day}, ${cell.planCount} ${cell.planCount === 1 ? "stop" : "stops"}`;
 }
 
-export function WeekStrip({ plans }: { plans: DayPlan[] }) {
+export function WeekStrip({
+  plans,
+  onSelectDate,
+}: {
+  plans: DayPlan[];
+  onSelectDate: (dateKey: string) => void;
+}) {
   const theme = useTheme();
   const today = todayKey();
   const cells = buildWeek(plans, today);
@@ -62,41 +69,50 @@ export function WeekStrip({ plans }: { plans: DayPlan[] }) {
       contentContainerStyle={styles.strip}
     >
       {cells.map((cell) => (
-        <ThemedView
+        <Pressable
           key={cell.dateKey}
-          type="backgroundElement"
           accessible
+          accessibilityRole="button"
           accessibilityLabel={describeCell(cell)}
-          style={[
-            styles.cell,
-            cell.isToday && { borderColor: theme.primary, borderWidth: 1 },
-          ]}
+          accessibilityHint="Adds a plan on this day"
+          hitSlop={4}
+          onPress={() => onSelectDate(cell.dateKey)}
         >
-          <ThemedText
+          <ThemedView
+            type="backgroundElement"
             style={[
-              styles.dayLabel,
-              { color: cell.isToday ? theme.primary : theme.textSecondary },
+              styles.cell,
+              cell.isToday && { borderColor: theme.primary, borderWidth: 1 },
             ]}
           >
-            {cell.dayLabel}
-          </ThemedText>
-          <ThemedText style={styles.dateLabel}>{cell.dateLabel}</ThemedText>
-          {cell.planCount > 0 && (
-            <View
+            <ThemedText
               style={[
-                styles.badge,
-                {
-                  backgroundColor: theme.primary,
-                  borderColor: theme.backgroundElement,
-                },
+                styles.dayLabel,
+                { color: cell.isToday ? theme.primary : theme.textSecondary },
               ]}
             >
-              <ThemedText style={[styles.badgeText, { color: theme.onPrimary }]}>
-                {cell.planCount}
-              </ThemedText>
-            </View>
-          )}
-        </ThemedView>
+              {cell.dayLabel}
+            </ThemedText>
+            <ThemedText style={styles.dateLabel}>{cell.dateLabel}</ThemedText>
+            {cell.planCount > 0 && (
+              <View
+                style={[
+                  styles.badge,
+                  {
+                    backgroundColor: theme.primary,
+                    borderColor: theme.backgroundElement,
+                  },
+                ]}
+              >
+                <ThemedText
+                  style={[styles.badgeText, { color: theme.onPrimary }]}
+                >
+                  {cell.planCount}
+                </ThemedText>
+              </View>
+            )}
+          </ThemedView>
+        </Pressable>
       ))}
     </ScrollView>
   );

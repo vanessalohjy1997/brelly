@@ -1,6 +1,11 @@
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, RefreshControl, SectionList, StyleSheet } from "react-native";
+import {
+  Pressable,
+  RefreshControl,
+  SectionList,
+  StyleSheet,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
@@ -21,11 +26,11 @@ import {
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
-import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import type { ItinerarySlot } from "@/types/itinerary";
@@ -228,7 +233,12 @@ export default function PlansScreen() {
             keyExtractor={(slot: ItinerarySlot) => slot.id}
             ListHeaderComponent={
               <>
-                <WeekStrip plans={upcoming} />
+                <WeekStrip
+                  plans={upcoming}
+                  onSelectDate={(date) =>
+                    router.push({ pathname: "/plan/new", params: { date } })
+                  }
+                />
                 {conflicts.map((c, i) => (
                   <ThemedView
                     key={`conflict-${i}`}
@@ -360,7 +370,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
   },
   list: {
-    gap: Spacing.three,
+    gap: Spacing.one,
     paddingBottom: BottomTabInset + Spacing.three,
   },
   conflictBanner: {
