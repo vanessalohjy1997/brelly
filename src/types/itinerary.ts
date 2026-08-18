@@ -1,3 +1,4 @@
+import type { WeatherProvider } from "@/utils/weatherProvider";
 import type { SlotKind } from "@/utils/slotKind";
 
 import { NeaRegion } from "./weather";
@@ -7,6 +8,16 @@ export type ItinerarySlot = {
   label: string;
   location: string; // human-readable display name
   neaRegion: NeaRegion; // derived once from lat/lng on slot creation
+  // Which weather API this slot's forecast comes from, derived once from
+  // lat/lng on slot creation, same as `neaRegion`. Absent on slots created
+  // before this existed, which reads as "nea" — the answer that matches
+  // every slot's actual behaviour before this feature existed. Read it
+  // through `resolveSlotProvider` rather than comparing directly. No store
+  // migration needed. `neaRegion` stays populated even for an overseas slot
+  // (it degrades to the harmless "central" fallback `getRegionFromCoordinates`
+  // already produces for any out-of-Singapore coordinate) rather than being
+  // made optional, so nothing else has to change to tolerate a missing region.
+  provider?: WeatherProvider;
   latitude: number; // from Google Places
   longitude: number; // from Google Places
   startTime: string;

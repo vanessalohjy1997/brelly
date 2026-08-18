@@ -1,7 +1,9 @@
 # Brelly implementation plan
 
-Brelly shows Singapore weather (via `data.gov.sg` NEA APIs) for user-planned
-itinerary stops (via Google Places). This file is the task list only.
+Brelly shows weather (NEA's `data.gov.sg` in Singapore, Open-Meteo elsewhere —
+see [round 19](NOTES.md#round-19--weather-works-outside-singapore)) for
+user-planned itinerary stops (via Google Places). This file is the task list
+only.
 
 ## Before you start
 

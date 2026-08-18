@@ -36,6 +36,7 @@ import { routineUpdatesFromSlot } from "@/utils/routineOccurrences";
 import { routineForSlot } from "@/utils/routineSelectors";
 import { saveWithFeedback } from "@/utils/saveWithFeedback";
 import { suggestDryWindow } from "@/utils/suggestDryWindow";
+import { resolveSlotProvider } from "@/utils/weatherProvider";
 
 export default function EditSlotScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -63,6 +64,7 @@ export default function EditSlotScreen() {
   const bootstrapError = useCloudBootstrapError();
 
   const { data: weather } = useWeatherForSlot({
+    provider: resolveSlotProvider(found?.slot.provider),
     region: found?.slot.neaRegion ?? ("" as any),
     latitude: found?.slot.latitude ?? 0,
     longitude: found?.slot.longitude ?? 0,
@@ -76,12 +78,15 @@ export default function EditSlotScreen() {
     return derivePackingList(weather.forecast);
   }, [weather]);
 
+  // NEA-only concept — Open-Meteo has no equivalent "upcoming periods"
+  // endpoint, and this feeds the dry-window suggestion below, which is an
+  // explicit v1 scope cut for overseas slots rather than a silent gap.
   const { data: upcomingPeriods } = useQuery({
     queryKey: ["upcoming-periods", found?.slot.neaRegion],
     queryFn: () =>
       getUpcomingForecast(found!.slot.neaRegion, 24),
     staleTime: 1000 * 60 * 10,
-    enabled: !!found,
+    enabled: !!found && resolveSlotProvider(found.slot.provider) === "nea",
   });
 
   const dryWindow = useMemo(() => {

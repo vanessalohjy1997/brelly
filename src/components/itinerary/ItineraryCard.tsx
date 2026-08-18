@@ -19,6 +19,7 @@ import type { ItinerarySlot } from "@/types/itinerary";
 import { describeSlotTiming } from "@/utils/describeSlotTiming";
 import { describeUmbrella } from "@/utils/describeUmbrella";
 import { resolveSlotKind } from "@/utils/slotKind";
+import { resolveSlotProvider } from "@/utils/weatherProvider";
 
 const DELETE_ACTION_WIDTH = 88;
 
@@ -89,6 +90,7 @@ export function ItineraryCard({
   const colors = useTheme();
 
   const { data: weather, isLoading, refetch } = useWeatherForSlot({
+    provider: resolveSlotProvider(slot.provider),
     region: slot.neaRegion,
     latitude: slot.latitude,
     longitude: slot.longitude,
@@ -96,8 +98,11 @@ export function ItineraryCard({
     enabled: !past,
   });
   // Island-wide and cached for an hour, so every card on screen shares one
-  // request — the second half of the umbrella verdict.
+  // request — the second half of the umbrella verdict for an NEA slot. An
+  // Open-Meteo slot gets its own UV inline in `weather.uvIndex` instead (see
+  // below), since NEA's figure is Singapore-only and meaningless overseas.
   const { data: uv } = useUvIndex();
+  const uvIndex = weather?.uvIndex ?? uv?.value;
 
   const startTime = new Date(slot.startTime).toLocaleTimeString("en-SG", {
     hour: "2-digit",
@@ -134,7 +139,7 @@ export function ItineraryCard({
     weather.source !== "error" &&
     weather.source !== "unavailable";
   const verdict = hasForecast
-    ? describeUmbrella(weather.forecast, uv?.value)
+    ? describeUmbrella(weather.forecast, uvIndex)
     : null;
   const accent = verdict?.themeColor ? colors[verdict.themeColor] : null;
 
@@ -245,7 +250,7 @@ export function ItineraryCard({
             <WeatherBadge
               weather={weather}
               isLoading={isLoading}
-              uvIndex={uv?.value}
+              uvIndex={uvIndex}
               onRetry={() => refetch()}
             />
           )}

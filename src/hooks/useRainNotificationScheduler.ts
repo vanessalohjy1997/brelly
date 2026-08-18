@@ -1,10 +1,11 @@
 import { useCallback } from "react";
 
+import { getForecastForSlotByProvider } from "@/services/forecastProvider";
 import { scheduleRainNotification } from "@/services/notifications";
-import { getForecastForSlot } from "@/services/weather";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { ItinerarySlot } from "@/types/itinerary";
+import { resolveSlotProvider } from "@/utils/weatherProvider";
 
 /**
  * Returns a function that fetches the current forecast for a slot and, if
@@ -23,12 +24,13 @@ export function useRainNotificationScheduler() {
     async (date: string, slot: ItinerarySlot) => {
       if (!rainAlertsEnabled) return;
 
-      const forecast = await getForecastForSlot(
-        slot.neaRegion,
-        slot.latitude,
-        slot.longitude,
-        slot.startTime,
-      );
+      const forecast = await getForecastForSlotByProvider({
+        provider: resolveSlotProvider(slot.provider),
+        region: slot.neaRegion,
+        latitude: slot.latitude,
+        longitude: slot.longitude,
+        slotStartTime: slot.startTime,
+      });
       const notificationId = await scheduleRainNotification(slot, forecast, {
         quietHours,
         leadMinutes: rainLeadMinutes,

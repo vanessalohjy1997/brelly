@@ -400,7 +400,7 @@ export function SlotForm({
                 onChangeText={handleLocationChange}
                 onFocus={() => setLocationFocused(true)}
                 onBlur={() => setLocationFocused(false)}
-                placeholder="Search for a place in Singapore"
+                placeholder="Search for a place"
                 placeholderTextColor={theme.textSecondary}
                 accessibilityLabel="Location"
                 style={[

@@ -1,4 +1,4 @@
-import { reverseGeocode } from "@/services/geocoding";
+import { reverseGeocode, searchPlaces } from "@/services/geocoding";
 
 /**
  * Trimmed from real Geocoding API responses for Ang Mo Kio (1.3785, 103.8560)
@@ -130,5 +130,41 @@ describe("reverseGeocode", () => {
     await expect(reverseGeocode(1.3785, 103.856)).rejects.toThrow(
       "Reverse geocode error: 500",
     );
+  });
+});
+
+describe("searchPlaces", () => {
+  it("no longer restricts results to Singapore, so overseas places can be found", async () => {
+    fetchMock.mockReturnValue(mockResponse({ suggestions: [] }));
+
+    await searchPlaces("Shibuya Crossing");
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(requestBody).not.toHaveProperty("includedRegionCodes");
+    // The Singapore-centred bias is a ranking preference, not a filter, and
+    // stays in place.
+    expect(requestBody.locationBias.circle.center).toEqual({
+      latitude: 1.3521,
+      longitude: 103.8198,
+    });
+  });
+
+  it("does not default a missing secondaryText to Singapore", async () => {
+    fetchMock.mockReturnValue(
+      mockResponse({
+        suggestions: [
+          {
+            placePrediction: {
+              placeId: "p1",
+              structuredFormat: { mainText: { text: "Shibuya Crossing" } },
+            },
+          },
+        ],
+      }),
+    );
+
+    const results = await searchPlaces("Shibuya Crossing");
+
+    expect(results[0].secondaryText).toBe("");
   });
 });

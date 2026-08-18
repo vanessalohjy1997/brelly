@@ -17,7 +17,9 @@ export type WeatherForecast = {
 
 export type NeaRegion = "north" | "south" | "east" | "west" | "central";
 
-export type NeaWind = {
+// Named generically, not `NeaWind` — the shape is generic enough that
+// Open-Meteo's forecast reuses it too (see `services/openMeteo.ts`).
+export type SlotWind = {
   speed: { low: number; high: number }; // km/h
   direction: string; // compass abbreviation, e.g. "SSE"
 };
@@ -77,7 +79,7 @@ export type FourDayForecast = {
   forecast: NeaForecastText;
   temperature: { low: number; high: number };
   relativeHumidity: { low: number; high: number };
-  wind: NeaWind;
+  wind: SlotWind;
 };
 
 // The 4-day endpoint stamps its update time on the enclosing record, not on

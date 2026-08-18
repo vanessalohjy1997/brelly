@@ -26,6 +26,14 @@ describe("describeFreshness", () => {
     expect(describeFreshness("2hr", "4m ago")).toBe("Updated 4m ago");
   });
 
+  it("names the Open-Meteo outlook tier the same way as NEA's 4-day tier", () => {
+    expect(describeFreshness("openMeteoDaily", "2h ago")).toBe("Outlook · 2h ago");
+  });
+
+  it("reports an Open-Meteo hourly reading's age plainly", () => {
+    expect(describeFreshness("openMeteoHourly", "10m ago")).toBe("Updated 10m ago");
+  });
+
   it("says nothing when there's no age to report", () => {
     expect(describeFreshness("24hr", null)).toBeNull();
   });

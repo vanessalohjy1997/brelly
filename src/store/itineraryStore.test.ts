@@ -19,6 +19,7 @@ const mockDeleteSlotDoc = deleteSlotDoc as jest.Mock;
 // lookup the app uses — Marina Bay Sands (south) and Jurong East (west).
 const MarinaBay = { latitude: 1.2834, longitude: 103.8607 };
 const JurongEast = { latitude: 1.3329, longitude: 103.7436 };
+const Bangkok = { latitude: 13.7563, longitude: 100.5018 };
 
 function slotInput(overrides: Partial<Parameters<typeof addSlot>[1]> = {}) {
   return {
@@ -112,6 +113,18 @@ describe("updateSlot", () => {
     expect(plansOn("2026-07-31")?.slots[0].neaRegion).toBe("west");
   });
 
+  it("re-derives the provider when the slot moves across the Singapore border", () => {
+    const slot = addSlot("2026-07-31", slotInput());
+    expect(plansOn("2026-07-31")?.slots[0].provider).toBe("nea");
+
+    updateSlot("2026-07-31", slot.id, {
+      location: "Bangkok",
+      ...Bangkok,
+    });
+
+    expect(plansOn("2026-07-31")?.slots[0].provider).toBe("openMeteo");
+  });
+
   it("is a no-op when the slot isn't on the given day", () => {
     addSlot("2026-07-31", slotInput());
     const before = useItineraryStore.getState().plans;
@@ -138,6 +151,21 @@ describe("addSlot", () => {
     const slot = addSlot("2026-07-31", slotInput(), "r_routine1_2026-07-31");
 
     expect(slot.id).toBe("r_routine1_2026-07-31");
+  });
+
+  it("derives provider 'nea' for a Singapore location", () => {
+    const slot = addSlot("2026-07-31", slotInput());
+
+    expect(slot.provider).toBe("nea");
+  });
+
+  it("derives provider 'openMeteo' for an overseas location", () => {
+    const slot = addSlot(
+      "2026-07-31",
+      slotInput({ location: "Bangkok", ...Bangkok }),
+    );
+
+    expect(slot.provider).toBe("openMeteo");
   });
 });
 
