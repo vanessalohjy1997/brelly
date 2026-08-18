@@ -145,6 +145,21 @@ describe("slot field validation", () => {
     await assertFails(setDoc(ref, { ...validSlot, neaRegion: "north-west" }));
   });
 
+  test("a slot with an unknown provider is rejected", async () => {
+    const ref = doc(ownerDb(), "users", OWNER_UID, "slots", "s1");
+    await assertFails(setDoc(ref, { ...validSlot, provider: "weatherApi" }));
+  });
+
+  test("a slot with a valid provider is accepted", async () => {
+    const ref = doc(ownerDb(), "users", OWNER_UID, "slots", "s1");
+    await assertSucceeds(setDoc(ref, { ...validSlot, provider: "openMeteo" }));
+  });
+
+  test("a slot without a provider field is accepted", async () => {
+    const ref = doc(ownerDb(), "users", OWNER_UID, "slots", "s1");
+    await assertSucceeds(setDoc(ref, validSlot));
+  });
+
   test("a slot with an over-length label is rejected", async () => {
     const ref = doc(ownerDb(), "users", OWNER_UID, "slots", "s1");
     await assertFails(

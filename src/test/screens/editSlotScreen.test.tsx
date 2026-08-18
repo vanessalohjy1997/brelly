@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Alert } from "react-native";
 
 import EditSlotScreen from "@/app/plan/[id]";
+import { getUpcomingForecast } from "@/services/weather";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
@@ -15,6 +16,12 @@ jest.mock("@/services/weather", () => ({
   getForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Cloudy", source: "24hr" }),
+  getUpcomingForecast: jest.fn().mockResolvedValue([]),
+}));
+jest.mock("@/services/openMeteo", () => ({
+  getOpenMeteoForecastForSlot: jest
+    .fn()
+    .mockResolvedValue({ forecast: "Fair (Day)", source: "openMeteoHourly" }),
 }));
 
 const mockSearchParams = useLocalSearchParams as unknown as jest.Mock;
@@ -260,6 +267,35 @@ describe("EditSlotScreen", () => {
       .plans.flatMap((plan) => plan.slots)
       .find((slot) => slot.id !== "slot-1");
     expect(copy?.kind).toBe("indoor");
+  });
+
+  describe("an overseas (Open-Meteo) stop", () => {
+    beforeEach(() => {
+      useItineraryStore.setState({
+        plans: [
+          {
+            ...PLAN,
+            slots: [
+              {
+                ...PLAN.slots[0],
+                provider: "openMeteo",
+                location: "Bangkok",
+                latitude: 13.7563,
+                longitude: 100.5018,
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    it("renders without firing NEA's upcoming-periods query, and without a dry-window banner", async () => {
+      const view = await renderWithProviders(<EditSlotScreen />);
+
+      expect(view.getByDisplayValue("Lunch with Sam")).toBeTruthy();
+      expect(getUpcomingForecast).not.toHaveBeenCalled();
+      expect(view.queryByText(/looks dry/)).toBeNull();
+    });
   });
 
   describe("a stop that came from a routine", () => {

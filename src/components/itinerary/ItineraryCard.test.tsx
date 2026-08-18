@@ -2,6 +2,7 @@ import { fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
+import { getOpenMeteoForecastForSlot } from "@/services/openMeteo";
 import { getForecastForSlot } from "@/services/weather";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { ItinerarySlot } from "@/types/itinerary";
@@ -13,6 +14,9 @@ jest.mock("@/services/weather", () => ({
     temperature: { low: 25, high: 34 },
     updatedAt: new Date().toISOString(),
   }),
+}));
+jest.mock("@/services/openMeteo", () => ({
+  getOpenMeteoForecastForSlot: jest.fn(),
 }));
 
 const SLOT: ItinerarySlot = {
@@ -238,6 +242,51 @@ describe("ItineraryCard", () => {
 
       expect(await view.findByText("Rain")).toBeTruthy();
       expect(view.getByText("Thundery Showers")).toBeTruthy();
+    });
+  });
+
+  describe("an overseas (Open-Meteo) slot", () => {
+    const OVERSEAS_SLOT: ItinerarySlot = {
+      ...SLOT,
+      id: "slot-overseas",
+      location: "Bangkok",
+      provider: "openMeteo",
+      latitude: 13.7563,
+      longitude: 100.5018,
+    };
+
+    it("routes to Open-Meteo, not NEA", async () => {
+      jest.mocked(getOpenMeteoForecastForSlot).mockResolvedValueOnce({
+        forecast: "Fair (Day)",
+        source: "openMeteoHourly",
+        temperature: { low: 26, high: 34 },
+        uvIndex: 9,
+      });
+
+      const view = await renderWithProviders(
+        <ItineraryCard slot={OVERSEAS_SLOT} onDelete={jest.fn()} />,
+      );
+
+      expect(await view.findByText("Fair (Day)")).toBeTruthy();
+      expect(getForecastForSlot).not.toHaveBeenCalled();
+    });
+
+    it("takes its UV reading from the inline forecast, not the island-wide useUvIndex value", async () => {
+      jest.mocked(getOpenMeteoForecastForSlot).mockResolvedValueOnce({
+        forecast: "Fair (Day)",
+        source: "openMeteoHourly",
+        temperature: { low: 26, high: 34 },
+        uvIndex: 9,
+      });
+
+      const view = await renderWithProviders(
+        <ItineraryCard slot={OVERSEAS_SLOT} onDelete={jest.fn()} />,
+      );
+
+      // The real useUvIndex() fetch has nothing to succeed against in this
+      // test environment, so a "Sun" verdict here can only have come from
+      // the Open-Meteo forecast's own inline uvIndex.
+      expect(await view.findByText("Sun")).toBeTruthy();
     });
   });
 

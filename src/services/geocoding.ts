@@ -51,15 +51,18 @@ export async function searchPlaces(input: string): Promise<PlaceSuggestion[]> {
     body: JSON.stringify({
       input,
       sessionToken: getSessionToken(),
-      // Bias results toward Singapore
+      // A soft ranking preference, not a filter — still puts "Orchard Road"
+      // first for someone typing from Singapore, without blocking an
+      // overseas place typed in full. There used to be a hard
+      // `includedRegionCodes: ["sg"]` filter alongside this; removed so
+      // itinerary stops outside Singapore (see `weatherProvider.ts`) can
+      // actually be searched for.
       locationBias: {
         circle: {
           center: { latitude: 1.3521, longitude: 103.8198 },
           radius: 30000, // 30km radius covers all of Singapore
         },
       },
-      // Only return results in Singapore
-      includedRegionCodes: ["sg"],
     }),
   });
 
@@ -73,8 +76,9 @@ export async function searchPlaces(input: string): Promise<PlaceSuggestion[]> {
     .map((s: any) => ({
       placeId: s.placePrediction.placeId,
       displayName: s.placePrediction.structuredFormat.mainText.text,
-      secondaryText:
-        s.placePrediction.structuredFormat.secondaryText?.text ?? "Singapore",
+      // No longer defaulted to "Singapore" — a bare mainText result overseas
+      // would otherwise misreport its country.
+      secondaryText: s.placePrediction.structuredFormat.secondaryText?.text ?? "",
     }));
 }
 

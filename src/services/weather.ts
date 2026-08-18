@@ -2,7 +2,7 @@ import { findNearestArea } from "@/constants/neaRegions";
 import {
   FourDayOutlook,
   NeaRegion,
-  NeaWind,
+  SlotWind,
   TwentyFourHrForecast,
   TwoHrForecast,
 } from "@/types/weather";
@@ -83,6 +83,12 @@ export type SlotForecastSource =
   | "2hr"
   | "24hr"
   | "4day"
+  // Open-Meteo, for non-Singapore locations — see `services/openMeteo.ts`.
+  // Two tags, not one, so the freshness label can tell "hourly, high
+  // confidence" from "beyond the 7-day window" apart, the same distinction
+  // NEA's own "4day" tag already signals against "2hr"/"24hr".
+  | "openMeteoHourly"
+  | "openMeteoDaily"
   | "cached"
   | "unavailable"
   | "error";
@@ -93,7 +99,7 @@ export type SlotForecast = {
   // 2hr nowcasts don't carry temperature/humidity/wind — only 24hr and 4-day do.
   temperature?: { low: number; high: number };
   humidity?: { low: number; high: number };
-  wind?: NeaWind;
+  wind?: SlotWind;
   /**
    * When NEA last updated the reading this came from. Worth surfacing because
    * the tiers age very differently: a 2hr nowcast is minutes old, while the
@@ -103,6 +109,11 @@ export type SlotForecast = {
   updatedAt?: string;
   /** Set only on `source: "cached"` — when this app stored the reading. */
   cachedAt?: string;
+  /**
+   * Open-Meteo folds UV into the same forecast call; NEA's comes from a
+   * separate island-wide endpoint (`useUvIndex`) and never sets this.
+   */
+  uvIndex?: number;
 };
 
 /**

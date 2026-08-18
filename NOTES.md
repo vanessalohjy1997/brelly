@@ -75,7 +75,40 @@ links back here.
   that `tsc` couldn't catch, because responses were cast with `as` rather than
   validated (forecast strings are nested `{code, text}` objects, not bare
   strings; 2hr uses `forecasts[].area`, not `areas[].name`; 4-day dates live in
-  `timestamp`, not `date`).
+  `timestamp`, not `date`). The same trap applies to Open-Meteo: it's used
+  both `weathercode`/`weather_code` and `windspeed_10m`/`wind_speed_10m`
+  across API versions — `services/openMeteo.ts`'s field names were confirmed
+  against a live curl, not the docs.
+- **Open-Meteo's `hourly.time`/`daily.time` carry no timezone suffix at
+  all**, even with a timezone param set — `timezone=auto` returns the
+  location's *local* wall-clock time with nothing to disambiguate it from
+  the runtime's own local time if parsed naively (`new Date("2026-08-17T00:00")`
+  is read as local-to-the-device, not local-to-the-forecast-point).
+  `services/openMeteo.ts` requests `timezone=UTC` instead and appends `"Z"`
+  before parsing, so every timestamp is explicit UTC — deliberately giving up
+  the location's own local day boundary rather than risk silently mixing two
+  different "local"s.
+- **A new weather provider is a translator, not a parallel UI.** Open-Meteo
+  reports condition as a numeric WMO code, not English text, but
+  `wmoWeatherCode.ts`'s `wmoCodeToForecastText` deliberately emits strings
+  that reuse NEA's own vocabulary ("Light Rain", "Fair (Day)", "Thundery
+  Showers") — so `WeatherIcon.tsx`'s `forecastToSymbol`,
+  `shouldNotifyForRain`, and `derivePackingList` all keep working for
+  Open-Meteo forecasts with zero changes of their own. Snow/sleet codes
+  (71–77, 85–86) fall back to the generic "Partly Cloudy" reading — out of
+  scope while the only overseas markets are tropical SEA ones; a future
+  non-tropical market needs those keyword lists extended, not just the
+  translator.
+- **Every forecast-fetching call site must go through
+  `getForecastForSlotByProvider` (`services/forecastProvider.ts`), never
+  `getForecastForSlot`/`slot.neaRegion` directly.** `useRainNotificationScheduler`
+  originally called NEA's fetcher straight from the slot, bypassing
+  `useWeatherForSlot` entirely — a call site added this way for an overseas
+  slot would silently schedule its rain alert off Singapore's `"central"`
+  fallback forecast instead of erroring. `slot.neaRegion` stays populated
+  (and meaningless) even on an Open-Meteo slot specifically so nothing
+  reading it by accident crashes; the dispatcher is the only thing allowed
+  to treat it as authoritative.
 - **`AGENTS.md` requires checking `docs.expo.dev/versions/v57.0.0/` before
   writing Expo/Router code.** Things that were not guessable from file
   conventions: the NativeTabs + modal-`Stack` combination, and the header
@@ -306,7 +339,12 @@ links back here.
   live `area_metadata` lat/lng, temperature/humidity ranges where the tier
   carries them, and a `source: "error"` (fetch failed) distinct from
   `"unavailable"` (responded, no matching entry) so `WeatherBadge` can show
-  "Couldn't load forecast · Retry" instead of "No forecast".
+  "Couldn't load forecast · Retry" instead of "No forecast". Non-Singapore
+  locations (round 19) use Open-Meteo instead — `weatherProvider.ts` derives
+  `"nea"` vs `"openMeteo"` from coordinates once at slot creation, and
+  `forecastProvider.ts`'s `getForecastForSlotByProvider` is the one place
+  every caller branches on it. NEA stays the Singapore source; nothing about
+  it changed.
   `getUpcomingForecast` powers the empty-state "weather nearby" preview.
 - **Plans.** Google Places autocomplete + details (session-token billing),
   Google reverse geocoding for "Use my location" (`reverseGeocode`, with the
@@ -1076,6 +1114,59 @@ Today and Plans headers. Moved to `src/app/(tabs)/settings.tsx`, a fourth
   screenshot, so it's a real number rather than a guess — which every tab
   shares via the one constant, so Today/Plans/History got the same fix for
   free.
+
+### Round 19 — weather works outside Singapore
+
+Brelly's weather was NEA-only, which is Singapore-only by construction —
+blocking on the intended expansion into Southeast Asia. Open-Meteo (free, no
+key, no documented rate limit, global coverage) is now the provider for
+anywhere outside Singapore; NEA stays the Singapore source, since it's still
+more accurate there (real stations, purpose-built nowcast — see the weather
+API research this round is based on for the full comparison against
+WeatherAPI.com/OpenWeatherMap/Tomorrow.io/Apple WeatherKit).
+
+- **`weatherProvider.ts` (new)** derives `"nea"` vs `"openMeteo"` from
+  coordinates via `isInSingapore` — a generous bounding box, deliberately
+  separate from `neaRegions.ts`'s five region boxes, which answer a different
+  question ("which NEA region", not "is this Singapore at all"). Stored once
+  on `ItinerarySlot.provider` at creation/coordinate-change, exactly the way
+  `neaRegion` already is; absent reads as `"nea"` so no store migration was
+  needed, and `firestore.rules` got one additive `isValidSlot` line to match.
+- **`openMeteo.ts` (new)** mirrors `weather.ts`'s fetch/normalize split, but
+  the normalize step looks different: Open-Meteo's response is columnar
+  (parallel `hourly.time[i]`/`hourly.weathercode[i]`/... arrays), so matching
+  a slot to a reading is a nearest-index zip rather than NEA's
+  nearest-area/period object lookup. Two source tags —
+  `"openMeteoHourly"`/`"openMeteoDaily"`, split at the 7-day mark — carry the
+  same confidence signal NEA's own `"4day"` tag already does.
+  `wmoWeatherCode.ts` translates Open-Meteo's numeric condition codes into
+  NEA-vocabulary strings so nothing downstream needed a second vocabulary
+  (see the trap above).
+- **`forecastProvider.ts` (new)** is the single dispatcher every
+  forecast-fetching call site now goes through. Adding it surfaced a real bug
+  in the existing code: `useRainNotificationScheduler` called NEA's fetcher
+  directly, bypassing `useWeatherForSlot` — an overseas slot would have
+  silently scheduled its rain alert off Singapore's `"central"` fallback
+  forecast. Fixed as part of this round, not filed separately, since shipping
+  overseas slots without the fix live would have shipped the bug too.
+- **UV folded inline.** Open-Meteo returns `uv_index` in the same forecast
+  call; NEA's is a separate island-wide endpoint (`useUvIndex`). `SlotForecast`
+  gained an optional `uvIndex` field, and `ItineraryCard` now prefers
+  `weather.uvIndex` over the (NEA-only, meaningless overseas) `useUvIndex()`
+  value.
+- **Search widened.** `geocoding.ts`'s `searchPlaces` dropped its
+  `includedRegionCodes: ["sg"]` filter — the Singapore-centred
+  `locationBias` circle stays, since it's a ranking preference, not a
+  restriction, and still surfaces local results first for a search typed
+  from Singapore.
+- **Scope cuts, both explicit rather than silent.** Snow/sleet WMO codes fall
+  back to a generic "Partly Cloudy" reading — the prioritized SEA markets are
+  tropical, so `shouldNotifyForRain`/`derivePackingList`'s keyword lists
+  weren't extended for it; a future non-tropical market needs that done
+  properly. The "dry window" suggestion on the edit screen
+  (`suggestDryWindow`, fed by NEA's `getUpcomingForecast`) has no Open-Meteo
+  equivalent yet and is gated off for overseas slots rather than silently
+  never firing for a reason no one could see.
 
 ## Shipped from the feature-idea list
 

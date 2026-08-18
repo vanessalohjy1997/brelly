@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getForecastForSlot } from "@/services/weather";
+import { getForecastForSlotByProvider } from "@/services/forecastProvider";
 import { mmkvStorage } from "@/store/mmkvStorage";
 import { NeaRegion } from "@/types/weather";
 import {
@@ -8,14 +8,16 @@ import {
   readCachedForecast,
   writeCachedForecast,
 } from "@/utils/forecastCache";
+import type { WeatherProvider } from "@/utils/weatherProvider";
 
 type Params = {
+  provider: WeatherProvider;
   region: NeaRegion;
   latitude: number;
   longitude: number;
   slotStartTime: string; // ISO string
   /**
-   * Off for a stop that has already finished. NEA publishes forecasts, not
+   * Off for a stop that has already finished. Neither provider serves
    * history, so the request can only come back as "unavailable" — and an
    * archive of a hundred past stops would fire a hundred of them to render a
    * hundred "No forecast" lines.
@@ -24,6 +26,7 @@ type Params = {
 };
 
 export function useWeatherForSlot({
+  provider,
   region,
   latitude,
   longitude,
@@ -31,19 +34,22 @@ export function useWeatherForSlot({
   enabled = true,
 }: Params) {
   return useQuery({
-    queryKey: ["weather", region, latitude, longitude, slotStartTime],
+    queryKey: ["weather", provider, region, latitude, longitude, slotStartTime],
     queryFn: async () => {
       const cacheKey = forecastCacheKey({ latitude, longitude, slotStartTime });
-      const forecast = await getForecastForSlot(
+      const forecast = await getForecastForSlotByProvider({
+        provider,
         region,
         latitude,
         longitude,
         slotStartTime,
-      );
+      });
 
-      // `getForecastForSlot` reports a failed request as `source: "error"`
-      // rather than throwing, so React Query's own retry/error path never
-      // sees it — the offline fallback has to happen here.
+      // The dispatcher reports a failed request as `source: "error"` rather
+      // than throwing, so React Query's own retry/error path never sees it —
+      // the offline fallback has to happen here. The cache key is
+      // coordinate+time only, with no provider component, but that's safe:
+      // a given coordinate pair deterministically maps to one provider.
       if (forecast.source === "error") {
         const cached = readCachedForecast(mmkvStorage, cacheKey);
         if (cached) return cached;

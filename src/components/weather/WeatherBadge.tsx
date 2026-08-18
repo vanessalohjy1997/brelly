@@ -126,9 +126,10 @@ export function describeFreshness(
 ): string | null {
   if (source === "cached") return age ? `Offline · saved ${age}` : "Offline";
   if (!age) return null;
-  // A 2hr nowcast is minutes old; the 4-day outlook is issued once each
-  // morning. Saying which one you're looking at matters more than its age.
-  if (source === "4day") return `Outlook · ${age}`;
+  // A 2hr nowcast is minutes old; the 4-day/openMeteoDaily outlook is a
+  // lower-confidence, longer-range reading. Saying which one you're looking
+  // at matters more than its age.
+  if (source === "4day" || source === "openMeteoDaily") return `Outlook · ${age}`;
   return `Updated ${age}`;
 }
 

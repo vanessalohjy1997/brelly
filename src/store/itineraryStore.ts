@@ -4,25 +4,31 @@ import { deleteSlotDoc, writeSlot, writeSlotFields } from "@/services/itineraryS
 import { DayPlan, ItinerarySlot } from "@/types/itinerary";
 import { toDateKey } from "@/utils/dateKeys";
 import { sortSlotsByStart } from "@/utils/planSelectors";
+import { deriveWeatherProvider } from "@/utils/weatherProvider";
 import { create } from "zustand";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function applyUpdates(
   slot: ItinerarySlot,
-  updates: Partial<Omit<ItinerarySlot, "id" | "neaRegion">>,
+  updates: Partial<Omit<ItinerarySlot, "id" | "neaRegion" | "provider">>,
 ): ItinerarySlot {
+  const coordinatesChanged =
+    updates.latitude !== undefined || updates.longitude !== undefined;
+  const latitude = updates.latitude ?? slot.latitude;
+  const longitude = updates.longitude ?? slot.longitude;
+
   return {
     ...slot,
     ...updates,
-    // Re-derive region if coordinates changed
-    neaRegion:
-      updates.latitude !== undefined || updates.longitude !== undefined
-        ? getRegionFromCoordinates(
-            updates.latitude ?? slot.latitude,
-            updates.longitude ?? slot.longitude,
-          )
-        : slot.neaRegion,
+    // Re-derive region and provider together if coordinates changed — both
+    // are derived from the same lat/lng, so they can never disagree.
+    neaRegion: coordinatesChanged
+      ? getRegionFromCoordinates(latitude, longitude)
+      : slot.neaRegion,
+    provider: coordinatesChanged
+      ? deriveWeatherProvider(latitude, longitude)
+      : slot.provider,
   };
 }
 
@@ -69,7 +75,10 @@ type ItineraryState = {
   // Plan actions
   addSlot: (
     date: string,
-    slot: Omit<ItinerarySlot, "id" | "neaRegion" | "notificationId">,
+    slot: Omit<
+      ItinerarySlot,
+      "id" | "neaRegion" | "provider" | "notificationId"
+    >,
     /** Overrides the minted id — the routine materialiser's deterministic
      * `r_{routineId}_{date}` ids are the only caller that needs this. */
     id?: string,
@@ -89,7 +98,7 @@ type ItineraryState = {
   updateSlot: (
     date: string,
     slotId: string,
-    updates: Partial<Omit<ItinerarySlot, "id" | "neaRegion">>,
+    updates: Partial<Omit<ItinerarySlot, "id" | "neaRegion" | "provider">>,
   ) => ItinerarySlot | undefined;
   deleteSlot: (date: string, slotId: string) => void;
   /**
@@ -122,12 +131,13 @@ export const useItineraryStore = create<ItineraryState>()((set, get) => ({
     const newSlot: ItinerarySlot = {
       ...slotData,
       id: id ?? generateDocId(),
-      // Derive region from coordinates at creation time — stored on the
-      // slot so we never re-derive on every render or API call
+      // Derive region and provider from coordinates at creation time — both
+      // stored on the slot so we never re-derive on every render or API call
       neaRegion: getRegionFromCoordinates(
         slotData.latitude,
         slotData.longitude,
       ),
+      provider: deriveWeatherProvider(slotData.latitude, slotData.longitude),
     };
 
     set((state) => ({ plans: fileSlot(state.plans, date, newSlot) }));
