@@ -2,6 +2,7 @@ import { render } from "@testing-library/react-native";
 
 import {
   buildReadings,
+  deriveLiveForecastText,
   LiveConditionsCard,
 } from "@/components/weather/LiveConditionsCard";
 import type { LiveConditions } from "@/types/weather";
@@ -79,6 +80,36 @@ describe("buildReadings", () => {
   });
 });
 
+describe("deriveLiveForecastText", () => {
+  const noon = new Date("2024-01-01T12:00:00");
+  const midnight = new Date("2024-01-01T00:00:00");
+
+  it("calls out rain over time of day when it's actually raining", () => {
+    expect(
+      deriveLiveForecastText({ ...CONDITIONS, rainfallMm: 1.4 }, midnight),
+    ).toBe("Rain");
+  });
+
+  it("reports fair daytime weather when dry during the day", () => {
+    expect(deriveLiveForecastText({ ...CONDITIONS, rainfallMm: 0 }, noon)).toBe(
+      "Fair (Day)",
+    );
+  });
+
+  it("reports fair night weather when dry after dark", () => {
+    expect(
+      deriveLiveForecastText({ ...CONDITIONS, rainfallMm: 0 }, midnight),
+    ).toBe("Fair (Night)");
+  });
+
+  it("returns null when there's no rainfall sensor at all, rather than guessing", () => {
+    expect(
+      deriveLiveForecastText({ ...CONDITIONS, rainfallMm: undefined }, noon),
+    ).toBeNull();
+    expect(deriveLiveForecastText(null, noon)).toBeNull();
+  });
+});
+
 describe("LiveConditionsCard", () => {
   it("renders the readings with the station and how old they are", async () => {
     const view = await render(
@@ -95,6 +126,17 @@ describe("LiveConditionsCard", () => {
     // runs green→red, which red-green colour blindness collapses.
     expect(view.getByText("UV 8")).toBeTruthy();
     expect(view.getByText("Very high")).toBeTruthy();
+  });
+
+  it("shows a rain icon when the sensor is reporting rainfall", async () => {
+    const view = await render(
+      <LiveConditionsCard
+        conditions={{ ...CONDITIONS, rainfallMm: 1.4 }}
+        uvIndex={undefined}
+      />,
+    );
+
+    expect(view.getByTestId("symbol-rainy")).toBeTruthy();
   });
 
   it("renders nothing rather than an empty card when no reading came back", async () => {

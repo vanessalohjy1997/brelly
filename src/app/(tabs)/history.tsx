@@ -17,9 +17,9 @@ import {
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
+import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useTheme } from "@/hooks/useTheme";
-import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { showToast } from "@/store/toastStore";
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
   },
   list: {
-    gap: Spacing.three,
+    gap: Spacing.one,
     // A tab bar sits under this screen now, same as Today and Plans.
     paddingBottom: BottomTabInset + Spacing.three,
   },
