@@ -3,7 +3,7 @@ import { Linking, Pressable, StyleSheet } from "react-native";
 import { Icon } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import type { PermissionState } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -36,7 +36,7 @@ export function NearbyWeatherPrompt({ permission, onRequest }: Props) {
     >
       <Icon
         name={{ ios: "location.circle.fill", android: "my_location" }}
-        size={28}
+        size={IconSize.lead}
         tintColor={theme.primary}
       />
       <ThemedView style={styles.text}>

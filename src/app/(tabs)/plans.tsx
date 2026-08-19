@@ -23,6 +23,7 @@ import { NearbyWeatherPrompt } from "@/components/weather/NearbyWeatherPrompt";
 import {
   BottomTabInset,
   HeaderHeight,
+  IconSize,
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
@@ -113,7 +114,7 @@ export default function PlansScreen() {
             >
               <Icon
                 name={{ ios: "repeat", android: "repeat" }}
-                size={18}
+                size={IconSize.control}
                 tintColor={theme.text}
               />
             </Pressable>
@@ -163,7 +164,7 @@ export default function PlansScreen() {
               {!hasWeatherNearby && (
                 <Icon
                   name={{ ios: "calendar", android: "calendar_month" }}
-                  size={48}
+                  size={IconSize.hero}
                   tintColor={theme.textSecondary}
                   style={styles.emptyIcon}
                 />
@@ -204,7 +205,7 @@ export default function PlansScreen() {
           <ThemedView style={styles.emptyState}>
             <Icon
               name={{ ios: "magnifyingglass", android: "search" }}
-              size={48}
+              size={IconSize.hero}
               tintColor={theme.textSecondary}
               style={styles.emptyIcon}
             />
@@ -252,7 +253,7 @@ export default function PlansScreen() {
                         ios: "exclamationmark.triangle.fill",
                         android: "warning",
                       }}
-                      size={14}
+                      size={IconSize.inline}
                       tintColor={theme.umbrellaSun}
                     />
                     <ThemedText style={styles.conflictText}>
@@ -288,7 +289,7 @@ export default function PlansScreen() {
                 >
                   <Icon
                     name={{ ios: "plus", android: "add" }}
-                    size={16}
+                    size={IconSize.inline}
                     tintColor={theme.textSecondary}
                   />
                 </Pressable>

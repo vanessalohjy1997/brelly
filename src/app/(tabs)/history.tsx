@@ -14,6 +14,7 @@ import { ThemedView } from "@/components/themedView";
 import {
   BottomTabInset,
   HeaderHeight,
+  IconSize,
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
@@ -123,7 +124,7 @@ export default function HistoryScreen() {
             >
               <Icon
                 name={{ ios: "trash", android: "delete_sweep" }}
-                size={16}
+                size={IconSize.inline}
                 tintColor={theme.textSecondary}
               />
               <ThemedText themeColor="textSecondary" style={styles.pruneText}>
@@ -143,7 +144,7 @@ export default function HistoryScreen() {
           <ThemedView style={styles.emptyState}>
             <Icon
               name={{ ios: "clock.arrow.circlepath", android: "history" }}
-              size={48}
+              size={IconSize.hero}
               tintColor={theme.textSecondary}
               style={styles.emptyIcon}
             />
@@ -159,7 +160,7 @@ export default function HistoryScreen() {
           <ThemedView style={styles.emptyState}>
             <Icon
               name={{ ios: "magnifyingglass", android: "search" }}
-              size={48}
+              size={IconSize.hero}
               tintColor={theme.textSecondary}
               style={styles.emptyIcon}
             />

@@ -4,7 +4,7 @@ import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
 import { Icon, type IconName } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
-import { Spacing, type ThemeColor } from "@/constants/theme";
+import { IconSize, Spacing, type ThemeColor } from "@/constants/theme";
 import { useReduceMotion } from "@/hooks/useReduceMotion";
 import { useTheme } from "@/hooks/useTheme";
 import {
@@ -131,7 +131,7 @@ export function ToastHost({ bottomInset = 0, root = false }: Props) {
           { backgroundColor: colors.backgroundElement, borderColor: accent },
         ]}
       >
-        <Icon name={ICONS[toast.variant]} size={18} tintColor={accent} />
+        <Icon name={ICONS[toast.variant]} size={IconSize.control} tintColor={accent} />
         <ThemedText
           style={[styles.message, { color: colors.text }]}
           numberOfLines={3}

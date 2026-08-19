@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
 import { Icon } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { SlotForecast } from "@/services/weather";
 import { describeUmbrella } from "@/utils/describeUmbrella";
@@ -154,7 +154,7 @@ export function ForecastTimestamp({
     <ThemedView style={styles.freshnessRow}>
       <Icon
         name={{ ios: "clock", android: "schedule" }}
-        size={11}
+        size={IconSize.metadata}
         tintColor={colors.textSecondary}
       />
       <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
@@ -196,6 +196,7 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: Spacing.two,
     minHeight: 44,
   },
@@ -214,17 +215,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     fontWeight: "600",
+    textAlign: "right",
   },
   metaRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: Spacing.one,
     backgroundColor: "transparent",
   },
   meta: {
     fontSize: 12,
     lineHeight: 20,
+    textAlign: "right",
   },
   freshnessRow: {
     flexDirection: "row",
@@ -237,5 +241,6 @@ const styles = StyleSheet.create({
   problem: {
     fontSize: 13,
     fontWeight: "600",
+    textAlign: "right",
   },
 });

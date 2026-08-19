@@ -3,7 +3,7 @@ import { Pressable, StyleSheet } from "react-native";
 import { Icon } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 
 type Props = {
@@ -32,7 +32,7 @@ export function OnboardingPermissionPrimer({ kind, onAllow, onSkip }: Props) {
 
   return (
     <ThemedView style={styles.container}>
-      <Icon name={icon} size={48} tintColor={theme.primary} />
+      <Icon name={icon} size={IconSize.hero} tintColor={theme.primary} />
       <ThemedText type="subtitle" style={styles.title}>
         {title}
       </ThemedText>

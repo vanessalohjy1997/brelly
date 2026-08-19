@@ -146,4 +146,40 @@ describe("LiveConditionsCard", () => {
 
     expect(view.toJSON()).toBeNull();
   });
+
+  it("answers the umbrella question as a watermark when the sensor reports rain", async () => {
+    const view = await render(
+      <LiveConditionsCard
+        conditions={{ ...CONDITIONS, rainfallMm: 1.4 }}
+        uvIndex={undefined}
+      />,
+    );
+
+    await view.findByLabelText("Umbrella — rain");
+    expect(view.getByTestId("symbol-umbrella")).toBeTruthy();
+  });
+
+  it("shows no watermark when it's dry and UV doesn't call for one", async () => {
+    const view = await render(
+      <LiveConditionsCard
+        conditions={{ ...CONDITIONS, rainfallMm: 0 }}
+        uvIndex={{ value: 5, updatedAt: null }}
+      />,
+    );
+
+    expect(view.queryByTestId("symbol-umbrella")).toBeNull();
+    expect(view.queryByLabelText(/Umbrella —/)).toBeNull();
+  });
+
+  it("answers the sun half of the verdict from UV when it's dry", async () => {
+    const view = await render(
+      <LiveConditionsCard
+        conditions={{ ...CONDITIONS, rainfallMm: 0 }}
+        uvIndex={{ value: 9, updatedAt: null }}
+      />,
+    );
+
+    await view.findByLabelText("Umbrella — sun");
+    expect(view.getByTestId("symbol-umbrella")).toBeTruthy();
+  });
 });
