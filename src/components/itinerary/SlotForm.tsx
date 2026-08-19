@@ -20,7 +20,7 @@ import { Icon } from "@/components/icon";
 import { RepeatField } from "@/components/itinerary/RepeatField";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceSearch } from "@/hooks/usePlaceSearch";
 import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
@@ -381,7 +381,7 @@ export function SlotForm({
             >
               <Icon
                 name={{ ios: "checkmark.circle.fill", android: "check_circle" }}
-                size={16}
+                size={IconSize.inline}
                 tintColor={theme.primary}
               />
               <ThemedText style={styles.chipText} numberOfLines={2}>
@@ -395,7 +395,7 @@ export function SlotForm({
               >
                 <Icon
                   name={{ ios: "xmark.circle.fill", android: "cancel" }}
-                  size={16}
+                  size={IconSize.inline}
                   tintColor={theme.textSecondary}
                 />
               </Pressable>
@@ -479,7 +479,7 @@ export function SlotForm({
                   {!isLocating && (
                     <Icon
                       name={{ ios: "location.fill", android: "my_location" }}
-                      size={12}
+                      size={IconSize.metadata}
                       tintColor={theme.textSecondary}
                     />
                   )}

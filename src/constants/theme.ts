@@ -137,6 +137,36 @@ export const Spacing = {
   six: 64,
 } as const;
 
+// Icon sizes step in two grids. Below `hero` they're a tight 4px ladder —
+// these sit right next to text, so they need to track it closely. From
+// `hero` up they widen (48 → 96) because these are standalone marks, not
+// text companions, and at that size a small delta isn't visible anyway.
+//
+// `controlEmphasis` and `heroEmphasis` aren't a size up for their own sake —
+// they exist because `UmbrellaVerdictIcon`'s umbrella-and-marks reads
+// visually lighter than a filled symbol at the same nominal size (see
+// `RAIN_DROPS_COMPACT` in that file), so wherever it sits beside a
+// `WeatherIcon` at `control`/`hero`, it takes the next step up instead to
+// match visual weight.
+export const IconSize = {
+  /** Decorative glyphs beside caption-scale text — timestamps, indoor/muted/repeat markers. */
+  metadata: 12,
+  /** Icons inline with body text — chips, warnings, checkmarks, form field icons. */
+  inline: 16,
+  /** Standalone control icons — buttons, row actions, headings. */
+  control: 20,
+  /** `control`, one step up — see the emphasis note above. */
+  controlEmphasis: 24,
+  /** A lead icon beside a title/subtitle block, with no companion icon to size-match. */
+  lead: 32,
+  /** Empty-state and other focal illustration icons. */
+  hero: 48,
+  /** `hero`, one step up — see the emphasis note above. */
+  heroEmphasis: 56,
+  /** A large background mark bleeding off a card's own corner. */
+  watermark: 96,
+} as const;
+
 // iOS 26's tab bar floats clear of the bottom edge (the "Liquid Glass" pill,
 // not a docked bar), so it takes noticeably more clearance than a standard
 // tab bar — 50 measured flush against a real device leaves scrollable

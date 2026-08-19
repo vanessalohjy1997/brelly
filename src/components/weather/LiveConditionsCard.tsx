@@ -2,11 +2,13 @@ import { StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
 import { WeatherIcon } from "@/components/weather/WeatherIcon";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { UvIndex } from "@/hooks/useUvIndex";
 import type { LiveConditions } from "@/types/weather";
+import { describeUmbrella } from "@/utils/describeUmbrella";
 import { describeUv } from "@/utils/describeUv";
 import { formatRelativeTimestamp } from "@/utils/formatRelativeTimestamp";
 import { formatWindSpeedKnots } from "@/utils/formatWind";
@@ -34,16 +36,34 @@ export function LiveConditionsCard({ conditions, uvIndex }: Props) {
   const observedAgo = formatRelativeTimestamp(conditions?.observedAt);
   const liveForecast = deriveLiveForecastText(conditions);
 
+  // Same umbrella question the plan cards answer, asked of the live reading
+  // instead of a forecast — see the watermark on `ItineraryCard`.
+  const verdict = describeUmbrella(liveForecast ?? undefined, uvIndex?.value);
+  const accent = verdict.themeColor ? theme[verdict.themeColor] : null;
+
   return (
     <ThemedView
       style={[styles.card, { backgroundColor: theme.backgroundElement }]}
     >
+      {/* Decorative — nothing else on this card spells the verdict out as a
+          sentence, so the icon carries it via `accessibilityLabel` instead. */}
+      {verdict.reason !== "none" && (
+        <ThemedView style={styles.watermark} pointerEvents="none">
+          <UmbrellaVerdictIcon
+            reason={verdict.reason}
+            size={IconSize.watermark}
+            color={accent ?? theme.text}
+            accessibilityLabel={verdict.label}
+          />
+        </ThemedView>
+      )}
+
       <ThemedView style={styles.headingRow}>
         <ThemedView style={styles.headingLeft}>
           {liveForecast && (
             <WeatherIcon
               forecast={liveForecast}
-              size={18}
+              size={IconSize.control}
               tintColor={theme.textSecondary}
             />
           )}
@@ -152,6 +172,16 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     padding: Spacing.three,
     gap: Spacing.two,
+    // So the watermark's bleed is clipped to the card's own rounded corner
+    // instead of poking past it.
+    overflow: "hidden",
+  },
+  watermark: {
+    position: "absolute",
+    right: 8,
+    bottom: -20,
+    opacity: 0.14,
+    backgroundColor: "transparent",
   },
   headingRow: {
     flexDirection: "row",

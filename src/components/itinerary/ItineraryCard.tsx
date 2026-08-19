@@ -14,7 +14,7 @@ import {
   ForecastTimestamp,
   WeatherBadge,
 } from "@/components/weather/WeatherBadge";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherForSlot } from "@/hooks/useWeatherForSlot";
@@ -186,7 +186,7 @@ export function ItineraryCard({
           <ThemedView style={styles.watermark} pointerEvents="none">
             <UmbrellaVerdictIcon
               reason={verdict.reason}
-              size={132}
+              size={IconSize.watermark}
               color={accent ?? colors.text}
             />
           </ThemedView>
@@ -230,7 +230,7 @@ export function ItineraryCard({
               {resolveSlotKind(slot.kind) === "indoor" && (
                 <Icon
                   name={{ ios: "building.2.fill", android: "apartment" }}
-                  size={12}
+                  size={IconSize.metadata}
                   tintColor={colors.textSecondary}
                   accessibilityLabel="Indoor stop"
                 />
@@ -243,7 +243,7 @@ export function ItineraryCard({
                     ios: "bell.slash.fill",
                     android: "notifications_off",
                   }}
-                  size={12}
+                  size={IconSize.metadata}
                   tintColor={colors.textSecondary}
                   accessibilityLabel="Rain alerts off for this stop"
                 />
@@ -255,7 +255,7 @@ export function ItineraryCard({
               {slot.routineId && (
                 <Icon
                   name={{ ios: "repeat", android: "repeat" }}
-                  size={12}
+                  size={IconSize.metadata}
                   tintColor={colors.textSecondary}
                   accessibilityLabel="Repeating stop"
                 />
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     // through one of them — the bottom edge can bleed further because the
     // umbrella canopy there is a single unbroken shape.
     right: 8,
-    bottom: -28,
+    bottom: -20,
     opacity: 0.14,
     backgroundColor: "transparent",
   },

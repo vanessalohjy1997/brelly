@@ -4,7 +4,7 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { SlotForecast } from "@/services/weather";
 import { describeUmbrella } from "@/utils/describeUmbrella";
@@ -82,7 +82,7 @@ export default function DevWeatherPreview() {
                   <ThemedView style={styles.watermark} pointerEvents="none">
                     <UmbrellaVerdictIcon
                       reason={verdict.reason}
-                      size={132}
+                      size={IconSize.watermark}
                       color={accent ?? colors.text}
                     />
                   </ThemedView>
@@ -135,8 +135,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: -8,
     bottom: -28,
-    width: 132,
-    height: 132,
+    width: IconSize.watermark,
+    height: IconSize.watermark,
     opacity: 0.14,
     backgroundColor: "transparent",
   },

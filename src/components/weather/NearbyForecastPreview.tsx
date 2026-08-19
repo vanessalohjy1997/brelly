@@ -4,7 +4,7 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
 import { WeatherIcon } from "@/components/weather/WeatherIcon";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { UpcomingPeriodForecast } from "@/services/weather";
 import { describeUmbrella } from "@/utils/describeUmbrella";
@@ -46,13 +46,16 @@ export function NearbyForecastPreview({ forecasts, uvIndex }: Props) {
         {verdict.reason === "none" ? (
           <WeatherIcon
             forecast={current.forecast}
-            size={44}
+            size={IconSize.hero}
             tintColor={theme.text}
           />
         ) : (
+          // One step up from `hero`: the umbrella-and-marks reads visually
+          // lighter than a filled WeatherIcon symbol at the same nominal
+          // size, so it needs the bump to match — see `IconSize`.
           <UmbrellaVerdictIcon
             reason={verdict.reason}
-            size={50}
+            size={IconSize.heroEmphasis}
             color={heroTint}
             haloColor={theme.backgroundElement}
             // Nothing beside it repeats the verdict here — the hero line is
@@ -96,9 +99,11 @@ export function NearbyForecastPreview({ forecasts, uvIndex }: Props) {
                 </ThemedText>
                 <ThemedView style={styles.laterForecast}>
                   {wet ? (
+                    // One step up from `control` — same visual-weight
+                    // compensation as the hero pair above.
                     <UmbrellaVerdictIcon
                       reason="rain"
-                      size={22}
+                      size={IconSize.controlEmphasis}
                       color={theme.umbrellaRain}
                       haloColor={theme.backgroundElement}
                       accessibilityLabel="Umbrella — rain"
@@ -106,7 +111,7 @@ export function NearbyForecastPreview({ forecasts, uvIndex }: Props) {
                   ) : (
                     <WeatherIcon
                       forecast={period.forecast}
-                      size={18}
+                      size={IconSize.control}
                       tintColor={theme.text}
                     />
                   )}

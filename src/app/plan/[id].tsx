@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { ToastHost } from "@/components/toast";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
 import { useRoutineMaterializer } from "@/hooks/useRoutineMaterializer";
@@ -306,7 +306,7 @@ export default function EditSlotScreen() {
                       ios: "checkmark.circle",
                       android: "check_circle_outline",
                     }}
-                    size={14}
+                    size={IconSize.inline}
                     tintColor={theme.textSecondary}
                   />
                   <ThemedText style={styles.packingItem}>
@@ -345,7 +345,7 @@ export default function EditSlotScreen() {
             >
               <Icon
                 name={{ ios: "sun.max.fill", android: "wb_sunny" }}
-                size={16}
+                size={IconSize.inline}
                 tintColor={theme.umbrellaSun}
               />
               <ThemedView style={styles.dryWindowText}>

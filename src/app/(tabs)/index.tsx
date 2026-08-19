@@ -16,6 +16,7 @@ import { NearbyWeatherPrompt } from "@/components/weather/NearbyWeatherPrompt";
 import {
   BottomTabInset,
   HeaderHeight,
+  IconSize,
   MaxContentWidth,
   Spacing,
 } from "@/constants/theme";
@@ -209,7 +210,7 @@ export default function TodayScreen() {
               {!hasWeatherNearby && (
                 <Icon
                   name={{ ios: "cloud.sun.fill", android: "partly_cloudy_day" }}
-                  size={48}
+                  size={IconSize.hero}
                   tintColor={colors.textSecondary}
                   style={styles.emptyIcon}
                 />

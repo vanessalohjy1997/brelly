@@ -5,7 +5,7 @@ import { Icon } from "@/components/icon";
 import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { MaxContentWidth, Spacing } from "@/constants/theme";
+import { IconSize, MaxContentWidth, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
@@ -74,7 +74,7 @@ export default function RoutinesScreen() {
           <ThemedView style={styles.emptyState}>
             <Icon
               name={{ ios: "repeat", android: "repeat" }}
-              size={48}
+              size={IconSize.hero}
               tintColor={theme.textSecondary}
               style={styles.emptyIcon}
             />

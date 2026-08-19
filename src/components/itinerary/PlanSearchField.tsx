@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, TextInput } from "react-native";
 
 import { Icon } from "@/components/icon";
 import { ThemedView } from "@/components/themedView";
-import { Spacing } from "@/constants/theme";
+import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 
 /**
@@ -41,7 +41,7 @@ export function PlanSearchField({ value, onChange, placeholder }: Props) {
     >
       <Icon
         name={{ ios: "magnifyingglass", android: "search" }}
-        size={16}
+        size={IconSize.inline}
         tintColor={theme.textSecondary}
       />
       <TextInput
@@ -68,7 +68,7 @@ export function PlanSearchField({ value, onChange, placeholder }: Props) {
         >
           <Icon
             name={{ ios: "xmark.circle.fill", android: "cancel" }}
-            size={16}
+            size={IconSize.inline}
             tintColor={theme.textSecondary}
           />
         </Pressable>
