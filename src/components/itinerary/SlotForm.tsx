@@ -366,7 +366,7 @@ export function SlotForm({
             handleFieldLayout("location", e.nativeEvent.layout.y)
           }
         >
-          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+          <ThemedText type="fieldLabel" themeColor="textSecondary">
             Location
           </ThemedText>
 
@@ -522,7 +522,7 @@ export function SlotForm({
           style={styles.field}
           onLayout={(e) => handleFieldLayout("label", e.nativeEvent.layout.y)}
         >
-          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+          <ThemedText type="fieldLabel" themeColor="textSecondary">
             Label
           </ThemedText>
           <TextInput
@@ -557,7 +557,7 @@ export function SlotForm({
           style={styles.field}
           onLayout={(e) => handleFieldLayout("time", e.nativeEvent.layout.y)}
         >
-          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+          <ThemedText type="fieldLabel" themeColor="textSecondary">
             Day
           </ThemedText>
           {/* One date, then two times. Both fields used to be `mode="datetime"`,
@@ -577,7 +577,7 @@ export function SlotForm({
           <ThemedView
             style={[styles.field, !stackDateTimeFields && styles.flex1]}
           >
-            <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            <ThemedText type="fieldLabel" themeColor="textSecondary">
               Starts
             </ThemedText>
             <DateTimePicker
@@ -595,7 +595,7 @@ export function SlotForm({
           <ThemedView
             style={[styles.field, !stackDateTimeFields && styles.flex1]}
           >
-            <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            <ThemedText type="fieldLabel" themeColor="textSecondary">
               Ends
             </ThemedText>
             <DateTimePicker
@@ -642,7 +642,7 @@ export function SlotForm({
           screen. Unlike Repeat this renders on the edit screen too — a stop can
           turn out to be indoor after it was added. */}
         <ThemedView style={styles.field}>
-          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+          <ThemedText type="fieldLabel" themeColor="textSecondary">
             Indoor or outdoor
           </ThemedText>
           <ThemedView
@@ -710,7 +710,7 @@ export function SlotForm({
         )}
 
         <ThemedView style={styles.field}>
-          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+          <ThemedText type="fieldLabel" themeColor="textSecondary">
             Notes
           </ThemedText>
           <TextInput
@@ -844,11 +844,6 @@ const styles = StyleSheet.create({
   // render, which is what makes two of them fit side by side on a phone.
   timePicker: {
     width: 96,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
   },
   input: {
     borderRadius: Spacing.two,

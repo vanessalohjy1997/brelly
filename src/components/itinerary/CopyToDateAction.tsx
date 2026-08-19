@@ -30,7 +30,7 @@ export function CopyToDateAction({ onDuplicate }: Props) {
       {/* Moving a plan is just editing its start date — the slot re-files
           itself under the new day on save. Copying it has no such equivalent,
           so duplicating is the only action that needs to live here. */}
-      <ThemedText style={styles.label} themeColor="textSecondary">
+      <ThemedText type="fieldLabel" themeColor="textSecondary">
         Duplicate to another day
       </ThemedText>
       <DateTimePicker
@@ -56,11 +56,6 @@ export function CopyToDateAction({ onDuplicate }: Props) {
 const styles = StyleSheet.create({
   container: {
     gap: Spacing.two,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
   },
   // See `DatePickerWidth` — a content-sized box is what puts the picker flush
   // left rather than centred.

@@ -9,8 +9,11 @@ import Animated, {
 import { Icon } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { VerdictPill } from "@/components/weather/VerdictPill";
-import { WeatherBadge } from "@/components/weather/WeatherBadge";
+import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
+import {
+  ForecastTimestamp,
+  WeatherBadge,
+} from "@/components/weather/WeatherBadge";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUvIndex } from "@/hooks/useUvIndex";
@@ -28,9 +31,9 @@ type Props = {
   onDelete: () => void;
   /**
    * The stop has already ended — set on the Past plans archive. It drops
-   * everything about the weather: the forecast request, the badge, the pill
-   * and the accent bar. There is no forecast for a time that has passed, and
-   * a column of "No forecast" would say nothing eight times over.
+   * everything about the weather: the forecast request, the badge, the icon
+   * watermark and the accent bar. There is no forecast for a time that has
+   * passed, and a column of "No forecast" would say nothing eight times over.
    *
    * Deliberately *not* a dimmed or greyed variant. Every card in the archive
    * is past, so dimming separates it from nothing and only costs contrast —
@@ -73,7 +76,9 @@ function DeleteAction({
       >
         {/* `onDanger`, not a hardcoded white: the dark theme's danger is the
             lighter of the two, so white on it is 2.34:1. */}
-        <ThemedText style={[styles.deleteButtonText, { color: colors.onDanger }]}>
+        <ThemedText
+          style={[styles.deleteButtonText, { color: colors.onDanger }]}
+        >
           Delete
         </ThemedText>
       </Pressable>
@@ -89,7 +94,11 @@ export function ItineraryCard({
 }: Props) {
   const colors = useTheme();
 
-  const { data: weather, isLoading, refetch } = useWeatherForSlot({
+  const {
+    data: weather,
+    isLoading,
+    refetch,
+  } = useWeatherForSlot({
     provider: resolveSlotProvider(slot.provider),
     region: slot.neaRegion,
     latitude: slot.latitude,
@@ -129,7 +138,7 @@ export function ItineraryCard({
     ? { relative: null, isNow: false }
     : describeSlotTiming(slot.startTime, slot.endTime, new Date());
 
-  // The pill in the corner and the bar on the card's edge are the two things
+  // The icon watermark and the bar on the card's edge are the two things
   // readable while scrolling a day at speed, and both carry this. A
   // placeholder forecast ("error", "unavailable") is not a verdict — see the
   // guards in `WeatherBadge` — so it earns neither.
@@ -163,7 +172,25 @@ export function ItineraryCard({
           pressed && { backgroundColor: colors.backgroundSelected },
         ]}
       >
-        {accent && <ThemedView style={[styles.accentBar, { backgroundColor: accent }]} />}
+        {accent && (
+          <ThemedView style={[styles.accentBar, { backgroundColor: accent }]} />
+        )}
+
+        {/* The verdict as a picture before it's a sentence: a large, faint
+            umbrella-and-marks bleeding off the card's own rounded corner,
+            clipped by `card`'s `overflow: "hidden"`. Rendered before `body`
+            so the card's real content paints on top of it. A clear stop (or
+            no forecast at all) gets no watermark — the same restraint the
+            corner pill used to apply to itself. */}
+        {verdict && verdict.reason !== "none" && (
+          <ThemedView style={styles.watermark} pointerEvents="none">
+            <UmbrellaVerdictIcon
+              reason={verdict.reason}
+              size={132}
+              color={accent ?? colors.text}
+            />
+          </ThemedView>
+        )}
 
         {/* One column, each row the full width of the card. The old
             side-by-side split gave the weather 50% of a phone screen, which
@@ -172,9 +199,9 @@ export function ItineraryCard({
             can be carried by size: what this stop is, then whether you need
             an umbrella for it, then the numbers behind that. */}
         <ThemedView style={styles.body}>
-          {/* Time and whether this stop will warn you on the left; the
-              verdict as a pill on the right, where a column of cards puts
-              every status in the same place to scan down. */}
+          {/* When this stop is, and whether it will warn you. The verdict
+              itself now lives in the icon watermark on the card, rather
+              than a pill here. */}
           <ThemedView style={styles.topRow}>
             <ThemedView style={styles.timeRow}>
               {timing.relative && (
@@ -199,8 +226,7 @@ export function ItineraryCard({
               </ThemedText>
               {/* Only indoor is marked. Outdoor is the default and most of the
                   list, so a glyph on every row would carry no information and
-                  cost the label the width. The verdict pill stays either way —
-                  you still have to get there. */}
+                  cost the label the width. */}
               {resolveSlotKind(slot.kind) === "indoor" && (
                 <Icon
                   name={{ ios: "building.2.fill", android: "apartment" }}
@@ -213,7 +239,10 @@ export function ItineraryCard({
                   open every one of them. */}
               {slot.notificationsMuted && (
                 <Icon
-                  name={{ ios: "bell.slash.fill", android: "notifications_off" }}
+                  name={{
+                    ios: "bell.slash.fill",
+                    android: "notifications_off",
+                  }}
                   size={12}
                   tintColor={colors.textSecondary}
                   accessibilityLabel="Rain alerts off for this stop"
@@ -232,28 +261,44 @@ export function ItineraryCard({
                 />
               )}
             </ThemedView>
-            {verdict && <VerdictPill verdict={verdict} />}
+
+            {/* The reading's age, right-aligned against the plan's own
+                time rather than buried beside the temperature below — this
+                is the corner a glance checks to see if the forecast is
+                stale. Null on a past, errored or already-spelled-out
+                (offline/outlook) reading — see `ForecastTimestamp`. */}
+            {!past && <ForecastTimestamp weather={weather} />}
           </ThemedView>
 
-          <ThemedText type="default" style={styles.label} numberOfLines={1}>
-            {slot.label}
-          </ThemedText>
-          <ThemedText
-            type="small"
-            style={{ color: colors.textSecondary }}
-            numberOfLines={1}
-          >
-            {slot.location}
-          </ThemedText>
+          {/* The weather badge sits beside the label/location column now,
+              rather than stacked below it — the second column the location
+              gives up by wrapping to two lines instead of one is exactly
+              what the badge needed, and the card ends up shorter for it. */}
+          <ThemedView style={styles.labelRow}>
+            <ThemedView style={styles.labelColumn}>
+              <ThemedText type="default" style={styles.label} numberOfLines={1}>
+                {slot.label}
+              </ThemedText>
+              <ThemedText
+                type="small"
+                style={{ color: colors.textSecondary }}
+                numberOfLines={2}
+              >
+                {slot.location}
+              </ThemedText>
+            </ThemedView>
 
-          {!past && (
-            <WeatherBadge
-              weather={weather}
-              isLoading={isLoading}
-              uvIndex={uvIndex}
-              onRetry={() => refetch()}
-            />
-          )}
+            {!past && (
+              <ThemedView style={styles.weatherColumn}>
+                <WeatherBadge
+                  weather={weather}
+                  isLoading={isLoading}
+                  uvIndex={uvIndex}
+                  onRetry={() => refetch()}
+                />
+              </ThemedView>
+            )}
+          </ThemedView>
         </ThemedView>
       </Pressable>
     </Swipeable>
@@ -270,6 +315,17 @@ const styles = StyleSheet.create({
   accentBar: {
     width: 4,
     alignSelf: "stretch",
+  },
+  watermark: {
+    position: "absolute",
+    // A rain drop / sun mark sits close to the icon's own right edge (see
+    // `UmbrellaVerdictIcon`), so a large horizontal overhang slices straight
+    // through one of them — the bottom edge can bleed further because the
+    // umbrella canopy there is a single unbroken shape.
+    right: 8,
+    bottom: -28,
+    opacity: 0.14,
+    backgroundColor: "transparent",
   },
   body: {
     flex: 1,
@@ -301,6 +357,32 @@ const styles = StyleSheet.create({
   },
   label: {
     fontWeight: "600",
+  },
+  labelRow: {
+    flexDirection: "row",
+    // Top-aligned, not centred: the label's own line has to land beside the
+    // forecast's, and the location's beside the temperature's, and centring
+    // the two columns as blocks only does that by accident when the location
+    // happens to wrap to exactly as many lines as the badge has rows.
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: Spacing.four,
+    backgroundColor: "transparent",
+  },
+  labelColumn: {
+    flex: 1,
+    minWidth: 0,
+    gap: Spacing.half,
+    backgroundColor: "transparent",
+  },
+  // Sized to content and capped rather than left to grow — otherwise a long
+  // forecast word ("Thundery Showers") claims width from the label column
+  // instead of truncating in its own.
+  weatherColumn: {
+    alignSelf: "flex-start",
+    flexShrink: 1,
+    maxWidth: "40%",
+    backgroundColor: "transparent",
   },
   deleteAction: {
     width: DELETE_ACTION_WIDTH,

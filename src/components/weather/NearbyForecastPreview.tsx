@@ -38,7 +38,7 @@ export function NearbyForecastPreview({ forecasts, uvIndex }: Props) {
     <ThemedView
       style={[styles.card, { backgroundColor: theme.backgroundElement }]}
     >
-      <ThemedText style={[styles.heading, { color: theme.textSecondary }]}>
+      <ThemedText type="eyebrow" themeColor="textSecondary">
         Nearby
       </ThemedText>
 
@@ -128,12 +128,6 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     padding: Spacing.three,
     gap: Spacing.two,
-  },
-  heading: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
   },
   hero: {
     flexDirection: "row",

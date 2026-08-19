@@ -47,7 +47,7 @@ export function LiveConditionsCard({ conditions, uvIndex }: Props) {
               tintColor={theme.textSecondary}
             />
           )}
-          <ThemedText style={[styles.heading, { color: theme.textSecondary }]}>
+          <ThemedText type="eyebrow" themeColor="textSecondary">
             Right now
           </ThemedText>
         </ThemedView>
@@ -165,12 +165,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.one,
     backgroundColor: "transparent",
-  },
-  heading: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
   },
   station: {
     fontSize: 11,

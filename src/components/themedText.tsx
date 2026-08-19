@@ -12,7 +12,9 @@ export type ThemedTextProps = TextProps & {
     | "subtitle"
     | "link"
     | "linkPrimary"
-    | "code";
+    | "code"
+    | "eyebrow"
+    | "fieldLabel";
   themeColor?: ThemeColor;
 };
 
@@ -39,6 +41,8 @@ export function ThemedText({
         type === "link" && styles.link,
         type === "linkPrimary" && styles.linkPrimary,
         type === "code" && styles.code,
+        type === "eyebrow" && styles.eyebrow,
+        type === "fieldLabel" && styles.fieldLabel,
         style,
       ]}
       {...rest}
@@ -90,5 +94,22 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.mono,
     fontWeight: Platform.select({ android: 700 }) ?? 500,
     fontSize: 12,
+  },
+  // A small caps section heading — "Right now", "Nearby" — that sits above
+  // a card's own content rather than labelling a single value.
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  // A form field's own label ("Location", "Label") or a single action's
+  // caption ("Duplicate to another day") — one size up from `eyebrow` and
+  // without its letter-spacing, since it sits directly above the thing it
+  // names rather than over a whole card.
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    textTransform: "uppercase",
   },
 });
