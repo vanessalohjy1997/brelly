@@ -1,9 +1,8 @@
 import { ActivityIndicator, Pressable, StyleSheet } from "react-native";
 
+import { Icon } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
-import { WeatherIcon } from "@/components/weather/WeatherIcon";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import type { SlotForecast } from "@/services/weather";
@@ -61,53 +60,106 @@ export function WeatherBadge({ weather, isLoading, uvIndex, onRetry }: Props) {
   }
 
   const verdict = describeUmbrella(weather.forecast, uvIndex);
-  const accent = verdict.themeColor ? colors[verdict.themeColor] : colors.text;
 
   // A cached reading's age is measured from when it was stored, not from
   // NEA's issue time — that's the number that tells you how stale the app's
   // view of the world is.
   const age = formatRelativeTimestamp(weather.cachedAt ?? weather.updatedAt);
   const freshness = describeFreshness(weather.source, age);
+  // "Updated" is the one freshness word with a common enough icon (a clock)
+  // to stand in for it — "Offline · saved" and "Outlook ·" aren't, so those
+  // stay spelled out. The full sentence still reaches screen readers via
+  // `accessibilityLabel` below; this only swaps the on-screen word.
+  const isUpdatedFreshness = freshness?.startsWith("Updated ") ?? false;
+
+  // The pill used to carry this: "the pill is the short form; a screen
+  // reader gets the whole sentence, which is no longer written anywhere else
+  // on the card" (its own comment, before it was removed). With the pill
+  // gone, this field is the only thing left to say it — so it groups itself
+  // into one accessible node with the full sentence, the same way the pill
+  // did, rather than losing the sentence along with it. The verdict's colour
+  // itself now lives in `ItineraryCard`'s icon watermark, not here.
+  const accessibilityLabel = [
+    verdict.label,
+    weather.forecast,
+    weather.temperature && formatTempRange(weather.temperature),
+    freshness,
+  ]
+    .filter(Boolean)
+    .join(". ");
 
   return (
-    <ThemedView style={styles.badge}>
-      {/* The answer as a picture before it is a sentence: an umbrella with
-          rain falling on it, or under a sun. A clear stop gets no umbrella at
-          all — the plain sky icon is the cue that nothing is needed. */}
-      {verdict.reason === "none" ? (
-        <WeatherIcon forecast={weather.forecast} size={34} tintColor={accent} />
-      ) : (
-        <UmbrellaVerdictIcon
-          reason={verdict.reason}
-          size={42}
-          color={accent}
-          // The badge sits directly on the card now, so the halo that keeps
-          // the marks legible is the card's own surface.
-          haloColor={colors.backgroundElement}
-        />
-      )}
-      <ThemedView style={styles.textContainer}>
-        {/* The verdict itself is the pill in the card's corner now, so what
-            is left here is the weather behind it: NEA's own wording leads,
-            then the numbers and how stale they are. Wind is gone — it never
-            fed the umbrella question, and it was the reading that pushed this
-            line into wrapping. */}
-        <ThemedText style={styles.forecast} numberOfLines={1}>
-          {weather.forecast}
-        </ThemedText>
-        <ThemedView style={styles.metaRow}>
-          {weather.temperature && (
-            <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
-              {formatTempRange(weather.temperature)}
-            </ThemedText>
-          )}
-          {freshness && (
-            <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
-              {freshness}
-            </ThemedText>
-          )}
-        </ThemedView>
+    <ThemedView
+      style={styles.field}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={accessibilityLabel}
+    >
+      {/* NEA's own wording leads, then the numbers and how stale they are.
+          Wind is gone — it never fed the umbrella question, and it was the
+          reading that pushed this line into wrapping. */}
+      <ThemedText style={styles.forecast} numberOfLines={1}>
+        {weather.forecast}
+      </ThemedText>
+      <ThemedView style={styles.metaRow}>
+        {weather.temperature && (
+          <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
+            {formatTempRange(weather.temperature)}
+          </ThemedText>
+        )}
+        {/* A live reading's age moved to the card's top corner, next to the
+            plan's own time — see `ForecastTimestamp` below. Offline and
+            outlook readings stay here spelled out: they aren't "updated
+            just now", so the corner clock would be the wrong claim. */}
+        {freshness && !isUpdatedFreshness && (
+          <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
+            {freshness}
+          </ThemedText>
+        )}
       </ThemedView>
+    </ThemedView>
+  );
+}
+
+/**
+ * The "Updated 4m ago" clock, split out so `ItineraryCard` can place it in
+ * the card's top-right corner, aligned with the plan's own time, instead of
+ * buried beside the temperature. Only a live reading's age qualifies — see
+ * `describeFreshness`; a cached or outlook reading renders its own spelled-out
+ * line inside `WeatherBadge` instead, since "just now" would misstate how
+ * fresh that reading actually is.
+ */
+export function ForecastTimestamp({
+  weather,
+}: {
+  weather: SlotForecast | undefined;
+}) {
+  const colors = useTheme();
+
+  if (
+    !weather ||
+    weather.source === "error" ||
+    weather.source === "unavailable"
+  ) {
+    return null;
+  }
+
+  const age = formatRelativeTimestamp(weather.cachedAt ?? weather.updatedAt);
+  const freshness = describeFreshness(weather.source, age);
+  const isUpdatedFreshness = freshness?.startsWith("Updated ") ?? false;
+
+  if (!freshness || !isUpdatedFreshness) return null;
+
+  return (
+    <ThemedView style={styles.freshnessRow}>
+      <Icon
+        name={{ ios: "clock", android: "schedule" }}
+        size={11}
+        tintColor={colors.textSecondary}
+      />
+      <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
+        {age}
+      </ThemedText>
     </ThemedView>
   );
 }
@@ -129,7 +181,8 @@ export function describeFreshness(
   // A 2hr nowcast is minutes old; the 4-day/openMeteoDaily outlook is a
   // lower-confidence, longer-range reading. Saying which one you're looking
   // at matters more than its age.
-  if (source === "4day" || source === "openMeteoDaily") return `Outlook · ${age}`;
+  if (source === "4day" || source === "openMeteoDaily")
+    return `Outlook · ${age}`;
   return `Updated ${age}`;
 }
 
@@ -146,14 +199,20 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     minHeight: 44,
   },
-  textContainer: {
+  field: {
     backgroundColor: "transparent",
-    flex: 1,
-    gap: 1,
+    alignSelf: "stretch",
+    // Top-aligned, and its two rows' line-heights (below) match `label` and
+    // `location` in `ItineraryCard` exactly — so the forecast sits level
+    // with the label above it, and the temperature level with the location,
+    // rather than this block floating centred against a taller neighbour.
+    justifyContent: "flex-start",
+    gap: Spacing.half,
+    minHeight: 44,
   },
   forecast: {
     fontSize: 15,
-    lineHeight: 20,
+    lineHeight: 24,
     fontWeight: "600",
   },
   metaRow: {
@@ -165,7 +224,13 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 20,
+  },
+  freshnessRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "transparent",
   },
   // An error should not look like a reading — the old badge rendered both as
   // 12pt secondary text, so a failed card read as data at a glance.

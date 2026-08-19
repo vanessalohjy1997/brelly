@@ -74,25 +74,59 @@ describe("ItineraryCard", () => {
     expect(await view.findByText("Thundery Showers")).toBeTruthy();
   });
 
-  it("answers the umbrella question as a pill, and as a picture", async () => {
+  it("shows the temperature range beside the label, in the relocated weather badge", async () => {
     const view = await renderWithProviders(
       <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
     );
 
-    expect(await view.findByText("Rain")).toBeTruthy();
+    expect(await view.findByText("25–34°C")).toBeTruthy();
+  });
+
+  it("shows the reading's age in the top-right corner, beside the plan's time", async () => {
+    const view = await renderWithProviders(
+      <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
+    );
+
+    expect(await view.findByText("just now")).toBeTruthy();
+  });
+
+  it("shows no age for a past stop — there is no forecast to have one", async () => {
+    const view = await renderWithProviders(
+      <ItineraryCard slot={SLOT} onDelete={jest.fn()} past />,
+    );
+
+    expect(view.queryByText("just now")).toBeNull();
+  });
+
+  it("lets the location wrap to two lines now that the badge moved beside it", async () => {
+    const view = await renderWithProviders(
+      <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
+    );
+
+    expect(view.getByText("Tanjong Pagar, Singapore").props.numberOfLines).toBe(
+      2,
+    );
+  });
+
+  it("answers the umbrella question as a large icon watermark on the card", async () => {
+    const view = await renderWithProviders(
+      <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
+    );
+
+    await view.findByLabelText(/^Umbrella — rain\. /);
     expect(view.getByTestId("symbol-umbrella")).toBeTruthy();
-    expect(view.getAllByTestId("symbol-water_drop").length).toBeGreaterThan(1);
+    expect(view.getAllByTestId("symbol-water_drop").length).toBeGreaterThan(0);
   });
 
-  it("spells the verdict out for a screen reader, short as it looks", async () => {
+  it("spells the verdict out for a screen reader, as the full sentence", async () => {
     const view = await renderWithProviders(
       <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
     );
 
-    expect(await view.findByLabelText("Umbrella — rain")).toBeTruthy();
+    expect(await view.findByLabelText(/^Umbrella — rain\. /)).toBeTruthy();
   });
 
-  it("shows no pill when there is no forecast to have a verdict about", async () => {
+  it("shows no verdict when there is no forecast to have one about", async () => {
     jest.mocked(getForecastForSlot).mockResolvedValueOnce({
       forecast: "Forecast unavailable",
       source: "unavailable",
@@ -102,10 +136,27 @@ describe("ItineraryCard", () => {
       <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
     );
 
-    // An empty corner, rather than a pill claiming the stop is clear.
+    // An empty corner, rather than a watermark claiming the stop is clear.
     expect(await view.findByText("No forecast")).toBeTruthy();
-    expect(view.queryByText("Clear")).toBeNull();
-    expect(view.queryByText("Rain")).toBeNull();
+    expect(view.queryByLabelText(/Umbrella —/)).toBeNull();
+    expect(view.queryByLabelText(/You're clear/)).toBeNull();
+    expect(view.queryByTestId("symbol-umbrella")).toBeNull();
+  });
+
+  it("shows no watermark on a clear stop — a tinted list is one where no tint means anything", async () => {
+    jest.mocked(getForecastForSlot).mockResolvedValueOnce({
+      forecast: "Fair (Day)",
+      source: "24hr",
+      temperature: { low: 26, high: 32 },
+      updatedAt: new Date().toISOString(),
+    });
+
+    const view = await renderWithProviders(
+      <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
+    );
+
+    expect(await view.findByLabelText(/^You're clear\. /)).toBeTruthy();
+    expect(view.queryByTestId("symbol-umbrella")).toBeNull();
   });
 
   it("still identifies the stop when it is past", async () => {
@@ -132,13 +183,14 @@ describe("ItineraryCard", () => {
     expect(view.queryByText("Checking the sky…")).toBeNull();
   });
 
-  it("shows no verdict pill for a past stop", async () => {
+  it("shows no verdict for a past stop", async () => {
     const view = await renderWithProviders(
       <ItineraryCard slot={SLOT} onDelete={jest.fn()} past />,
     );
 
-    expect(view.queryByText("Rain")).toBeNull();
-    expect(view.queryByText("Clear")).toBeNull();
+    expect(view.queryByLabelText(/Umbrella —/)).toBeNull();
+    expect(view.queryByLabelText(/You're clear/)).toBeNull();
+    expect(view.queryByTestId("symbol-umbrella")).toBeNull();
   });
 
   it("can still be deleted when past", async () => {
@@ -240,7 +292,7 @@ describe("ItineraryCard", () => {
         />,
       );
 
-      expect(await view.findByText("Rain")).toBeTruthy();
+      expect(await view.findByLabelText(/^Umbrella — rain\. /)).toBeTruthy();
       expect(view.getByText("Thundery Showers")).toBeTruthy();
     });
   });
@@ -284,9 +336,9 @@ describe("ItineraryCard", () => {
       );
 
       // The real useUvIndex() fetch has nothing to succeed against in this
-      // test environment, so a "Sun" verdict here can only have come from
+      // test environment, so a sun verdict here can only have come from
       // the Open-Meteo forecast's own inline uvIndex.
-      expect(await view.findByText("Sun")).toBeTruthy();
+      expect(await view.findByLabelText(/^Umbrella — sun\. /)).toBeTruthy();
     });
   });
 
