@@ -331,6 +331,27 @@ links back here.
   `src/test/fakeFirestore.ts`'s `.set()` happily stored a literal `undefined`
   in its in-memory map — it now throws the same way the real SDK does, which
   is what caught `writeRoutine`'s bug the moment it was written.
+- **EAS Build only uploads git-tracked files, so `app.config.js` must be
+  committed or the Firebase config silently vanishes.** `GoogleService-Info.plist`
+  and `google-services.json` are gitignored (this repo is public and they carry
+  real project identifiers), so they never reach the builder as files. The
+  bridge is `app.config.js`, which overrides `app.json`'s
+  `ios.googleServicesFile` / `android.googleServicesFile` with
+  `GOOGLE_SERVICES_INFO_PLIST` / `GOOGLE_SERVICES_JSON` — EAS `file`-type
+  environment variables whose value at build time is the path to the uploaded
+  file. Two things have to be true at once, and each fails the same way
+  (`"GoogleService-Info.plist" is missing, make sure that the file exists`):
+  the dynamic config has to be *tracked by git* (an untracked `app.config.js`
+  is not uploaded, so EAS reads `app.json` alone and looks for the gitignored
+  relative path), and the file variables have to *exist on EAS* for the
+  environment the build profile names in `eas.json` (`production` →
+  `"environment": "production"`). Both are set now, on `production`, `preview`,
+  and `development`, via
+  `eas env:set --type file --visibility secret --name GOOGLE_SERVICES_INFO_PLIST --value ./GoogleService-Info.plist`.
+  They are `secret`, so `eas env:list` shows `*****` and they cannot be read
+  back — to rotate one, re-run `env:set` from a local copy. `app.config.test.js`
+  pins the override precedence in both directions so a refactor cannot quietly
+  drop it.
 
 ## Built so far
 

@@ -13,8 +13,11 @@
         "dark": "./assets/icon/dusk-hook.png",
         "tinted": "./assets/icon/tinted-hook.png"
       },
-      "bundleIdentifier": "com.brelly.app",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "bundleIdentifier": "com.sg.brelly.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,8 +27,14 @@
         "monochromeImage": "./assets/icon/android-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.brelly.app",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.sg.brelly.app",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
     },
     "web": {
       "output": "static",
@@ -87,6 +96,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d4928396-8f82-4d4d-8369-2e422790fb11"
+      }
+    },
+    "owner": "brelly"
   }
 }

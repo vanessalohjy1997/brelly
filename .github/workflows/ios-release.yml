@@ -1,0 +1,45 @@
+name: iOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile
+        type: choice
+        options: [production, preview]
+        default: production
+      submit:
+        description: Submit the build to App Store Connect after it finishes
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build (EAS)
+        run: eas build --platform ios --profile ${{ inputs.profile }} --non-interactive --wait
+
+      # `appleId` is deliberately absent from eas.json so the Apple account
+      # email stays out of this public repo; EAS reads it from EXPO_APPLE_ID.
+      # This runs on the GitHub runner, not on EAS, so the value has to come
+      # from a repo secret rather than from `eas env:create`.
+      - name: Submit to App Store Connect
+        if: ${{ inputs.submit }}
+        env:
+          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
+        run: eas submit --platform ios --profile ${{ inputs.profile }} --latest --non-interactive
