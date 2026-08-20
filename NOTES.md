@@ -168,17 +168,43 @@ links back here.
   `OTHER_CFLAGS` line at all. `plugins/withExpoUiReactHeaderFix.js` adds them
   in `post_install`.
 - **A freshly prebuilt `ios/` needs `pod install` to run twice, and one of
-  the plugins is why it no longer does.** `AppDelegate.swift` calls
-  `FirebaseApp.configure()`, so `FirebaseCore` has to be linked into the app
-  target; RNFirebase does that in `rnfirebase_add_spm_core_to_app_target`,
-  which skips any target lacking a `[CP] Embed Pods Frameworks` phase.
-  CocoaPods only adds that phase while "Integrating client project", *after*
-  `post_install` — so on a newly created `ios/` the linking is skipped and
-  the build dies at link time with `Undefined symbols … "_OBJC_CLASS_$_FIRApp",
-  referenced from: in AppDelegate.o`. A second `pod install` fixes it because
-  the phase now exists. `plugins/withFirebaseCoreSpmLink.js` re-runs
-  RNFirebase's own (idempotent) function from `post_integrate`, which runs
-  after integration, so one prebuild is enough.
+  the plugins is why it no longer does.** RNFirebase does four things to the
+  app's own target in `firebase_spm.rb`, and every one of them first checks
+  that the target already has a `[CP] Embed Pods Frameworks` phase —
+  `rnfirebase_add_spm_embed_phase`, `rnfirebase_verify_spm_embed_phase_applied!`,
+  `rnfirebase_add_spm_core_to_app_target` and
+  `rnfirebase_fix_spm_archive_signature_collision`. All four run from
+  `post_install`, and CocoaPods only adds that phase while "Integrating client
+  project", *after* `post_install` — so on a newly created `ios/` all four
+  silently skip. A second `pod install` fixes it because the phase now exists.
+  `plugins/withFirebaseSpmPostIntegrate.js` re-runs RNFirebase's own
+  (idempotent) functions from `post_integrate`, which runs after integration,
+  so one prebuild is enough.
+  The three failures that hides, in the order they were hit: the app crashes
+  at launch with a missing-library dyld error (no embed phase); the build dies
+  at link time with `Undefined symbols … "_OBJC_CLASS_$_FIRApp", referenced
+  from: in AppDelegate.o` (no FirebaseCore link); and a Release *archive*
+  fails in fastlane with `"openssl_grpc.xcframework-ios.signature" couldn't be
+  copied to "Signatures" because an item with the same name already exists`
+  (no signature-collision phase). Note
+  `rnfirebase_verify_spm_embed_phase_applied!` exists to catch the first of
+  those and carries the same guard as the function it verifies, so on a fresh
+  `ios/` it skips too and never fires — re-running it is what makes it a real
+  safety net.
+  **This only ever bites on EAS, never locally**, which is what made it hard to
+  see: EAS Build prebuilds a fresh `ios/` on every run and so gets the
+  first-`pod install` behaviour every time, while a local checkout had its
+  second `pod install` long ago. Don't conclude from a green local build that
+  the plugin is redundant; check the generated project —
+  `grep -c 'name = "\[RNFB\]' ios/brelly.xcodeproj/project.pbxproj` returns 2,
+  the Embed and Remove-duplicate phases. Match on `name = ` and don't count
+  bare `[RNFB]` (that returns 9, since each phase is referenced several times);
+  and note the third RNFB phase, `[CP-User] [RNFB] Core Configuration`, is
+  CocoaPods' own `script_phase` and lands with or without this plugin, so it is
+  not the thing to check. The A/B is on record: from a deintegrated project
+  with those two phases deleted, one `pod install` restores both with this
+  plugin and neither with the pre-fix version, which is exactly what EAS
+  build 4 shipped.
 - **Xcode 26's explicit modules break Firebase's SPM targets, and neither
   React Native nor RNFirebase turns them all the way off.** RNFirebase 26
   resolves `firebase-ios-sdk` over SPM, and Firebase's internal SPM targets
