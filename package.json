@@ -70,7 +70,9 @@
     "lint": "expo lint --max-warnings 0",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "test:emulator": "firebase emulators:exec --project demo-brelly --only firestore \"jest --config jest.emulator.config.js\""
+    "test:emulator": "firebase emulators:exec --project demo-brelly --only firestore \"jest --config jest.emulator.config.js\"",
+    "prepare": "git config core.hooksPath .githooks",
+    "verify": "npx tsc --noEmit && yarn lint && yarn test:coverage"
   },
   "private": true,
   "jest": {
