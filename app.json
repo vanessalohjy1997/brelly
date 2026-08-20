@@ -91,7 +91,7 @@
       ],
       "./plugins/withExplicitModulesDisabled",
       "./plugins/withExpoUiReactHeaderFix",
-      "./plugins/withFirebaseCoreSpmLink"
+      "./plugins/withFirebaseSpmPostIntegrate"
     ],
     "experiments": {
       "typedRoutes": true,
