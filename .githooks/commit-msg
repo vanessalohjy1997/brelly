@@ -1,0 +1,21 @@
+#!/bin/sh
+# Enforces the commit-subject convention. Prose in AGENTS.md was not enough:
+# "feat: more features" landed three times before this hook existed.
+subject=$(head -n 1 "$1")
+
+# Git generates these itself; they are not ours to shape.
+case "$subject" in
+  "Merge "*|"Revert "*|fixup!*|squash!*|amend!*) exit 0 ;;
+esac
+
+if ! printf '%s' "$subject" | grep -Eq '^(feat|fix|chore): .+'; then
+  cat >&2 <<MSG
+commit-msg: subject must start with "feat: ", "fix: ", or "chore: ".
+  got: $subject
+
+  feat: a feature implementation
+  fix:  a bug fix
+  chore: a refactor or pipeline/workflow change
+MSG
+  exit 1
+fi
