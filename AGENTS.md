@@ -18,16 +18,20 @@ Read the relevant one before implementing — do not work from memory of them.
 Keep all three current as you work: a stale plan gets acted on as if it were
 true.
 
-# Branch naming
+# Branches and commits
 
-Prefix every branch with the kind of change it makes:
+Every branch and every commit message starts with the kind of change it makes:
 
-- `feat/` — a feature implementation, e.g. `feat/open-meteo-integration`
-- `fix/` — a bug fix
-- `chore/` — a refactor or pipeline/workflow change
+- `feat/`, `feat:` — a feature implementation
+- `fix/`, `fix:` — a bug fix
+- `chore/`, `chore:` — a refactor or pipeline/workflow change
 
-After the prefix, name the branch for what it does, e.g.
-`fix/weather-icon-crash` — never a timestamp or generic label.
+Name the branch for what it does — `fix/weather-icon-crash`,
+`feat/open-meteo-integration` — never a timestamp or a generic label.
+
+Write the commit subject the same way: `feat: weather works outside Singapore
+via Open-Meteo`. Say what changed, not that something changed ("feat: more
+features" is three commits in this history and none of them are findable).
 
 # Tests
 
