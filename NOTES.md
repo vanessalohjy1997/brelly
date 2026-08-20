@@ -404,6 +404,13 @@ links back here.
   projects, make new builds, release updates, and manage credentials", which is
   exactly what build + submit touch, and it withholds billing and member
   management. A robot on a personal account cannot see the project at all.
+  `eas.json`'s `submit.production.ios` is deliberately empty: there is no App
+  Store Connect app record yet, so there is no `ascAppId` to set, and the API
+  key is already scoped to one team so `appleTeamId` adds nothing. Placeholder
+  strings were worse than absence — EAS forwards them to Apple verbatim. Once
+  the record exists, put the real `ascAppId` back, because it is what makes
+  submit skip the find-or-create-the-app step that `--non-interactive` handles
+  badly.
 
 ## Built so far
 
