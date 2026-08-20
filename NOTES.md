@@ -390,6 +390,28 @@ links back here.
   pins the override precedence in both directions so a refactor cannot quietly
   drop it.
 
+- **The iOS release workflow authenticates to Apple through an App Store
+  Connect API key held on EAS, not through an Apple ID in repo secrets.** This
+  repo is public, so the Apple account email and an app-specific password both
+  stay out of it. `eas credentials --platform ios` → *App Store Connect: Manage
+  your API Key* → *Set up your project to use an API Key for EAS Submit* stores
+  the key against the project; from then on `EXPO_TOKEN` is the only secret the
+  workflow needs, and `eas submit --non-interactive` reads the key itself. The
+  earlier `EXPO_APPLE_ID` env var on the submit step is gone — restoring it
+  would also require `EXPO_APPLE_APP_SPECIFIC_PASSWORD`, which is the thing
+  this avoids. `EXPO_TOKEN` is a **robot user on the `brelly` org** (matching
+  `app.json`'s `owner`), Developer role: the docs scope that to "create new
+  projects, make new builds, release updates, and manage credentials", which is
+  exactly what build + submit touch, and it withholds billing and member
+  management. A robot on a personal account cannot see the project at all.
+  `eas.json`'s `submit.production.ios` is deliberately empty: there is no App
+  Store Connect app record yet, so there is no `ascAppId` to set, and the API
+  key is already scoped to one team so `appleTeamId` adds nothing. Placeholder
+  strings were worse than absence — EAS forwards them to Apple verbatim. Once
+  the record exists, put the real `ascAppId` back, because it is what makes
+  submit skip the find-or-create-the-app step that `--non-interactive` handles
+  badly.
+
 ## Built so far
 
 - **Weather.** NEA service with 2hr nowcast / 24hr / 4-day tier selection

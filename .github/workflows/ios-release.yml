@@ -34,12 +34,10 @@ jobs:
       - name: Build (EAS)
         run: eas build --platform ios --profile ${{ inputs.profile }} --non-interactive --wait
 
-      # `appleId` is deliberately absent from eas.json so the Apple account
-      # email stays out of this public repo; EAS reads it from EXPO_APPLE_ID.
-      # This runs on the GitHub runner, not on EAS, so the value has to come
-      # from a repo secret rather than from `eas env:create`.
+      # Apple auth comes from an App Store Connect API key stored on EAS
+      # (`eas credentials --platform ios` -> App Store Connect: Manage your API
+      # Key). EXPO_TOKEN alone is enough to read it, so no Apple account email
+      # or app-specific password needs to live in this public repo's secrets.
       - name: Submit to App Store Connect
         if: ${{ inputs.submit }}
-        env:
-          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
         run: eas submit --platform ios --profile ${{ inputs.profile }} --latest --non-interactive
