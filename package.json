@@ -69,6 +69,7 @@
     "web": "expo start --web",
     "lint": "expo lint --max-warnings 0",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:emulator": "firebase emulators:exec --project demo-brelly --only firestore \"jest --config jest.emulator.config.js\""
   },
   "private": true,
@@ -84,6 +85,19 @@
     "moduleNameMapper": {
       "\\.(css)$": "<rootDir>/__mocks__/styleMock.js",
       "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "collectCoverageFrom": [
+      "src/**/*.{ts,tsx}",
+      "!src/**/*.d.ts",
+      "!src/test/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      }
     }
   }
 }

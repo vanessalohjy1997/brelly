@@ -119,6 +119,17 @@ links back here.
   upgrading breaks test-suite loading with an opaque `TypeError`. `tsconfig`
   also needs its explicit `"types": ["jest"]` — without it `@types/jest`'s
   ambient globals silently aren't picked up.
+- **CI gates on coverage, so a new file with no test can fail the build even
+  when every test passes.** `package.json`'s `jest.coverageThreshold` requires
+  90% statements/functions/lines and 85% branches, measured by
+  `collectCoverageFrom` over *all* of `src/**` — not just the files a test
+  happens to import — with `src/test/**` (the fakes and render helpers)
+  excluded. That scope is the point: an untested module counts as zeros rather
+  than being invisible. The `Test` step in `.github/workflows/ci.yml` runs
+  `yarn test:coverage`, and Jest exits non-zero on a breach; run that script
+  locally to see the same number CI will. Current headroom is small (94%
+  statements, 89.7% branches), so the threshold is a floor to hold, not slack
+  to spend.
 - **Native modules need their config plugin in `app.json`.** `expo-location`
   without its plugin means `NSLocationWhenInUseUsageDescription` never reaches
   Info.plist and the iOS permission prompt silently fails. `expo-calendar` and
