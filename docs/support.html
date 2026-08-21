@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brelly — Support</title>
+<style>
+  :root {
+    --bg: #f8f6fb;
+    --fg: #1b1726;
+    --muted: #5c5670;
+    --rule: #e2dcef;
+    --accent: #5b44c4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #120f1a;
+      --fg: #ece6f8;
+      --muted: #a49cba;
+      --rule: #2c2740;
+      --accent: #a68cff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2.5rem 1.25rem 5rem;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 40rem; margin: 0 auto; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .5rem; }
+  h2 { font-size: 1.15rem; margin: 2.5rem 0 .6rem; }
+  .lede { color: var(--muted); margin: 0 0 2rem; }
+  a { color: var(--accent); }
+  ul { padding-left: 1.2rem; }
+  li { margin: .35rem 0; }
+  dt { font-weight: 600; margin-top: 1.4rem; }
+  dd { margin: .3rem 0 0; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0 1.5rem; }
+  footer { color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Brelly Support</h1>
+<p class="lede">Brelly shows you the weather for the places on your plan for the
+day, so you know which stops need an umbrella.</p>
+
+<h2>Get in touch</h2>
+
+<p>Bug reports, questions and feature requests all go to the same place:
+<a href="https://github.com/vanessalohjy1997/brelly/issues">open an issue on
+GitHub</a>. You'll need a free GitHub account to post one.</p>
+
+<p>Please include your device model and iOS or Android version — it makes a bug
+much faster to track down. Issues are public, so leave out anything personal.</p>
+
+<h2>Common questions</h2>
+
+<dl>
+  <dt>Why is the forecast different from other weather apps?</dt>
+  <dd>Inside Singapore, Brelly uses the National Environment Agency's own
+      forecasts via data.gov.sg. Outside Singapore, it uses Open-Meteo. Other
+      apps use other sources, so they will not always agree.</dd>
+
+  <dt>Why didn't I get a rain alert?</dt>
+  <dd>Check that notifications are allowed for Brelly in your device settings,
+      that the stop is not muted, and that it is marked as outdoors — indoor
+      stops do not get rain alerts.</dd>
+
+  <dt>How do I move my plans to a new phone?</dt>
+  <dd>Link a Google or Apple account in the app on both devices and your plans
+      will sync. You can also export your plans to a file and import it on the
+      new device.</dd>
+
+  <dt>Why does Brelly want my calendar?</dt>
+  <dd>Only so you can turn an existing event into a plan, and so your plans can
+      show up in your calendar alongside everything else. It is optional, and
+      you can say no and use the app normally.</dd>
+
+  <dt>How do I delete my data?</dt>
+  <dd>Delete your plans and routines in the app, or open an issue asking for your
+      account to be deleted. See the
+      <a href="./privacy.html">privacy policy</a> for details.</dd>
+</dl>
+
+<hr>
+<footer>
+  <a href="./privacy.html">Privacy policy</a> ·
+  <a href="https://github.com/vanessalohjy1997/brelly">Source on GitHub</a>
+</footer>
+
+</main>
+</body>
+</html>
