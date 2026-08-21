@@ -152,34 +152,30 @@ describe("WeatherBadge", () => {
     expect(view.queryByText(/SE/)).toBeNull();
   });
 
-  it("shows how old the reading is", async () => {
-    const weather: SlotForecast = {
-      forecast: "Fair (Day)",
-      source: "4day",
-      updatedAt: minutesAgo(200),
-    };
+  it.each([
+    ["an outlook", "4day" as const, "Outlook · 3h ago"],
+    ["a cached", "cached" as const, "Offline · saved 3h ago"],
+    ["a live", "2hr" as const, "4m ago"],
+  ])(
+    "shows no age of its own for %s reading — every one of them moved to ForecastTimestamp",
+    async (_name, source, text) => {
+      const weather: SlotForecast = {
+        forecast: "Fair (Day)",
+        source,
+        updatedAt: minutesAgo(200),
+        cachedAt: minutesAgo(200),
+      };
 
-    const view = await render(<WeatherBadge weather={weather} isLoading={false} />);
+      const view = await render(
+        <WeatherBadge weather={weather} isLoading={false} />,
+      );
 
-    expect(view.getByText("Outlook · 3h ago")).toBeTruthy();
-  });
+      expect(view.queryByText(text)).toBeNull();
+      expect(view.queryByText(/ago/)).toBeNull();
+    },
+  );
 
-  it("ages a cached reading from when it was stored", async () => {
-    const weather: SlotForecast = {
-      forecast: "Showers",
-      source: "cached",
-      // NEA issued this long ago; the app stored it 20 minutes ago. The
-      // second number is the one that describes the app's view of the world.
-      updatedAt: minutesAgo(600),
-      cachedAt: minutesAgo(20),
-    };
-
-    const view = await render(<WeatherBadge weather={weather} isLoading={false} />);
-
-    expect(view.getByText("Offline · saved 20m ago")).toBeTruthy();
-  });
-
-  it("no longer shows a live reading's age itself — that moved to ForecastTimestamp", async () => {
+  it("leaves freshness out of its spoken sentence — ForecastTimestamp speaks its own", async () => {
     const weather: SlotForecast = {
       forecast: "Fair (Day)",
       source: "2hr",
@@ -188,11 +184,8 @@ describe("WeatherBadge", () => {
 
     const view = await render(<WeatherBadge weather={weather} isLoading={false} />);
 
-    expect(view.queryByText("4m ago")).toBeNull();
-    expect(view.queryByText(/Updated/)).toBeNull();
-    // The word is gone from the screen, but not from what a screen reader
-    // hears — the field's own accessibility label still spells it out.
-    expect(view.getByLabelText(/Updated 4m ago/)).toBeTruthy();
+    expect(view.queryByLabelText(/Updated 4m ago/)).toBeNull();
+    expect(view.getByLabelText(/Fair \(Day\)/)).toBeTruthy();
   });
 
   it("no longer shows the raw API tier label", async () => {
@@ -277,7 +270,7 @@ describe("ForecastTimestamp", () => {
     expect(view.getByText("4m ago")).toBeTruthy();
   });
 
-  it("says nothing for a cached reading — it isn't 'updated', it's saved", async () => {
+  it("spells out a cached reading rather than reducing it to a bare age — it isn't 'updated', it's saved", async () => {
     const weather: SlotForecast = {
       forecast: "Showers",
       source: "cached",
@@ -286,10 +279,10 @@ describe("ForecastTimestamp", () => {
 
     const view = await render(<ForecastTimestamp weather={weather} />);
 
-    expect(view.queryByText(/ago/)).toBeNull();
+    expect(view.getByText("Offline · saved 20m ago")).toBeTruthy();
   });
 
-  it("says nothing for an outlook reading — same reason", async () => {
+  it("spells out an outlook reading — same reason, and the same corner", async () => {
     const weather: SlotForecast = {
       forecast: "Fair (Day)",
       source: "4day",
@@ -298,7 +291,43 @@ describe("ForecastTimestamp", () => {
 
     const view = await render(<ForecastTimestamp weather={weather} />);
 
-    expect(view.queryByText(/ago/)).toBeNull();
+    expect(view.getByText("Outlook · 3h ago")).toBeTruthy();
+  });
+
+  it("puts an NEA outlook and an Open-Meteo hourly reading in the same corner", async () => {
+    // The bug this replaced: which tier answers is decided by geography, so
+    // a Singapore plan two days out (NEA "4day") and an overseas one at the
+    // same distance (Open-Meteo, hourly for a week) rendered their age in
+    // two different places on an otherwise identical card.
+    const nea = await render(
+      <ForecastTimestamp
+        weather={{ forecast: "Fair (Day)", source: "4day", updatedAt: minutesAgo(60) }}
+      />,
+    );
+    const openMeteo = await render(
+      <ForecastTimestamp
+        weather={{
+          forecast: "Fair (Day)",
+          source: "openMeteoHourly",
+          updatedAt: minutesAgo(60),
+        }}
+      />,
+    );
+
+    expect(nea.getByText(/1h ago/)).toBeTruthy();
+    expect(openMeteo.getByText(/1h ago/)).toBeTruthy();
+  });
+
+  it("speaks the whole freshness sentence even where the clock icon stands in for 'Updated'", async () => {
+    const weather: SlotForecast = {
+      forecast: "Fair (Day)",
+      source: "2hr",
+      updatedAt: minutesAgo(4),
+    };
+
+    const view = await render(<ForecastTimestamp weather={weather} />);
+
+    expect(view.getByLabelText("Updated 4m ago")).toBeTruthy();
   });
 
   it("says nothing when there is no forecast to have an age", async () => {

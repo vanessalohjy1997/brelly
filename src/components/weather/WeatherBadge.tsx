@@ -61,17 +61,6 @@ export function WeatherBadge({ weather, isLoading, uvIndex, onRetry }: Props) {
 
   const verdict = describeUmbrella(weather.forecast, uvIndex);
 
-  // A cached reading's age is measured from when it was stored, not from
-  // NEA's issue time — that's the number that tells you how stale the app's
-  // view of the world is.
-  const age = formatRelativeTimestamp(weather.cachedAt ?? weather.updatedAt);
-  const freshness = describeFreshness(weather.source, age);
-  // "Updated" is the one freshness word with a common enough icon (a clock)
-  // to stand in for it — "Offline · saved" and "Outlook ·" aren't, so those
-  // stay spelled out. The full sentence still reaches screen readers via
-  // `accessibilityLabel` below; this only swaps the on-screen word.
-  const isUpdatedFreshness = freshness?.startsWith("Updated ") ?? false;
-
   // The pill used to carry this: "the pill is the short form; a screen
   // reader gets the whole sentence, which is no longer written anywhere else
   // on the card" (its own comment, before it was removed). With the pill
@@ -79,11 +68,13 @@ export function WeatherBadge({ weather, isLoading, uvIndex, onRetry }: Props) {
   // into one accessible node with the full sentence, the same way the pill
   // did, rather than losing the sentence along with it. The verdict's colour
   // itself now lives in `ItineraryCard`'s icon watermark, not here.
+  //
+  // Freshness is no longer part of the sentence: every reading's age now
+  // renders in the card's corner, and `ForecastTimestamp` speaks its own.
   const accessibilityLabel = [
     verdict.label,
     weather.forecast,
     weather.temperature && formatTempRange(weather.temperature),
-    freshness,
   ]
     .filter(Boolean)
     .join(". ");
@@ -101,33 +92,38 @@ export function WeatherBadge({ weather, isLoading, uvIndex, onRetry }: Props) {
       <ThemedText style={styles.forecast} numberOfLines={1}>
         {weather.forecast}
       </ThemedText>
-      <ThemedView style={styles.metaRow}>
-        {weather.temperature && (
-          <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
-            {formatTempRange(weather.temperature)}
-          </ThemedText>
-        )}
-        {/* A live reading's age moved to the card's top corner, next to the
-            plan's own time — see `ForecastTimestamp` below. Offline and
-            outlook readings stay here spelled out: they aren't "updated
-            just now", so the corner clock would be the wrong claim. */}
-        {freshness && !isUpdatedFreshness && (
-          <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
-            {freshness}
-          </ThemedText>
-        )}
-      </ThemedView>
+      {/* Every reading's age now lives in the card's top corner next to the
+          plan's own time — see `ForecastTimestamp` below. Splitting it by
+          tier, with a live reading in the corner and an outlook or offline
+          one spelled out down here, put the same fact in two different
+          places depending on which API answered; a column of cards then had
+          no one line to scan for staleness. */}
+      {weather.temperature && (
+        <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
+          {formatTempRange(weather.temperature)}
+        </ThemedText>
+      )}
     </ThemedView>
   );
 }
 
 /**
- * The "Updated 4m ago" clock, split out so `ItineraryCard` can place it in
- * the card's top-right corner, aligned with the plan's own time, instead of
- * buried beside the temperature. Only a live reading's age qualifies — see
- * `describeFreshness`; a cached or outlook reading renders its own spelled-out
- * line inside `WeatherBadge` instead, since "just now" would misstate how
- * fresh that reading actually is.
+ * The freshness clock, split out so `ItineraryCard` can place it in the
+ * card's top-right corner, aligned with the plan's own time, instead of
+ * buried beside the temperature.
+ *
+ * Every reading that has an age renders here, whichever tier answered. It
+ * used to take only the live "Updated 4m ago" case and leave the outlook and
+ * offline ones spelled out inside `WeatherBadge` — but which tier answers is
+ * decided by geography (NEA switches to its 4-day outlook a day out,
+ * Open-Meteo stays hourly for a week), so the same plan put its timestamp in
+ * two different places depending on where it was. Down a column of cards
+ * there was no single line to check for staleness.
+ *
+ * The clock icon stands in for the word "Updated" only. "Outlook" and
+ * "Offline" say something the clock cannot — how far the reading is being
+ * stretched, and that it came off disk — so those stay spelled out beside
+ * the icon rather than being reduced to a bare age.
  */
 export function ForecastTimestamp({
   weather,
@@ -144,21 +140,33 @@ export function ForecastTimestamp({
     return null;
   }
 
+  // A cached reading's age is measured from when it was stored, not from
+  // NEA's issue time — that's the number that tells you how stale the app's
+  // view of the world is.
   const age = formatRelativeTimestamp(weather.cachedAt ?? weather.updatedAt);
   const freshness = describeFreshness(weather.source, age);
-  const isUpdatedFreshness = freshness?.startsWith("Updated ") ?? false;
 
-  if (!freshness || !isUpdatedFreshness) return null;
+  if (!freshness) return null;
+
+  const isUpdatedFreshness = freshness.startsWith("Updated ");
 
   return (
-    <ThemedView style={styles.freshnessRow}>
+    <ThemedView
+      style={styles.freshnessRow}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={freshness}
+    >
       <Icon
         name={{ ios: "clock", android: "schedule" }}
         size={IconSize.metadata}
         tintColor={colors.textSecondary}
       />
-      <ThemedText style={[styles.meta, { color: colors.textSecondary }]}>
-        {age}
+      <ThemedText
+        style={[styles.meta, { color: colors.textSecondary }]}
+        numberOfLines={1}
+      >
+        {isUpdatedFreshness ? age : freshness}
       </ThemedText>
     </ThemedView>
   );
@@ -217,14 +225,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "right",
   },
-  metaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: Spacing.one,
-    backgroundColor: "transparent",
-  },
   meta: {
     fontSize: 12,
     lineHeight: 20,
@@ -234,6 +234,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
+    // "Outlook · 1h ago" is longer than the bare age this row used to hold,
+    // so it claims its width from the time row beside it (which shrinks and
+    // truncates) rather than wrapping onto a second line.
+    flexShrink: 0,
     backgroundColor: "transparent",
   },
   // An error should not look like a reading — the old badge rendered both as

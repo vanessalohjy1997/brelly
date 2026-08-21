@@ -265,8 +265,9 @@ export function ItineraryCard({
             {/* The reading's age, right-aligned against the plan's own
                 time rather than buried beside the temperature below — this
                 is the corner a glance checks to see if the forecast is
-                stale. Null on a past, errored or already-spelled-out
-                (offline/outlook) reading — see `ForecastTimestamp`. */}
+                stale, and every reading with an age puts it here whichever
+                API answered. Null on a past or errored one — see
+                `ForecastTimestamp`. */}
             {!past && <ForecastTimestamp weather={weather} />}
           </ThemedView>
 
