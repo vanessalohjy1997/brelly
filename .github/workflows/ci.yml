@@ -68,3 +68,18 @@ jobs:
             fi
           done < <(git log --format=%s "$base"..HEAD)
           exit $fail
+
+  # `always()` so a failed verify still reports; without it this job inherits
+  # the default "only if the needs succeeded" and stays silent exactly when a
+  # notification is most wanted. `conventions` is skipped on a push to main,
+  # and a skipped need must not read as a failure.
+  notify:
+    needs: [verify, conventions]
+    if: always()
+    uses: ./.github/workflows/notify-telegram.yml
+    with:
+      status: >-
+        ${{ (contains(needs.*.result, 'failure') && 'failure')
+        || (contains(needs.*.result, 'cancelled') && 'cancelled')
+        || 'success' }}
+    secrets: inherit

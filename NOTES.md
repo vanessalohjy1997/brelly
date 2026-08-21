@@ -1351,6 +1351,33 @@ Your app cannot contain standalone executables or libraries."
   proceed` — it ran twelve minutes before the `EXPO_TOKEN` secret existed. Not
   a credentials problem, and not the reason the submission failed.
 
+### Round 23 — a run's result reaches a phone instead of a browser tab
+
+Waiting on the Actions page for a green tick is not a workflow. Telegram was
+the pick over email or a GitHub mobile push because a bot is free, needs no
+account beyond the one already there, and delivers in seconds.
+
+- **One reusable workflow, not a copied step.** `notify-telegram.yml` is a
+  `workflow_call` workflow that both `ci.yml` and `ios-release.yml` end with.
+  Inside a reusable workflow `github.workflow` resolves to the *caller's*
+  name, so one copy labels every message correctly without being told which
+  workflow it is reporting on.
+- **`if: always()` is the whole point.** A job with `needs` defaults to
+  running only when those needs succeeded, which would have made the notifier
+  silent in exactly the case worth a notification.
+- **A skipped need is not a failure.** `conventions` only runs on a
+  `pull_request`, so on a push to `main` it reports `skipped`. The status
+  expression checks for `failure` and `cancelled` explicitly and treats
+  everything else as success, rather than requiring every need to be
+  `success`.
+- **Missing secrets skip, they do not fail.** A PR from a fork gets no
+  secrets, and this repo is public. The step exits 0 with a note when
+  `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID` is empty, so an outside
+  contributor's PR is not red for a reason that is none of their business.
+- **`github.ref_name` is the wrong branch on a PR.** It resolves to
+  `17/merge`. The message uses `github.head_ref || github.ref_name` so a PR
+  reports its own branch and a push still reports `main`.
+
 ## Shipped from the feature-idea list
 
 The feature ideas were derived from what was already built — each named the seam
