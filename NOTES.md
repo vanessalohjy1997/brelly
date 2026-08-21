@@ -237,6 +237,20 @@ links back here.
   supported`. Static is only reachable via `$RNFirebaseDisableSPM = true` in
   the Podfile, which we don't need. `FIREBASE_MIGRATION.md` carried the wrong
   version of this for a while — the note there is corrected.
+- **The `[RNFB] Embed Firebase SPM Frameworks` phase over-collects, and only a
+  real archive shows it.** `rnfirebase_spm_embed_script` sweeps two folders.
+  The second, `${OBJROOT}/UninstalledProducts/${PLATFORM_NAME}`, is only
+  populated by the Archive action — and it holds *every* archive-time build
+  product, CocoaPods' static pod frameworks included, not just Swift Package
+  ones. The sweep is a bare `find -name "*.framework"`, so all of them get
+  copied into `Frameworks/`, and App Store validation rejects a static `ar`
+  archive there as ITMS-90171. `plugins/withFirebaseSpmPostIntegrate.js`
+  splices a `file -b`-based guard into the phase so it only embeds dynamic
+  frameworks. Nothing local can catch this: the sweep is inert outside an
+  archive, the EAS build itself *succeeds*, and the rejection only lands at
+  `eas submit`. Check the artifact, not the build status — `unzip` the `.ipa`
+  and run `file` over `Payload/*.app/Frameworks/*.framework/*`; everything
+  there must be a Mach-O dylib.
 - **A native picker's props are invisible when the mock drops them.** The
   `DateTimePicker` stub in `jest.setup.js` forwards `themeVariant`, `mode`,
   `value` and `onValueChange` on purpose: each was, at some point, the only
@@ -1299,6 +1313,43 @@ was right; the placement wasn't.
   `ForecastTimestamp` is now its own accessible node speaking the full
   `describeFreshness` string, so VoiceOver hears "Updated 4m ago" where the
   screen shows a clock and "4m ago".
+
+### Round 22 — the first App Store submission, rejected by its own frameworks
+
+Builds 5 and 6 finished green on EAS and `eas submit` still bounced, with
+ITMS-90171 repeated once per framework: "the ... binary file is not permitted.
+Your app cannot contain standalone executables or libraries."
+
+- **The build status told us nothing; the artifact told us everything.**
+  Downloading build 6's `.ipa` and running `file` over
+  `Payload/brelly.app/Frameworks/` split it cleanly: 47 Mach-O dylibs and 24
+  static `ar` archives. Every framework Apple named was in the static 24, and
+  the pasted error list was simply truncated at 20. A static library cannot be
+  loaded by dyld and has already been linked into the app binary, so its
+  presence in the bundle was pure dead weight — all 24 held nothing but the
+  binary, an `Info.plist` and a `_CodeSignature`, so dropping them loses
+  nothing.
+- **The culprit was our own Firebase plugin's phase, not CocoaPods'.**
+  `Pods-brelly-frameworks.sh` embeds 38 frameworks, all of them correct. The
+  other 33 came from `[RNFB] Embed Firebase SPM Frameworks`, which
+  `withFirebaseSpmPostIntegrate.js` installs: 9 genuine Swift Package products
+  (`Firebase*`, `GUL*`, `third-party-IsAppEncrypted`) and 24 CocoaPods static
+  products it had no business touching, `Pods_brelly.framework` — the
+  CocoaPods umbrella, unambiguously not a Swift Package — among them. See the
+  trap above for the mechanism.
+- **The guard is spliced in, not a rewrite.** Replacing the whole upstream
+  script would silently revert any future RNFirebase fix, so the plugin
+  `sub`s a `file -b` check in after one literal line of it and raises
+  `Pod::Informative` when that line is gone. A test greps the real
+  `firebase_spm.rb` for the same literal, so an upstream rewrite fails at
+  `yarn test` rather than as a rejected submission weeks later.
+- **Unidentifiable binaries are embedded, not dropped.** The asymmetry is
+  deliberate: a spare framework is a validation warning, while dropping one
+  the app really links is a dyld crash at launch.
+- **The CI failure that started this was unrelated and already fixed.** The
+  one red `iOS Release` run died on `An Expo user account is required to
+  proceed` — it ran twelve minutes before the `EXPO_TOKEN` secret existed. Not
+  a credentials problem, and not the reason the submission failed.
 
 ## Shipped from the feature-idea list
 
