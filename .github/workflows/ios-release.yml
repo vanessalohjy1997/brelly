@@ -17,19 +17,53 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: yarn
 
       - run: yarn install --frozen-lockfile
 
-      - uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v9
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+
+      # `eas build` evaluates the app config on *this* runner before uploading
+      # anything, and `app.config.js` only redirects `ios.googleServicesFile`
+      # when `GOOGLE_SERVICES_INFO_PLIST` is set. It never is here: that EAS
+      # variable is `secret`-visibility, and EAS keeps those on the builder
+      # rather than sending them to the client — the build log lists only the
+      # "Plain text" and "Sensitive" ones. So the config falls back to
+      # `app.json`'s gitignored relative path and evaluation dies with
+      # `withIosInfoPlistBaseMod: ENOENT ... GoogleService-Info.plist`.
+      #
+      # Writing the file here satisfies that local read. It still never enters
+      # git (this repo is public and the plist carries real project
+      # identifiers), and the builder keeps using its own copy from the EAS
+      # file variable, so this changes nothing about what ships.
+      #
+      # Reproduce a failure here without pushing — `git archive` gives exactly
+      # what this runner gets, because EAS only ever uploads tracked files:
+      #   git archive --format=tar HEAD | tar -x -C /tmp/brelly-clean
+      #   cd /tmp/brelly-clean && yarn install --frozen-lockfile
+      #   npx expo config --type introspect
+      - name: Write the Firebase iOS config
+        env:
+          GOOGLE_SERVICES_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICES_INFO_PLIST_BASE64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_INFO_PLIST_BASE64" ]; then
+            echo "GOOGLE_SERVICES_INFO_PLIST_BASE64 is unset — add it with:" >&2
+            echo "  base64 < GoogleService-Info.plist | tr -d '\n' \\" >&2
+            echo "    | gh secret set GOOGLE_SERVICES_INFO_PLIST_BASE64" >&2
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_INFO_PLIST_BASE64" \
+            | base64 -d > GoogleService-Info.plist
+          plutil -lint GoogleService-Info.plist 2>/dev/null \
+            || python3 -c 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))' GoogleService-Info.plist
 
       - name: Build (EAS)
         run: eas build --platform ios --profile ${{ inputs.profile }} --non-interactive --wait
@@ -41,3 +75,11 @@ jobs:
       - name: Submit to App Store Connect
         if: ${{ inputs.submit }}
         run: eas submit --platform ios --profile ${{ inputs.profile }} --latest --non-interactive
+
+  notify:
+    needs: [build]
+    if: always()
+    uses: ./.github/workflows/notify-telegram.yml
+    with:
+      status: ${{ needs.build.result }}
+    secrets: inherit

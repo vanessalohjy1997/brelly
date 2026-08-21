@@ -403,6 +403,28 @@ links back here.
   back — to rotate one, re-run `env:set` from a local copy. `app.config.test.js`
   pins the override precedence in both directions so a refactor cannot quietly
   drop it.
+- **That bridge covers the builder, not the machine that runs `eas build`.**
+  `eas build` evaluates the app config *locally* before uploading anything, so
+  a CI runner needs `GoogleService-Info.plist` on disk too — and it will not
+  get it from the EAS file variable, because those are `secret`-visibility and
+  EAS keeps secrets on the builder. The build log names what it did send:
+  `Environment variables with visibility "Plain text" and "Sensitive" loaded
+  from the "production" environment`. With the variable unset, `app.config.js`
+  falls back to `app.json`'s gitignored relative path and the run dies on
+  `withIosInfoPlistBaseMod: ENOENT ... GoogleService-Info.plist`. The iOS
+  release workflow writes the file from a base64 repo secret before building.
+  This never reproduces from a working copy, where the real file is sitting
+  there — reproduce it the way the runner sees things instead, in seconds and
+  without pushing:
+
+  ```
+  git archive --format=tar HEAD | tar -x -C /tmp/brelly-clean
+  cd /tmp/brelly-clean && yarn install --frozen-lockfile
+  npx expo config --type introspect
+  ```
+
+  `git archive` is the right tool because EAS also uploads only tracked files,
+  so it gives exactly what the builder gets.
 
 - **The iOS release workflow authenticates to Apple through an App Store
   Connect API key held on EAS, not through an Apple ID in repo secrets.** This
@@ -1350,6 +1372,63 @@ Your app cannot contain standalone executables or libraries."
   one red `iOS Release` run died on `An Expo user account is required to
   proceed` — it ran twelve minutes before the `EXPO_TOKEN` secret existed. Not
   a credentials problem, and not the reason the submission failed.
+
+### Round 23 — a run's result reaches a phone instead of a browser tab
+
+Waiting on the Actions page for a green tick is not a workflow. Telegram was
+the pick over email or a GitHub mobile push because a bot is free, needs no
+account beyond the one already there, and delivers in seconds.
+
+- **One reusable workflow, not a copied step.** `notify-telegram.yml` is a
+  `workflow_call` workflow that both `ci.yml` and `ios-release.yml` end with.
+  Inside a reusable workflow `github.workflow` resolves to the *caller's*
+  name, so one copy labels every message correctly without being told which
+  workflow it is reporting on.
+- **`if: always()` is the whole point.** A job with `needs` defaults to
+  running only when those needs succeeded, which would have made the notifier
+  silent in exactly the case worth a notification.
+- **A skipped need is not a failure.** `conventions` only runs on a
+  `pull_request`, so on a push to `main` it reports `skipped`. The status
+  expression checks for `failure` and `cancelled` explicitly and treats
+  everything else as success, rather than requiring every need to be
+  `success`.
+- **Missing secrets skip, they do not fail.** A PR from a fork gets no
+  secrets, and this repo is public. The step exits 0 with a note when
+  `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID` is empty, so an outside
+  contributor's PR is not red for a reason that is none of their business.
+- **`github.ref_name` is the wrong branch on a PR.** It resolves to
+  `17/merge`. The message uses `github.head_ref || github.ref_name` so a PR
+  reports its own branch and a push still reports `main`.
+
+### Round 24 — the release pipeline gets far enough to fail somewhere new
+
+Three dispatches, three unrelated failures, none of which a local build could
+have shown. Worth listing together, because the shape repeats: every one was
+the runner having less than a working copy does.
+
+- **`EXPO_TOKEN` did not exist yet.** The first run died on `An Expo user
+  account is required to proceed` twelve minutes before the secret was created
+  (`created_at` and `updated_at` both say so). `expo/expo-github-action` does
+  not fail on an empty token; it just does not authenticate.
+- **ITMS-90171 came from a build that succeeded.** Rejected at `eas submit`,
+  not at build time — see round 22.
+- **`GoogleService-Info.plist` was missing on the runner.** See the trap above
+  for why `app.config.js` does not cover this case.
+
+Two things follow from that.
+
+- **A green build status says nothing about a shippable artifact.** The one
+  build that reached App Store validation had already been marked `finished`.
+  Check the `.ipa`, not the badge.
+- **The cheap gate is a tracked-files-only tree.** `git archive` plus
+  `expo config --type introspect` reproduces the runner's view in seconds and
+  would have caught the plist immediately. It cannot catch a repo-settings
+  problem like the missing token, and it cannot catch anything that only
+  appears in a real archive — so it is a habit, not a guarantee.
+
+The actions were also pinned forward to `checkout@v7`, `setup-node@v7` and
+`expo-github-action@v9`, which are the first majors on `node24`; the `v4`/`v8`
+line runs on `node20` and GitHub now forces and warns about it.
 
 ## Shipped from the feature-idea list
 
