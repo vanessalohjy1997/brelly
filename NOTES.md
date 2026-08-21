@@ -447,9 +447,53 @@ links back here.
   the record exists, put the real `ascAppId` back, because it is what makes
   submit skip the find-or-create-the-app step that `--non-interactive` handles
   badly.
+- **An over-the-air update that no build can run fails silently, and the
+  `fingerprint` runtime-version policy is what makes that detectable.**
+  `app.json` sets `runtimeVersion: { policy: "fingerprint" }`, so a build and
+  an update only match when `@expo/fingerprint`'s hash of everything
+  native-affecting agrees — dependencies, the evaluated app config, the config
+  plugins, `expo-build-properties`. Publish an update whose fingerprint no
+  installed build carries and EAS accepts it happily; it simply reaches nobody,
+  and the fix looks shipped. `.github/workflows/ota-update.yml` therefore
+  refuses to publish unless `eas build:list --fingerprint-hash <local hash>`
+  matches a finished build on the target channel. **Adding or bumping any
+  native dependency moves the fingerprint**, so it needs a new build before an
+  OTA can follow — including the commit that added `expo-updates` itself
+  (`4a3684c…` → `661ed17…`).
+- **The fingerprint hashes `GoogleService-Info.plist`'s *contents*, not its
+  path — which is the only reason the `app.config.js` file-variable bridge
+  above does not break it.** The builder reads the plist from an absolute EAS
+  path and a runner reads `./GoogleService-Info.plist`, but both are recorded
+  as `expoConfigExternalFile:contentsOnly`, so the two hashes agree. Verified
+  by hand, not assumed: computing the fingerprint twice with
+  `GOOGLE_SERVICES_INFO_PLIST` set and unset returns the same hash. The
+  consequence is a coupling worth knowing about — the plist held on EAS as the
+  `GOOGLE_SERVICES_INFO_PLIST` file variable and the one in the
+  `GOOGLE_SERVICES_INFO_PLIST_BASE64` repo secret must stay byte-identical.
+  Rotate one and not the other and every subsequent update computes a runtime
+  version no build has. The guard above turns that from a silent no-op into a
+  failed run, but it cannot tell you *which* of the two drifted;
+  `eas fingerprint:compare --build-id <ID>` can.
+- **`--environment` is mandatory on `eas update` from SDK 55 on**, and it has
+  to name the same EAS environment the target channel's build profile uses in
+  `eas.json` (`production` → `production`, `preview` → `preview`). Get it wrong
+  and the config is evaluated against a different set of variables than the
+  build was, which shows up as a fingerprint mismatch with no obvious cause.
 
 ## Built so far
 
+- **Over-the-air updates.** `expo-updates` on the `fingerprint` runtime-version
+  policy, with `preview` and `production` channels wired to the same-named
+  build profiles. `checkAutomatically` is left at its `ON_LOAD` default, so a
+  cold start downloads in the background and runs the new bundle next launch;
+  `useOtaUpdate` adds the two things that default misses — a foreground
+  re-check (`ON_LOAD` fires once per process, so a backgrounded app never looks
+  again) and telling the user, through `UpdateBanner` on Today and an "App
+  updates" section in Settings. `describeOtaUpdateState` collapses
+  `useUpdates()`' seven overlapping booleans into one ordered status.
+  Publishing is `.github/workflows/ota-update.yml`, manually dispatched like
+  the release pipeline beside it — see the fingerprint traps above for what it
+  refuses to do and why.
 - **Weather.** NEA service with 2hr nowcast / 24hr / 4-day tier selection
   (`getForecastForSlot`), nearest-NEA-area matching by coordinates against the
   live `area_metadata` lat/lng, temperature/humidity ranges where the tier
@@ -1429,6 +1473,45 @@ Two things follow from that.
 The actions were also pinned forward to `checkout@v7`, `setup-node@v7` and
 `expo-github-action@v9`, which are the first majors on `node24`; the `v4`/`v8`
 line runs on `node20` and GitHub now forces and warns about it.
+
+### Round 25 — a fix can ship without the App Store
+
+Everything in this app that isn't native is JavaScript, and until now a typo in
+a forecast string took the same two-day round trip through review as a new
+native module. `expo-updates` closes that, and the interesting part is not the
+install — it is deciding, mechanically, which changes are allowed through it.
+
+The `fingerprint` runtime-version policy is that decision. It hashes
+everything that could affect the native runtime and refuses to match an update
+against a build whose hash differs, which is exactly the question "does this
+need a rebuild?" answered by something other than memory. The cost is real —
+any new native dependency now means a build before an update — and it is the
+right cost, because the failure it replaces is invisible: EAS publishes an
+update under an unmatched runtime version without complaint, and it reaches
+nobody.
+
+Two things came out of building it that were not obvious going in.
+
+- **The `app.config.js` plist bridge does not break fingerprinting**, though it
+  looks like it should. The builder and a CI runner read
+  `GoogleService-Info.plist` from different absolute paths, and the evaluated
+  app config is part of the hash — but `@expo/fingerprint` records external
+  config files as `expoConfigExternalFile:contentsOnly`, so only the bytes
+  count. Checked by computing the fingerprint twice rather than by reading the
+  docs, which do not say this. What it does create is a coupling: the plist on
+  EAS and the one in the repo secret have to stay identical.
+- **A silent update is worse than no update.** The default behaviour — download
+  in the background, swap on some later cold start — means a downloaded fix can
+  sit unused for days while the user looks at the bug it repairs, and there is
+  nothing on screen to say so. `UpdateBanner` renders only when a bundle is
+  genuinely staged and is dismissible, since nothing about it is urgent; the
+  Settings section says what is actually true on the device, in the same spirit
+  as "Scheduled right now" (round 9) saying what the OS has queued rather than
+  what the app intends.
+
+The workflow is manual, matching `ios-release.yml`. Publishing from every merge
+would make a deliberate update indistinguishable from an incidental one, and
+the fingerprint guard is meant to be a second opinion rather than the only one.
 
 ## Shipped from the feature-idea list
 

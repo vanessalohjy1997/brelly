@@ -1,6 +1,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
+import * as Updates from "expo-updates";
 import { Linking } from "react-native";
 
 import SettingsScreen from "@/app/(tabs)/settings";
@@ -14,6 +15,19 @@ const getAllScheduled =
   Notifications.getAllScheduledNotificationsAsync as jest.Mock;
 const scheduleNotification =
   Notifications.scheduleNotificationAsync as jest.Mock;
+const useUpdatesMock = Updates.useUpdates as jest.Mock;
+const checkForUpdateAsync = Updates.checkForUpdateAsync as jest.Mock;
+const reloadAsync = Updates.reloadAsync as jest.Mock;
+
+const NO_UPDATE = {
+  isChecking: false,
+  isDownloading: false,
+  isUpdateAvailable: false,
+  isUpdatePending: false,
+  isRestarting: false,
+  checkError: undefined,
+  downloadError: undefined,
+};
 
 const DEFAULTS = {
   themePreference: "system" as const,
@@ -32,6 +46,10 @@ beforeEach(() => {
   getPermissions.mockResolvedValue({ granted: true, canAskAgain: false });
   requestPermissions.mockResolvedValue({ granted: true, canAskAgain: false });
   getAllScheduled.mockResolvedValue([]);
+  (Updates as { isEnabled: boolean }).isEnabled = true;
+  useUpdatesMock.mockReturnValue(NO_UPDATE);
+  checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
+  reloadAsync.mockResolvedValue(undefined);
   jest.spyOn(Linking, "openSettings").mockImplementation(async () => {});
 });
 
@@ -358,5 +376,46 @@ describe("SettingsScreen — back up your data", () => {
     await fireEvent.press(view.getByText("Back up your data"));
 
     expect(router.push).toHaveBeenCalledWith("/account-link");
+  });
+
+  it("says the app is up to date when nothing is staged", async () => {
+    const view = await render(<SettingsScreen />);
+
+    expect(view.getByText("Brelly is up to date.")).toBeTruthy();
+    expect(view.getByText("Check for updates")).toBeTruthy();
+  });
+
+  it("checks for an update on demand", async () => {
+    // The whole point of an over-the-air channel is that it is invisible, so
+    // this button is the only way to tell a working one from a broken one.
+    const view = await render(<SettingsScreen />);
+
+    await fireEvent.press(view.getByText("Check for updates"));
+
+    await waitFor(() => expect(checkForUpdateAsync).toHaveBeenCalled());
+  });
+
+  it("turns into a restart once an update is staged", async () => {
+    useUpdatesMock.mockReturnValue({ ...NO_UPDATE, isUpdatePending: true });
+    const view = await render(<SettingsScreen />);
+
+    expect(view.getByText("An update is ready. Restart to use it.")).toBeTruthy();
+    await fireEvent.press(view.getByText("Restart now"));
+
+    await waitFor(() => expect(reloadAsync).toHaveBeenCalled());
+  });
+
+  it("disables the button in a build that cannot take updates", async () => {
+    // A development build has no updates client. Offering a check there is a
+    // button that can only ever throw.
+    (Updates as { isEnabled: boolean }).isEnabled = false;
+    const view = await render(<SettingsScreen />);
+
+    expect(
+      view.getByText("This build installs updates with the app itself."),
+    ).toBeTruthy();
+    await fireEvent.press(view.getByText("Check for updates"));
+
+    expect(checkForUpdateAsync).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { act, fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
+import * as Updates from "expo-updates";
 
 import TodayScreen from "@/app/(tabs)/index";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
@@ -65,6 +66,18 @@ function todaysPlan(slots: ItinerarySlot[]): DayPlan {
   return { id: "today", date: todayKey(), slots };
 }
 
+const useUpdatesMock = Updates.useUpdates as jest.Mock;
+
+const NO_UPDATE = {
+  isChecking: false,
+  isDownloading: false,
+  isUpdateAvailable: false,
+  isUpdatePending: false,
+  isRestarting: false,
+  checkError: undefined,
+  downloadError: undefined,
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
@@ -75,6 +88,8 @@ beforeEach(() => {
     routinesReady: true,
     slotsReady: true,
   });
+  (Updates as { isEnabled: boolean }).isEnabled = true;
+  useUpdatesMock.mockReturnValue(NO_UPDATE);
 });
 
 describe("TodayScreen", () => {
@@ -293,5 +308,34 @@ describe("TodayScreen", () => {
     });
 
     expect(await view.findByText("Added later")).toBeTruthy();
+  });
+
+  it("says nothing about updates when none is staged", async () => {
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.queryByText("Update ready")).toBeNull();
+  });
+
+  it("offers a staged update above whatever the screen is showing", async () => {
+    // Over the empty state here, but the banner sits outside that branch on
+    // purpose — a downloaded fix is worth offering with plans, without them,
+    // and while the skeleton is still up.
+    useUpdatesMock.mockReturnValue({ ...NO_UPDATE, isUpdatePending: true });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.getByText("Update ready")).toBeTruthy();
+    expect(view.getByText("No plans yet")).toBeTruthy();
+  });
+
+  it("holds the update banner back during onboarding", async () => {
+    // Onboarding owns the screen; a restart prompt on top of a permission
+    // primer is two asks at once, and neither of them lands.
+    useSettingsStore.setState({ hasSeenOnboarding: false });
+    useUpdatesMock.mockReturnValue({ ...NO_UPDATE, isUpdatePending: true });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.queryByText("Update ready")).toBeNull();
   });
 });

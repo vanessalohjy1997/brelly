@@ -15,6 +15,7 @@ import { BottomTabInset, HeaderHeight, MaxContentWidth, Spacing } from "@/consta
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { useCalendarSync } from "@/hooks/useCalendarSync";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
+import { useOtaUpdate } from "@/hooks/useOtaUpdate";
 import { useTheme } from "@/hooks/useTheme";
 import { exportBackup } from "@/services/backup";
 import { IMPORT_HORIZON_DAYS } from "@/services/calendar";
@@ -71,6 +72,20 @@ export default function SettingsScreen() {
 
   const { status: permission, request: requestPermission } =
     useNotificationPermission();
+  const {
+    status: updateStatus,
+    message: updateMessage,
+    checkNow: checkForUpdate,
+    restart: restartForUpdate,
+  } = useOtaUpdate();
+  // Every state in which the button has nothing to do: either this build can
+  // never take an update, or one is already in flight and pressing again would
+  // only queue a second no-op.
+  const updateBusy =
+    updateStatus === "unsupported" ||
+    updateStatus === "checking" ||
+    updateStatus === "downloading" ||
+    updateStatus === "restarting";
   const {
     exportUpcoming,
     importUpcoming,
@@ -440,6 +455,54 @@ export default function SettingsScreen() {
                     stop with no coordinates can never show one. */}
                 Brings in the next {IMPORT_HORIZON_DAYS} days. Events need a
                 time and a place — all-day entries are skipped.
+              </ThemedText>
+            </ThemedView>
+          </ThemedView>
+
+          {/* Same reasoning as "Scheduled right now" above: the app's
+              intent ("updates are on") is not the interesting fact, what is
+              actually staged on this device is. An over-the-air update is
+              otherwise entirely invisible — it arrives silently and applies at
+              some later launch — so without a line saying so there is no way
+              to tell a working update channel from a broken one. */}
+          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            App updates
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.optionGroup}>
+            <ThemedView style={styles.switchRow}>
+              <ThemedView style={styles.switchLabel}>
+                <ThemedText>Version</ThemedText>
+                <ThemedText themeColor="textSecondary" style={styles.hint}>
+                  {updateMessage}
+                </ThemedText>
+              </ThemedView>
+            </ThemedView>
+            <ThemedView style={styles.subSetting}>
+              <Pressable
+                onPress={
+                  updateStatus === "ready" ? restartForUpdate : checkForUpdate
+                }
+                disabled={updateBusy}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: updateBusy }}
+                style={[
+                  styles.testButton,
+                  { backgroundColor: theme.background },
+                  updateBusy && styles.disabled,
+                ]}
+              >
+                <ThemedText style={styles.testButtonText}>
+                  {updateStatus === "ready"
+                    ? "Restart now"
+                    : "Check for updates"}
+                </ThemedText>
+              </Pressable>
+              <ThemedText themeColor="textSecondary" style={styles.hint}>
+                {/* Both halves are worth stating: a found update installs
+                    without the App Store, and one that needs a new binary
+                    cannot come this way at all. */}
+                Fixes that don&apos;t need a new App Store release arrive here.
+                Brelly also checks on its own each time you open it.
               </ThemedText>
             </ThemedView>
           </ThemedView>

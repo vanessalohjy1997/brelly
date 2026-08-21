@@ -1,0 +1,127 @@
+name: OTA Update
+
+# Manual, like the release pipeline it sits beside. An update published from
+# every merge would be indistinguishable from one published deliberately, and
+# the interesting question here — "does this change need a new binary?" — is
+# one a human should have already answered before pressing the button. The
+# fingerprint check below is the machine's second opinion, not the first.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Channel to publish to
+        type: choice
+        options: [preview, production]
+        default: preview
+      message:
+        description: What this update changes (shown in the EAS dashboard)
+        type: string
+        required: true
+      rollout:
+        description: Percentage of users who get it immediately (1-100)
+        type: string
+        default: "100"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Same reason as the release workflow: `eas update` evaluates the app
+      # config on *this* runner, and `app.config.js` falls back to `app.json`'s
+      # gitignored `./GoogleService-Info.plist` because the EAS file variable
+      # is secret-visibility and never leaves the builder. Without the file the
+      # run dies on `withIosInfoPlistBaseMod: ENOENT`.
+      #
+      # It matters twice as much here as it does there. `runtimeVersion` is the
+      # `fingerprint` policy, and @expo/fingerprint hashes this plist's
+      # *contents* (as `expoConfigExternalFile:contentsOnly` — the path it is
+      # read from is deliberately not part of the hash, which is the only
+      # reason the EAS-file-variable indirection works at all). So the copy
+      # written here has to be byte-identical to the one held on EAS as the
+      # `GOOGLE_SERVICES_INFO_PLIST` file variable. If they ever drift, this
+      # runner computes a runtime version no build has, and the guard below
+      # fails the run rather than publishing to nobody.
+      - name: Write the Firebase iOS config
+        env:
+          GOOGLE_SERVICES_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICES_INFO_PLIST_BASE64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_INFO_PLIST_BASE64" ]; then
+            echo "GOOGLE_SERVICES_INFO_PLIST_BASE64 is unset — add it with:" >&2
+            echo "  base64 < GoogleService-Info.plist | tr -d '\n' \\" >&2
+            echo "    | gh secret set GOOGLE_SERVICES_INFO_PLIST_BASE64" >&2
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_INFO_PLIST_BASE64" \
+            | base64 -d > GoogleService-Info.plist
+          python3 -c 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))' GoogleService-Info.plist
+
+      # The whole point of the fingerprint runtime-version policy: it changes
+      # whenever anything that could affect the native runtime does — a new
+      # native dependency, an `app.json` plugin, an `expo-build-properties`
+      # setting, one of the local plugins under `plugins/`. An update published
+      # under a runtime version no installed build carries is not an error on
+      # EAS's side; it simply reaches nobody, silently, and the fix looks
+      # shipped. Refusing to publish is the only way that failure is visible.
+      #
+      # `--environment` is required from SDK 55 on, and it decides which EAS
+      # environment's variables the config is evaluated with — it has to match
+      # the `environment` the same-named build profile uses in `eas.json`, or
+      # the fingerprint is computed against a different config than the build
+      # was.
+      - name: Refuse to publish an update no build can run
+        id: fingerprint
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          HASH=$(eas fingerprint:generate \
+            --platform ios --environment "$CHANNEL" --json --non-interactive \
+            | jq -r '.hash')
+          echo "Local fingerprint: $HASH"
+          MATCHES=$(eas build:list \
+            --platform ios --channel "$CHANNEL" --status finished \
+            --fingerprint-hash "$HASH" --limit 1 --json --non-interactive \
+            | jq 'length')
+          if [ "$MATCHES" -eq 0 ]; then
+            echo "::error::No finished iOS build on the '$CHANNEL' channel has" \
+              "fingerprint $HASH. Something native changed, so this needs a new" \
+              "build (run the iOS Release workflow), not an over-the-air update." \
+              "If nothing native did change, compare the two configs with:" \
+              "eas fingerprint:compare --build-id <ID> --environment $CHANNEL" >&2
+            exit 1
+          fi
+          echo "Matched a finished build on '$CHANNEL'."
+
+      - name: Publish (EAS Update)
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          MESSAGE: ${{ inputs.message }}
+          ROLLOUT: ${{ inputs.rollout }}
+        run: |
+          eas update \
+            --channel "$CHANNEL" \
+            --message "$MESSAGE" \
+            --environment "$CHANNEL" \
+            --rollout-percentage "$ROLLOUT" \
+            --non-interactive
+
+  notify:
+    needs: [publish]
+    if: always()
+    uses: ./.github/workflows/notify-telegram.yml
+    with:
+      status: ${{ needs.publish.result }}
+    secrets: inherit

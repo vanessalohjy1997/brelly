@@ -100,6 +100,30 @@ jest.mock("expo-calendar", () => ({
   EntityTypes: { EVENT: "event", REMINDER: "reminder" },
 }));
 
+// expo-updates is native-backed, and `useUpdates` is a subscription to the
+// native module's state rather than something derivable in JS — so it is a
+// `jest.fn` a test can drive, not a fixed object. `isEnabled` is a plain
+// mutable property for the same reason: it is `false` in a development build,
+// which is a state the UI has its own copy for, and useOtaUpdate reads it at
+// call time precisely so a test can flip it.
+jest.mock("expo-updates", () => ({
+  isEnabled: true,
+  channel: "production",
+  runtimeVersion: "test-fingerprint",
+  useUpdates: jest.fn(() => ({
+    isChecking: false,
+    isDownloading: false,
+    isUpdateAvailable: false,
+    isUpdatePending: false,
+    isRestarting: false,
+    checkError: undefined,
+    downloadError: undefined,
+  })),
+  checkForUpdateAsync: jest.fn().mockResolvedValue({ isAvailable: false }),
+  fetchUpdateAsync: jest.fn().mockResolvedValue({ isNew: false }),
+  reloadAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock("expo-location", () => ({
   // `useNearbyForecast` reads the status without prompting on mount and only
   // calls `request…` from an explicit affordance — so both have to exist.
