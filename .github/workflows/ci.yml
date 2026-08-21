@@ -33,3 +33,38 @@ jobs:
 
       - name: Test
         run: yarn test:coverage
+
+  # The local .githooks copies of these checks can be bypassed with --no-verify;
+  # this one cannot.
+  conventions:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Branch name
+        run: |
+          branch='${{ github.head_ref }}'
+          case "$branch" in
+            feat/*|fix/*|chore/*) echo "ok: $branch" ;;
+            *) echo "branch \"$branch\" must start with feat/, fix/, or chore/" >&2; exit 1 ;;
+          esac
+
+      - name: Commit subjects
+        run: |
+          base='${{ github.event.pull_request.base.sha }}'
+          fail=0
+          while IFS= read -r subject; do
+            case "$subject" in
+              "Merge "*|"Revert "*) continue ;;
+            esac
+            if printf '%s' "$subject" | grep -Eq '^(feat|fix|chore): .+'; then
+              echo "ok:   $subject"
+            else
+              echo "fail: $subject" >&2
+              fail=1
+            fi
+          done < <(git log --format=%s "$base"..HEAD)
+          exit $fail

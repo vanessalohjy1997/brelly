@@ -1,0 +1,14 @@
+#!/bin/sh
+# Branch names carry the same prefix as commits. Checked at push rather than at
+# branch creation, which git gives us no hook for.
+branch=$(git symbolic-ref --short HEAD 2>/dev/null) || exit 0
+
+case "$branch" in
+  main|feat/*|fix/*|chore/*) exit 0 ;;
+esac
+
+cat >&2 <<MSG
+pre-push: branch "$branch" must start with feat/, fix/, or chore/.
+  Rename it: git branch -m feat/what-it-does
+MSG
+exit 1
