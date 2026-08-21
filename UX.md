@@ -547,6 +547,20 @@ system settings) when the status is denied.
   together with the "Updated 12m ago" line into one plain-language freshness
   note.
 
+- [x] **The reading's age moved depending on where the plan was.** The card's
+  top-right corner took the live "Updated 4m ago" clock; an outlook or offline
+  reading spelled itself out under the temperature instead
+  ([WeatherBadge.tsx](src/components/weather/WeatherBadge.tsx)). Which of those
+  a plan gets is decided by geography, not by anything the reader can see —
+  NEA falls back to its island-wide 4-day outlook about a day out, while
+  Open-Meteo stays on hourly data for a week — so two plans the same distance
+  ahead printed their timestamp in two different places, and a Singapore stop
+  almost always got the buried one. `ForecastTimestamp` now takes every
+  reading that has an age, so there is one line down the column to check for
+  staleness. The clock icon still stands in for the word "Updated" only:
+  "Outlook · 1h ago" and "Offline · saved 20m ago" stay spelled out beside it,
+  because they say how far the reading is being stretched, which no clock can.
+
 - [x] **Pull-to-refresh has no screen-level result.** Both tabs refresh, but
   staleness is only shown per badge — nothing confirms the whole screen
   updated.

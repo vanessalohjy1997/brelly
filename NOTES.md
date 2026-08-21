@@ -1270,6 +1270,36 @@ datetime picker instead.
   doesn't say what tapping does, and the hint doesn't need to repeat the stop
   count.
 
+### Round 21 — one corner for how stale the forecast is
+
+The card's top-right clock only took a *live* reading's age. An outlook or an
+offline one spelled itself out under the temperature instead, on the reasoning
+that "just now" beside a clock icon would misstate a 4-day outlook. The word
+was right; the placement wasn't.
+
+- **Which tier answers is geography, not anything the reader can see.**
+  `getForecastForSlot` hands anything more than a day out to NEA's 4-day
+  outlook (`source: "4day"`), while `fetchOpenMeteoForecast` keeps the hourly
+  tag for a full week (`HOURLY_CONFIDENCE_DAYS = 7`). So a Singapore stop
+  tomorrow got "Outlook · 1h ago" buried under its temperature, and an
+  overseas stop *further* ahead got a tidy corner clock. Same card, same
+  question, two different places to look — and in practice the buried one was
+  always the Singapore plan.
+- **`ForecastTimestamp` now takes every reading that has an age.** Freshness
+  is gone from `WeatherBadge` entirely; its `metaRow` collapsed to the single
+  temperature line it now holds. One line down the column to check for
+  staleness, whichever API answered.
+- **The clock icon still stands in for "Updated" only.** "Outlook ·" and
+  "Offline · saved" ride beside the icon spelled out, because they say how far
+  the reading is being stretched and that it came off disk — neither of which
+  a clock face can carry. `freshnessRow` took `flexShrink: 0` so the longer
+  strings claim their width from the time row rather than wrapping.
+- **The spoken sentence moved with it.** `WeatherBadge`'s `accessibilityLabel`
+  used to append freshness even for the live case it no longer rendered;
+  `ForecastTimestamp` is now its own accessible node speaking the full
+  `describeFreshness` string, so VoiceOver hears "Updated 4m ago" where the
+  screen shows a clock and "4m ago".
+
 ## Shipped from the feature-idea list
 
 The feature ideas were derived from what was already built — each named the seam
