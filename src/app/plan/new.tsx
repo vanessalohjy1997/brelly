@@ -53,6 +53,7 @@ export default function NewSlotScreen() {
                     location: values.location,
                     latitude: values.latitude,
                     longitude: values.longitude,
+                    countryCode: values.countryCode,
                     weekdays: repeat.weekdays,
                     startTime: toTimeOfDay(start),
                     endTime: toTimeOfDay(new Date(values.endTime)),

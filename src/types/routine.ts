@@ -17,6 +17,12 @@ export type Routine = {
   latitude: number;
   longitude: number;
   /**
+   * ISO 3166-1 alpha-2 for the rule's location, carried so the stops it
+   * materialises are no more anonymous than a hand-made one — see
+   * `ItinerarySlot.countryCode`. Absent means unknown, as it does there.
+   */
+  countryCode?: string;
+  /**
    * Which days it falls on, as `Date.getDay()` — 0 is Sunday, 6 is Saturday.
    *
    * An array rather than a bitmask so the persisted JSON is readable, and
