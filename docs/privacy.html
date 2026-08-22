@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brelly — Privacy Policy</title>
+<style>
+  :root {
+    --bg: #f8f6fb;
+    --fg: #1b1726;
+    --muted: #5c5670;
+    --rule: #e2dcef;
+    --accent: #5b44c4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #120f1a;
+      --fg: #ece6f8;
+      --muted: #a49cba;
+      --rule: #2c2740;
+      --accent: #a68cff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2.5rem 1.25rem 5rem;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 40rem; margin: 0 auto; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 2.5rem 0 .6rem; }
+  .updated { color: var(--muted); font-size: .9rem; margin: 0 0 2rem; }
+  a { color: var(--accent); }
+  ul { padding-left: 1.2rem; }
+  li { margin: .35rem 0; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0 1.5rem; }
+  footer { color: var(--muted); font-size: .9rem; }
+  code { font-size: .9em; background: var(--rule); padding: .1em .35em; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Brelly Privacy Policy</h1>
+<p class="updated">Last updated 21 August 2026</p>
+
+<p>Brelly shows you the weather for the places on your plan for the day. This
+page explains what the app collects, where it goes, and how to get rid of it.</p>
+
+<p>Brelly is made by an independent developer. There is no advertising in the
+app, no analytics or tracking SDK, and none of your data is sold or shared with
+data brokers.</p>
+
+<h2>What Brelly stores about you</h2>
+
+<p>Everything below is created by you using the app. Brelly does not ask for
+your name, your address, or your phone number.</p>
+
+<ul>
+  <li><strong>Your plans.</strong> For each stop you add: the label you gave it,
+      the place name, its latitude and longitude, the start and end time, any
+      notes you typed, and whether it is indoors or outdoors.</li>
+  <li><strong>Your routines.</strong> Repeating plans you have set up, and the
+      days they apply to.</li>
+  <li><strong>Your settings.</strong> App preferences, such as how far ahead you
+      want rain alerts.</li>
+  <li><strong>An account identifier.</strong> Brelly signs you in anonymously the
+      first time you open it, which produces a random ID with no personal
+      details attached. If you choose to link a Google or Apple account so your
+      plans follow you to another device, that sign-in also gives Brelly the
+      email address associated with the account you picked.</li>
+</ul>
+
+<h2>Where it is stored</h2>
+
+<p>Your plans, routines and settings are saved on your device and synced to
+Google Firebase (Cloud Firestore and Firebase Authentication), which Brelly uses
+as its backend. They are stored under your account identifier and are readable
+only by that account. Google processes this data as Brelly's service provider —
+see the <a href="https://firebase.google.com/support/privacy">Firebase Privacy
+and Security</a> page.</p>
+
+<h2>Permissions the app asks for</h2>
+
+<ul>
+  <li><strong>Location.</strong> Used while you are using the app, to prefill the
+      location when you add a plan and to show nearby weather when you have no
+      plans. Your device location is used to look up a forecast; it is not
+      stored on Brelly's servers as a location history.</li>
+  <li><strong>Calendar.</strong> Only if you turn it on. Brelly reads your
+      calendar so you can turn an event into a plan, and can write your plans
+      back so they appear alongside your other events. Calendar data is read on
+      your device. Nothing from your calendar is uploaded except what becomes a
+      plan you saved, which is then stored as described above.</li>
+  <li><strong>Notifications.</strong> Used to send you a rain alert before a
+      stop. Alerts are scheduled locally on your device.</li>
+</ul>
+
+<h2>Services Brelly sends requests to</h2>
+
+<p>To show a forecast and to let you search for a place, the app sends requests
+to these services. Each request includes what it needs to answer — a place you
+typed, or a set of coordinates.</p>
+
+<ul>
+  <li><strong>Google Places and Google Maps</strong> — place search and
+      autocomplete when you add a stop.
+      (<a href="https://policies.google.com/privacy">Privacy policy</a>)</li>
+  <li><strong>data.gov.sg / NEA</strong> — weather forecasts inside Singapore.
+      (<a href="https://data.gov.sg/privacy-statement">Privacy statement</a>)</li>
+  <li><strong>Open-Meteo</strong> — weather forecasts outside Singapore.
+      (<a href="https://open-meteo.com/en/terms">Terms and privacy</a>)</li>
+</ul>
+
+<h2>Children</h2>
+
+<p>Brelly is not directed at children under 13, and does not knowingly collect
+information from them.</p>
+
+<h2>Getting your data out, and deleting it</h2>
+
+<p>You can export your plans and routines to a file from inside the app at any
+time, and import them again.</p>
+
+<p>To delete your data, delete your plans and routines in the app, or ask for your
+account to be deleted using the contact link below and it will be removed from
+Firestore. Deleting the app from your device removes the local copy; if you have
+linked an account, ask for deletion so the synced copy goes too.</p>
+
+<h2>Changes</h2>
+
+<p>If this policy changes, the updated version will be posted on this page with a
+new date at the top.</p>
+
+<h2>Contact</h2>
+
+<p>Questions about this policy, or a deletion request:
+<a href="https://github.com/vanessalohjy1997/brelly/issues">open an issue on
+GitHub</a>.</p>
+
+<p>GitHub issues are public, so please don't include personal details in one. If
+you are asking for your data to be deleted, say so without posting anything you
+would rather keep private, and you'll be told what is needed.</p>
+
+<hr>
+<footer>
+  <a href="./support.html">Support</a> ·
+  <a href="https://github.com/vanessalohjy1997/brelly">Source on GitHub</a>
+</footer>
+
+</main>
+</body>
+</html>
