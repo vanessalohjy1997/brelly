@@ -20,6 +20,14 @@ export type ItinerarySlot = {
   provider?: WeatherProvider;
   latitude: number; // from Google Places
   longitude: number; // from Google Places
+  // ISO 3166-1 alpha-2, from the Places lookup's `country` address component.
+  // Absent on stops created before this existed, on calendar imports, and on
+  // "Use my location" (the Geocoding reverse lookup this app makes doesn't ask
+  // for it). Absent means *unknown*, and specifically not `"SG"` —
+  // `detectScheduleConflicts` reads it that way on purpose, since assuming
+  // Singapore is exactly the bug the field was added to fix. No store
+  // migration needed.
+  countryCode?: string;
   startTime: string;
   endTime: string;
   // Set after a rain notification is scheduled for this slot, so it can be

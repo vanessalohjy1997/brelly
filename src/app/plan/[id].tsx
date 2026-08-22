@@ -202,6 +202,7 @@ export default function EditSlotScreen() {
             location: slot.location,
             latitude: slot.latitude,
             longitude: slot.longitude,
+            countryCode: slot.countryCode,
             startTime: slot.startTime,
             endTime: slot.endTime,
             notificationsMuted: slot.notificationsMuted,

@@ -7,7 +7,7 @@ import {
   SlotForm,
   type SlotFormValues,
 } from "@/components/itinerary/SlotForm";
-import { searchPlaces } from "@/services/geocoding";
+import { getPlaceDetails, searchPlaces } from "@/services/geocoding";
 import { useSettingsStore } from "@/store/settingsStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import { toDateKey } from "@/utils/dateKeys";
@@ -18,12 +18,14 @@ jest.mock("@/services/geocoding", () => ({
 }));
 
 const mockSearchPlaces = searchPlaces as jest.Mock;
+const mockGetPlaceDetails = getPlaceDetails as jest.Mock;
 
 const INITIAL: SlotFormValues = {
   label: "Lunch with Sam",
   location: "Tanjong Pagar, Singapore",
   latitude: 1.2766,
   longitude: 103.8456,
+  countryCode: "SG",
   startTime: new Date(2026, 6, 31, 12, 30).toISOString(),
   endTime: new Date(2026, 6, 31, 13, 30).toISOString(),
 };
@@ -490,6 +492,61 @@ describe("SlotForm", () => {
       await fireEvent(view.getByLabelText("Location"), "blur");
 
       expect(view.queryByLabelText("Location suggestions")).toBeNull();
+    });
+
+    // The country is what keeps the gap warning off a flight
+    // (`detectScheduleConflicts`), and only the place lookup knows it — so it
+    // has to survive the trip from the dropdown to `onSubmit`.
+    it("carries the chosen place's country through to the submitted values", async () => {
+      mockGetPlaceDetails.mockResolvedValue({
+        placeId: "p1",
+        displayName: "East Coast Park",
+        formattedAddress: "East Coast Park Service Rd, Singapore",
+        latitude: 1.3009,
+        longitude: 103.9124,
+        countryCode: "SG",
+      });
+      const onSubmit = jest.fn();
+      const view = await renderWithProviders(
+        <SlotForm submitLabel="Add" onSubmit={onSubmit} />,
+      );
+
+      await searchFor(view, "East Coast");
+      await fireEvent.press(view.getByText("East Coast Park"));
+      await fireEvent.press(view.getByText("Add"));
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          location: "East Coast Park",
+          countryCode: "SG",
+        }),
+      );
+    });
+
+    // Replacing the place has to replace its country too. Keeping the old
+    // one would leave a stop abroad still claiming Singapore, which is the
+    // one reading `detectScheduleConflicts` must never be handed.
+    it("clears the previous country when the new place names none", async () => {
+      mockGetPlaceDetails.mockResolvedValue({
+        placeId: "p1",
+        displayName: "East Coast Park",
+        formattedAddress: "East Coast Park Service Rd",
+        latitude: 1.3009,
+        longitude: 103.9124,
+      });
+      const onSubmit = jest.fn();
+      const view = await renderWithProviders(
+        <SlotForm submitLabel="Save" initialValues={INITIAL} onSubmit={onSubmit} />,
+      );
+
+      await fireEvent.press(view.getByLabelText("Clear location"));
+      await searchFor(view, "East Coast");
+      await fireEvent.press(view.getByText("East Coast Park"));
+      await fireEvent.press(view.getByText("Save"));
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ countryCode: undefined }),
+      );
     });
 
     it("brings the same suggestions back on focus without searching again", async () => {

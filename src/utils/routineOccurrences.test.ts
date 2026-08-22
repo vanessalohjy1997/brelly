@@ -130,7 +130,7 @@ describe("routineSlotForDate", () => {
 
   it("carries the routine's identity onto the stop", () => {
     const slot = routineSlotForDate(
-      routine({ kind: "indoor", notificationsMuted: true }),
+      routine({ kind: "indoor", notificationsMuted: true, countryCode: "SG" }),
       MONDAY,
     );
 
@@ -140,6 +140,9 @@ describe("routineSlotForDate", () => {
     expect(slot.latitude).toBe(1.2843);
     expect(slot.kind).toBe("indoor");
     expect(slot.notificationsMuted).toBe(true);
+    // Without this a routine's stops would be the only ones with no country,
+    // and the gap warning would treat every leg to one as unknown.
+    expect(slot.countryCode).toBe("SG");
   });
 });
 
@@ -157,6 +160,7 @@ describe("routineUpdatesFromSlot", () => {
       location: "Raffles Place, Singapore",
       latitude: 1.2843,
       longitude: 103.8514,
+      countryCode: "JP",
       startTime: new Date(2026, 7, 5, 10, 0).toISOString(),
       endTime: new Date(2026, 7, 5, 19, 0).toISOString(),
       kind: "indoor",
@@ -166,6 +170,9 @@ describe("routineUpdatesFromSlot", () => {
     expect(updates.startTime).toBe("10:00");
     expect(updates.endTime).toBe("19:00");
     expect(updates.label).toBe("Office (late)");
+    // Moving the rule's location abroad has to move its country with it, or
+    // every stop it fills in afterwards names the old one.
+    expect(updates.countryCode).toBe("JP");
   });
 
   it("carries no day, because a rule has none", () => {

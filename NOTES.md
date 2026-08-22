@@ -251,6 +251,16 @@ links back here.
   `eas submit`. Check the artifact, not the build status — `unzip` the `.ipa`
   and run `file` over `Payload/*.app/Frameworks/*.framework/*`; everything
   there must be a Mach-O dylib.
+- **`getPlaceDetails`'s field mask is a billing decision, and nothing fails
+  when you get it wrong.** Places (New) prices Place Details by *which fields
+  you ask for*: the mask is what puts the call on the Essentials SKU rather
+  than Pro or Enterprise, and adding one field from a higher tier silently
+  reprices every location a user picks. `addressComponents` (round 26's
+  `countryCode`) was added only after checking Google's SKU table put it in
+  Essentials alongside `id`/`displayName`/`formattedAddress`/`location`. The
+  response shape needs the same treatment as NEA's above — confirmed by curling
+  the endpoint, which is how the country component turned out to carry the
+  code in `shortText` and the country's *name* in `longText`.
 - **A native picker's props are invisible when the mock drops them.** The
   `DateTimePicker` stub in `jest.setup.js` forwards `themeVariant`, `mode`,
   `value` and `onValueChange` on purpose: each was, at some point, the only
@@ -1512,6 +1522,49 @@ Two things came out of building it that were not obvious going in.
 The workflow is manual, matching `ios-release.yml`. Publishing from every merge
 would make a deliberate update indistinguishable from an incidental one, and
 the fingerprint guard is meant to be a second opinion rather than the only one.
+
+### Round 26 — the gap warning stops firing on flights
+
+`detectScheduleConflicts` compares the distance between two stops against
+`MAX_PLAUSIBLE_SPEED_KMH = 60`, a figure chosen when every stop was in
+Singapore and the question was "Changi to Jurong in ten minutes?". Since round
+19 an itinerary can cross an ocean, and then the check fires on every single
+leg — with a banner the user can do nothing about, because they are on a plane.
+
+The fix is a suppression, not a bigger number. Raising the speed limit to
+something a plane could hit would blind the check to the case it was written
+for; the leg has to be *classified* first, and only ground legs measured.
+
+Two signals do the classifying, and the interesting part is why neither works
+alone.
+
+- **Different country codes** is the direct evidence, and `countryCode` is a new
+  optional slot field read straight off the Places lookup's `country` address
+  component. But optional means it is missing on every stop made before this
+  round, on every calendar import, and on "Use my location" — and a missing code
+  has to read as *unknown*, never as `"SG"`. Defaulting it to Singapore is the
+  same assumption that caused the bug.
+- **A `GROUND_TRANSPORT_LIMIT_KM = 500` ceiling** covers those unknowns, and
+  also covers what a country code cannot describe at all: a domestic flight,
+  where both stops honestly agree on `"US"` and are still 4,000 km apart.
+
+`overlap` is untouched. Two stops booked over each other are double-booked
+wherever they are, and that check never asked how you get between them.
+
+Two things worth knowing if this is picked up again:
+
+- **The country came free.** `getPlaceDetails`'s field mask is a billing
+  decision as much as a data one — see the trap above. `addressComponents` is on
+  the same Place Details Essentials SKU as the four fields already requested, so
+  this added a field without adding a cent. That was checked against Google's
+  SKU table, and the component's shape against a live response: the country
+  entry is `{ longText: "Singapore", shortText: "SG", types: ["country",
+  "political"] }`, so `longText` is the country's *name* and only `shortText`
+  is the code.
+- **Routines carry it too.** A rule stores one location, so `Routine` grew the
+  same optional field and `routineSlotForDate` passes it down. Without that,
+  a routine's stops would have been the only ones in the app permanently
+  unknown, and every leg to one would have fallen back to the distance ceiling.
 
 ## Shipped from the feature-idea list
 

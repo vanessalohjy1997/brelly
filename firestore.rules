@@ -31,6 +31,7 @@ service cloud.firestore {
         && (!('routineId' in data) || data.routineId is string)
         && (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000))
         && (!('provider' in data) || data.provider in ['nea', 'openMeteo'])
+        && (!('countryCode' in data) || (data.countryCode is string && data.countryCode.size() == 2))
         && !('notificationId' in data)
         && !('notificationLeadMinutes' in data);
     }
@@ -46,6 +47,7 @@ service cloud.firestore {
         && isTimeOfDay(data.endTime)
         && isDateKey(data.startDate)
         && (!('endDate' in data) || isDateKey(data.endDate))
+        && (!('countryCode' in data) || (data.countryCode is string && data.countryCode.size() == 2))
         && (!('kind' in data) || data.kind in ['outdoor', 'indoor'])
         && (!('notificationsMuted' in data) || data.notificationsMuted is bool)
         && data.exceptions is list;
