@@ -13,10 +13,12 @@
       }
     },
     "preview": {
+      "channel": "preview",
       "distribution": "internal",
       "environment": "preview"
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "environment": "production"
     }

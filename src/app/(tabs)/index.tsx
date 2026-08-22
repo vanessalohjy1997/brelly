@@ -10,6 +10,7 @@ import { OnboardingPermissionPrimer } from "@/components/OnboardingPermissionPri
 import { Skeleton } from "@/components/Skeleton";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { LiveConditionsCard } from "@/components/weather/LiveConditionsCard";
 import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
 import { NearbyWeatherPrompt } from "@/components/weather/NearbyWeatherPrompt";
@@ -156,6 +157,13 @@ export default function TodayScreen() {
             </Pressable>
           </ThemedView>
         </ThemedView>
+
+        {/* Above the branch below, not inside one: a staged update is worth
+            offering whether the screen is showing plans, an empty state or a
+            skeleton. Onboarding is the exception — it owns the screen, and it
+            renders nothing of this because the banner is the only thing here
+            that would compete with it. */}
+        {!activeOnboardingStep && <UpdateBanner />}
 
         {!ready ? (
           <Skeleton
