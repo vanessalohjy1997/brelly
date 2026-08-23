@@ -4,8 +4,8 @@ import { Icon } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { IconSize, Spacing } from "@/constants/theme";
-import type { PermissionState } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
+import type { PermissionState } from "@/store/deviceLocationStore";
 
 type Props = {
   permission: PermissionState;
