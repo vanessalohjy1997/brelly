@@ -51,6 +51,13 @@ export type SlotFormValues = {
   location: string;
   latitude: number;
   longitude: number;
+  /**
+   * ISO 3166-1 alpha-2 for the chosen place, absent when the lookup didn't
+   * name one — "Use my location" never does. Carried rather than re-derived so
+   * it stays whatever the place lookup actually said; see
+   * `ItinerarySlot.countryCode`.
+   */
+  countryCode?: string;
   startTime: string; // ISO
   endTime: string; // ISO
   /** Per-stop opt-out from rain alerts. */
@@ -158,12 +165,14 @@ export function SlotForm({
     location: string;
     latitude: number;
     longitude: number;
+    countryCode?: string;
   } | null>(
     initialValues
       ? {
           location: initialValues.location,
           latitude: initialValues.latitude,
           longitude: initialValues.longitude,
+          countryCode: initialValues.countryCode,
         }
       : null,
   );
@@ -230,6 +239,7 @@ export function SlotForm({
       location: details.displayName,
       latitude: details.latitude,
       longitude: details.longitude,
+      countryCode: details.countryCode,
     });
   };
 
@@ -243,6 +253,10 @@ export function SlotForm({
     location: string;
     latitude: number;
     longitude: number;
+    // Absent from "Use my location", which reverse-geocodes an address and
+    // nothing else. Replacing a place therefore *clears* any code the previous
+    // one carried, rather than leaving a stale country on new coordinates.
+    countryCode?: string;
   }) => {
     setLocationQuery(place.location);
     setSelectedPlace(place);
@@ -311,6 +325,7 @@ export function SlotForm({
       location: selectedPlace.location,
       latitude: selectedPlace.latitude,
       longitude: selectedPlace.longitude,
+      countryCode: selectedPlace.countryCode,
       startTime: range.start.toISOString(),
       endTime: range.end.toISOString(),
       notificationsMuted,

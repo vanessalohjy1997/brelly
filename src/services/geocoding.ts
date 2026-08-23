@@ -16,6 +16,12 @@ export type PlaceDetails = {
   formattedAddress: string;
   latitude: number;
   longitude: number;
+  /**
+   * ISO 3166-1 alpha-2 ("SG", "JP"), or absent when the place has no country
+   * component — Google omits it for some results, and callers must read that
+   * as *unknown* rather than substituting a default.
+   */
+  countryCode?: string;
 };
 
 // ─── Session token ────────────────────────────────────────────────────────────
@@ -90,8 +96,11 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     headers: {
       "X-Goog-Api-Key": API_KEY,
       // Field mask controls exactly what data we get back — and what we're billed for.
-      // Only requesting Essentials fields keeps us on the cheapest SKU.
-      "X-Goog-FieldMask": "id,displayName,formattedAddress,location",
+      // Only requesting Essentials fields keeps us on the cheapest SKU, and
+      // `addressComponents` is one of them (checked against Google's SKU
+      // table, not assumed), so asking for the country costs nothing extra.
+      "X-Goog-FieldMask":
+        "id,displayName,formattedAddress,location,addressComponents",
     },
   });
 
@@ -109,7 +118,24 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     formattedAddress: json.formattedAddress,
     latitude: json.location.latitude,
     longitude: json.location.longitude,
+    countryCode: pickCountryCode(json.addressComponents),
   };
+}
+
+type AddressComponent = { shortText?: string; types?: string[] };
+
+/**
+ * The country component's `shortText` — confirmed against a live response, not
+ * the docs: a Singapore place returns
+ * `{ longText: "Singapore", shortText: "SG", types: ["country", "political"] }`,
+ * so `longText` is the country's *name* and only `shortText` is the code.
+ * Returns `undefined` rather than a fallback when there is no such component.
+ */
+function pickCountryCode(
+  components: AddressComponent[] | undefined,
+): string | undefined {
+  const country = components?.find((c) => c.types?.includes("country"));
+  return country?.shortText?.trim() || undefined;
 }
 
 // ─── Reverse geocoding ────────────────────────────────────────────────────────

@@ -1,4 +1,8 @@
-import { reverseGeocode, searchPlaces } from "@/services/geocoding";
+import {
+  getPlaceDetails,
+  reverseGeocode,
+  searchPlaces,
+} from "@/services/geocoding";
 
 /**
  * Trimmed from real Geocoding API responses for Ang Mo Kio (1.3785, 103.8560)
@@ -166,5 +170,117 @@ describe("searchPlaces", () => {
     const results = await searchPlaces("Shibuya Crossing");
 
     expect(results[0].secondaryText).toBe("");
+  });
+});
+
+describe("getPlaceDetails", () => {
+  /**
+   * Trimmed from a live Place Details response for Gardens by the Bay. The
+   * country component is the shape that matters: `longText` is the country's
+   * *name* ("Singapore") and only `shortText` is the code, so reading the
+   * wrong one gives a country name where an ISO code was expected.
+   */
+  const GardensByTheBayResponse = {
+    id: "ChIJMxZ-kwQZ2jERdsqftXeWCWI",
+    displayName: { text: "Gardens by the Bay", languageCode: "en" },
+    formattedAddress: "18 Marina Gardens Dr, Singapore 018953",
+    location: { latitude: 1.2815683, longitude: 103.8636132 },
+    addressComponents: [
+      { longText: "18", shortText: "18", types: ["street_number"] },
+      {
+        longText: "Marina Gardens Drive",
+        shortText: "Marina Gardens Dr",
+        types: ["route"],
+      },
+      {
+        longText: "Singapore",
+        shortText: "Singapore",
+        types: ["locality", "political"],
+      },
+      {
+        longText: "Singapore",
+        shortText: "SG",
+        types: ["country", "political"],
+      },
+    ],
+  };
+
+  it("returns the place and where it is", async () => {
+    fetchMock.mockReturnValue(mockResponse(GardensByTheBayResponse));
+
+    await expect(getPlaceDetails("ChIJMxZ-kwQZ2jERdsqftXeWCWI")).resolves.toEqual(
+      {
+        placeId: "ChIJMxZ-kwQZ2jERdsqftXeWCWI",
+        displayName: "Gardens by the Bay",
+        formattedAddress: "18 Marina Gardens Dr, Singapore 018953",
+        latitude: 1.2815683,
+        longitude: 103.8636132,
+        countryCode: "SG",
+      },
+    );
+  });
+
+  // The country is what stops the gap warning firing on a flight
+  // (`detectScheduleConflicts`), and Places sends nothing it wasn't asked for.
+  it("asks for the address components, or there is no country to read", async () => {
+    fetchMock.mockReturnValue(mockResponse(GardensByTheBayResponse));
+
+    await getPlaceDetails("ChIJMxZ-kwQZ2jERdsqftXeWCWI");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers["X-Goog-FieldMask"]).toContain("addressComponents");
+  });
+
+  it("takes the country's code, not its name", async () => {
+    fetchMock.mockReturnValue(
+      mockResponse({
+        ...GardensByTheBayResponse,
+        addressComponents: [
+          {
+            longText: "Japan",
+            shortText: "JP",
+            types: ["country", "political"],
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      getPlaceDetails("p1").then((d) => d.countryCode),
+    ).resolves.toBe("JP");
+  });
+
+  // Absent has to stay absent: `detectScheduleConflicts` reads it as *unknown*
+  // and falls back to distance, which a made-up default would defeat.
+  it("names no country when the response has no country component", async () => {
+    fetchMock.mockReturnValue(
+      mockResponse({
+        ...GardensByTheBayResponse,
+        addressComponents: [
+          { longText: "18", shortText: "18", types: ["street_number"] },
+        ],
+      }),
+    );
+
+    await expect(
+      getPlaceDetails("p1").then((d) => d.countryCode),
+    ).resolves.toBeUndefined();
+  });
+
+  it("names no country when the response carries no components at all", async () => {
+    const { addressComponents, ...withoutComponents } = GardensByTheBayResponse;
+    fetchMock.mockReturnValue(mockResponse(withoutComponents));
+
+    await expect(
+      getPlaceDetails("p1").then((d) => d.countryCode),
+    ).resolves.toBeUndefined();
+  });
+
+  it("throws when the request itself fails", async () => {
+    fetchMock.mockReturnValue(mockResponse({}, false, 404));
+
+    await expect(getPlaceDetails("p1")).rejects.toThrow(
+      "Place details error: 404",
+    );
   });
 });
