@@ -106,6 +106,7 @@ export function routineSlotForDate(
     location: routine.location,
     latitude: routine.latitude,
     longitude: routine.longitude,
+    countryCode: routine.countryCode,
     startTime: start.toISOString(),
     endTime: end.toISOString(),
     kind: routine.kind,
@@ -129,6 +130,7 @@ export function routineUpdatesFromSlot(
     | "location"
     | "latitude"
     | "longitude"
+    | "countryCode"
     | "startTime"
     | "endTime"
     | "kind"
@@ -140,6 +142,7 @@ export function routineUpdatesFromSlot(
     location: slot.location,
     latitude: slot.latitude,
     longitude: slot.longitude,
+    countryCode: slot.countryCode,
     startTime: toTimeOfDay(new Date(slot.startTime)),
     endTime: toTimeOfDay(new Date(slot.endTime)),
     kind: slot.kind,

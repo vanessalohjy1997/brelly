@@ -81,6 +81,18 @@ Each names the seam it hangs off — none of them need new architecture.
       every remaining day was deleted one at a time is unreachable while still
       filling the horizon back in. A list over `routineStore.routines` reusing
       `describeRoutine` is the whole screen.
+- [x] **The gap warning must not fire for flights.** `detectScheduleConflicts`
+      compares distance against `MAX_PLAUSIBLE_SPEED_KMH = 60`, a figure written
+      when every stop was in Singapore — since
+      [round 19](NOTES.md#round-19--weather-works-outside-singapore) an overseas
+      itinerary trips it on every leg, and the banner it raises is unactionable
+      because the user is on a plane. Suppress the `implausible-gap` check when a
+      plane is implied: the two stops carry different country codes, or they are
+      further apart than a `GROUND_TRANSPORT_LIMIT_KM` ceiling. `countryCode` is
+      a new optional slot field fed from the Places lookup, so it is absent on
+      existing stops and on calendar imports — absent means _unknown_, not `SG`,
+      and falls through to the distance ceiling, which is why both signals are
+      needed rather than either alone. `overlap` is unaffected.
 
 ### Data lifecycle
 
