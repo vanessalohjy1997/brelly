@@ -24,16 +24,16 @@ links back here.
   seeding the store with `useItineraryStore.setState(...)` and asserting on
   what renders — see `src/app/(tabs)/index.test.tsx`.
 - **Never put a test file under `src/app/`.** Expo Router's `require.context`
-  regex (`expo-router/_ctx.ios.js`) matches *every* `.ts`/`.tsx` file beneath
+  regex (`expo-router/_ctx.ios.js`) matches _every_ `.ts`/`.tsx` file beneath
   the app root — the only exclusions are `+api`, `+html` and `+middleware`. A
   `settings.test.tsx` there is therefore treated as a route, so Metro bundles
-  it and everything it imports into the *app*, and the build dies on
+  it and everything it imports into the _app_, and the build dies on
   `Unable to resolve module console` — `@testing-library/react-native`'s logger
   requires Node builtins that don't exist in a React Native bundle. Tests for
   route components live in `src/test/screens/` and import the screen through
   its `@/app/...` alias. (Nothing warns about this: `tsc`, `yarn lint` and
   `yarn test` all pass, and only a real bundle fails. `npx expo export
-  --platform ios` catches it.)
+--platform ios` catches it.)
 - **RNTL 14 is asynchronous.** `render`, `renderHook` and every `fireEvent`
   return promises and must be awaited, and the `screen` global is _not_
   populated — assert through the object `render` resolves to (that's what
@@ -81,7 +81,7 @@ links back here.
   against a live curl, not the docs.
 - **Open-Meteo's `hourly.time`/`daily.time` carry no timezone suffix at
   all**, even with a timezone param set — `timezone=auto` returns the
-  location's *local* wall-clock time with nothing to disambiguate it from
+  location's _local_ wall-clock time with nothing to disambiguate it from
   the runtime's own local time if parsed naively (`new Date("2026-08-17T00:00")`
   is read as local-to-the-device, not local-to-the-forecast-point).
   `services/openMeteo.ts` requests `timezone=UTC` instead and appends `"Z"`
@@ -122,7 +122,7 @@ links back here.
 - **CI gates on coverage, so a new file with no test can fail the build even
   when every test passes.** `package.json`'s `jest.coverageThreshold` requires
   90% statements/functions/lines and 85% branches, measured by
-  `collectCoverageFrom` over *all* of `src/**` — not just the files a test
+  `collectCoverageFrom` over _all_ of `src/**` — not just the files a test
   happens to import — with `src/test/**` (the fakes and render helpers)
   excluded. That scope is the point: an untested module counts as zeros rather
   than being invisible. The `Test` step in `.github/workflows/ci.yml` runs
@@ -155,11 +155,46 @@ links back here.
   the only symptom is a `dyld: Symbol not found` crash report in
   `~/Library/Logs/DiagnosticReports/`. Run `npx expo install --fix` after
   touching any `expo-*`/native dependency, then `cd ios && rm -rf Pods
-  Podfile.lock build && npx pod-install` — a plain `pod install` on top of the
+Podfile.lock build && npx pod-install` — a plain `pod install` on top of the
   old lock can leave stale precompiled xcframeworks in place. After that,
   restart Metro with `--clear`: Reanimated/Worklets bumps throw "[Worklets]
   Mismatch between JavaScript code version and Worklets Babel plugin version"
   from a cached transform that still embeds the old plugin version otherwise.
+- **Expo's precompiled modules are built by one exact Swift compiler, and a
+  newer Xcode cannot load them.** `ios.usePrecompiledModules` is `false` in
+  `app.json`'s `expo-build-properties` for that reason, and the failure it
+  prevents names the wrong culprit: `cannot link directly with 'SwiftUICore'
+because product being built is not an allowed client of it`, then `Undefined
+symbols for architecture arm64`. Nothing in this repo, or in any prebuilt
+  binary it links, mentions SwiftUICore. The chain is that a binary
+  `.swiftmodule` only loads in the compiler that produced it — SDK 57's
+  xcframeworks ship Swift 6.3.1 (Xcode 26.5), so Xcode 26.6 (Swift 6.3.3)
+  falls back to rebuilding `ExpoModulesCore` from its `.swiftinterface`, and
+  that interface is full of `SwiftUICore.View` and `SwiftUICore.Color` from
+  `ExpoSwiftUI`. The rebuild makes every client autolink `-framework
+SwiftUICore`, and `SwiftUICore.tbd` allows `SwiftUI` as its only client.
+  Six frameworks carry the mismatch: `ExpoModulesCore`, `ExpoImage`,
+  `ExpoFont`, `ExpoLocation`, `ExpoFileSystem`, `ExpoModulesWorklets`. Don't
+  reach for a version bump — `expo-modules-core` was already on the newest 57
+  patch. To see the real error instead of the linker's, compile one line that
+  imports the framework: `xcrun --sdk iphonesimulator swiftc -target
+arm64-apple-ios16.4-simulator -F <xcframework slice> -c t.swift` says `this
+SDK is not supported by the compiler` and names both versions. The cost is
+  that Expo modules build from source; React Native itself stays prebuilt,
+  since `RCT_USE_PREBUILT_RNCORE` is a separate property. The property can go
+  when Expo's prebuilds match the local toolchain — flip it back, `pod
+install`, and compare `head -2` of any shipped `.swiftinterface` against
+  `swift --version`.
+- **`ios/build/` is not scratch space — `pod install` generates the codegen
+  headers into it.** `ios/build/generated/ios/ReactCodegen/` holds
+  `NitroModulesSpec.h` and every component's `States.h`. Deleting `ios/build`
+  _after_ a `pod install` fails the next build with `The file
+"NitroModulesSpec.h" couldn't be opened because there is no such file. (in
+target 'ReactCodegen')`, which reads like a `react-native-nitro-modules`
+  problem and is not one — the build's own codegen phase does not put them
+  back. The `rm -rf Pods Podfile.lock build` in the bullet above is safe only
+  because `pod install` runs after it; in the other order, run `pod install`
+  again.
 - **`@expo/ui` can't see React's Objective-C headers, and the fix is a
   Podfile patch.** Compiling `ExpoUITouchHandlerHelper.mm` fails with
   `'React/RCTSurfaceTouchHandler.h' file not found`, which reads like an
@@ -167,9 +202,9 @@ links back here.
   there is no patch release to move to. Because `RCT_USE_PREBUILT_RNCORE=1`,
   React ships as a prebuilt `React.xcframework` whose headers live under
   `React_Core/`, `React_RCTFabric/` etc. rather than `React/`. Clang resolves
-  `React` as a *framework*, doesn't find the header in it, and never falls
+  `React` as a _framework_, doesn't find the header in it, and never falls
   back to the `-I` paths that do contain it — the giveaway is the `note: did
-  not find header … in framework 'React'` under the error.
+not find header … in framework 'React'` under the error.
   `ios/Pods/React-Core-prebuilt/React-VFS.yaml` overlays a virtual `React/`
   directory onto `React.xcframework/Headers`, so **both** `-ivfsoverlay` and
   an `-isystem` for that directory are needed; the overlay alone still fails.
@@ -186,7 +221,7 @@ links back here.
   `rnfirebase_add_spm_core_to_app_target` and
   `rnfirebase_fix_spm_archive_signature_collision`. All four run from
   `post_install`, and CocoaPods only adds that phase while "Integrating client
-  project", *after* `post_install` — so on a newly created `ios/` all four
+  project", _after_ `post_install` — so on a newly created `ios/` all four
   silently skip. A second `pod install` fixes it because the phase now exists.
   `plugins/withFirebaseSpmPostIntegrate.js` re-runs RNFirebase's own
   (idempotent) functions from `post_integrate`, which runs after integration,
@@ -194,9 +229,9 @@ links back here.
   The three failures that hides, in the order they were hit: the app crashes
   at launch with a missing-library dyld error (no embed phase); the build dies
   at link time with `Undefined symbols … "_OBJC_CLASS_$_FIRApp", referenced
-  from: in AppDelegate.o` (no FirebaseCore link); and a Release *archive*
+from: in AppDelegate.o` (no FirebaseCore link); and a Release _archive_
   fails in fastlane with `"openssl_grpc.xcframework-ios.signature" couldn't be
-  copied to "Signatures" because an item with the same name already exists`
+copied to "Signatures" because an item with the same name already exists`
   (no signature-collision phase). Note
   `rnfirebase_verify_spm_embed_phase_applied!` exists to catch the first of
   those and carries the same guard as the function it verifies, so on a fresh
@@ -224,43 +259,43 @@ links back here.
   Native's `react_native_post_install` clears `SWIFT_ENABLE_EXPLICIT_MODULES`
   project-wide but never the Clang half; RNFirebase's
   `rnfirebase_apply_spm_build_settings` clears both halves but only walks
-  `project.native_targets`, so the *project-level* configurations keep
+  `project.native_targets`, so the _project-level_ configurations keep
   `CLANG_ENABLE_EXPLICIT_MODULES` — and Swift Package targets inherit from
   the project. `plugins/withExplicitModulesDisabled.js` closes the gap by
   setting both on every configuration. Don't delete it because the settings
   "look already handled"; check `grep -c 'CLANG_ENABLE_EXPLICIT_MODULES = NO'
-  ios/brelly.xcodeproj/project.pbxproj` returns 4, not 2.
+ios/brelly.xcodeproj/project.pbxproj` returns 4, not 2.
 - **`ios.useFrameworks` is `"dynamic"`, and rnfirebase.io's Expo page will
   tell you otherwise.** That page says `"static"`; RNFirebase 26 pulls
   `firebase-ios-sdk` through SPM, and that Swift Package only ships dynamic
   products, so `pod install` now aborts with `SPM + static linkage is not
-  supported`. Static is only reachable via `$RNFirebaseDisableSPM = true` in
+supported`. Static is only reachable via `$RNFirebaseDisableSPM = true` in
   the Podfile, which we don't need. `FIREBASE_MIGRATION.md` carried the wrong
   version of this for a while — the note there is corrected.
 - **The `[RNFB] Embed Firebase SPM Frameworks` phase over-collects, and only a
   real archive shows it.** `rnfirebase_spm_embed_script` sweeps two folders.
   The second, `${OBJROOT}/UninstalledProducts/${PLATFORM_NAME}`, is only
-  populated by the Archive action — and it holds *every* archive-time build
+  populated by the Archive action — and it holds _every_ archive-time build
   product, CocoaPods' static pod frameworks included, not just Swift Package
   ones. The sweep is a bare `find -name "*.framework"`, so all of them get
   copied into `Frameworks/`, and App Store validation rejects a static `ar`
   archive there as ITMS-90171. `plugins/withFirebaseSpmPostIntegrate.js`
   splices a `file -b`-based guard into the phase so it only embeds dynamic
   frameworks. Nothing local can catch this: the sweep is inert outside an
-  archive, the EAS build itself *succeeds*, and the rejection only lands at
+  archive, the EAS build itself _succeeds_, and the rejection only lands at
   `eas submit`. Check the artifact, not the build status — `unzip` the `.ipa`
   and run `file` over `Payload/*.app/Frameworks/*.framework/*`; everything
   there must be a Mach-O dylib.
 - **`getPlaceDetails`'s field mask is a billing decision, and nothing fails
-  when you get it wrong.** Places (New) prices Place Details by *which fields
-  you ask for*: the mask is what puts the call on the Essentials SKU rather
+  when you get it wrong.** Places (New) prices Place Details by _which fields
+  you ask for_: the mask is what puts the call on the Essentials SKU rather
   than Pro or Enterprise, and adding one field from a higher tier silently
   reprices every location a user picks. `addressComponents` (round 26's
   `countryCode`) was added only after checking Google's SKU table put it in
   Essentials alongside `id`/`displayName`/`formattedAddress`/`location`. The
   response shape needs the same treatment as NEA's above — confirmed by curling
   the endpoint, which is how the country component turned out to carry the
-  code in `shortText` and the country's *name* in `longText`.
+  code in `shortText` and the country's _name_ in `longText`.
 - **A native picker's props are invisible when the mock drops them.** The
   `DateTimePicker` stub in `jest.setup.js` forwards `themeVariant`, `mode`,
   `value` and `onValueChange` on purpose: each was, at some point, the only
@@ -269,13 +304,13 @@ links back here.
   Day picker apart from Starts and Ends. Adding a prop the mock swallows means
   the test passes and the app is wrong.
 - **A slot's `notificationId` must never leave the device that wrote it.** It
-  is a handle into *this* device's notification queue, and
+  is a handle into _this_ device's notification queue, and
   `notificationLeadMinutes` is the lead time that particular alert was
   scheduled against. Carried anywhere else — into a backup file, onto a second
   device, or back onto this one after the alert was cancelled — the stop looks
   permanently scheduled: `planNotificationResync` reads `!!notificationId` as
   "has an alert", finds the lead time unchanged, and does nothing, so no alert
-  is ever scheduled and nothing on screen says so. Worse, it *half*-works: if
+  is ever scheduled and nothing on screen says so. Worse, it _half_-works: if
   the receiving device's `rainLeadMinutes` differs from the imported one the
   resync cancels and reschedules, so the bug only bites when they agree — the
   default. Anything moving a slot across a device or account boundary goes
@@ -294,7 +329,7 @@ links back here.
   double-book every day the routine covers.** `useRoutineSync`'s mount effect
   calls `planRoutineMaterialization` immediately at cold boot, from
   `getState()` on both stores. That function dedupes by `(routineId, date)`
-  against the plans it's handed, so it's idempotent *given accurate state* —
+  against the plans it's handed, so it's idempotent _given accurate state_ —
   but with no MMKV seed (see "No MMKV boot-time seed" below), cold-boot state
   is empty until the first Firestore snapshot lands, not just stale. A random
   id per materialised slot means the mount effect re-mints and re-writes every
@@ -315,7 +350,7 @@ links back here.
   same id and the materialiser overwrites the stop the user deliberately kept.
 - **`useNavigation` is mocked, and something depends on it.**
   `useUnsavedChangesGuard` disables a modal's swipe-to-dismiss through
-  `setOptions({ gestureEnabled })`, which is the *only* trace it leaves —
+  `setOptions({ gestureEnabled })`, which is the _only_ trace it leaves —
   there's no rendered output to assert on. The shared navigation object in the
   `expo-router` mock exists for that.
 - **The installed Firestore SDK is modular-only — there is no chained
@@ -326,13 +361,13 @@ links back here.
   `linkWithCredential`, …). Writing the namespaced form type-checks against
   older docs/examples and fails at the call site. The test doubles
   (`src/test/fakeFirestore.ts`, `src/test/fakeAuth.ts`) fake the modular
-  *functions* for the same reason — a chained mock object would fake an API
+  _functions_ for the same reason — a chained mock object would fake an API
   that no longer exists.
 - **`ios.useFrameworks` stays `"dynamic"`.** RNFirebase 26 resolves
   `firebase-ios-sdk` through SPM, and that Swift Package only ships dynamic
   library products — `"static"` (what rnfirebase.io's own Expo page
   recommends) makes `pod install` abort with `SPM + static linkage is not
-  supported`. Static is only reachable via `$RNFirebaseDisableSPM = true` in
+supported`. Static is only reachable via `$RNFirebaseDisableSPM = true` in
   the Podfile, which this app doesn't need.
 - **Zustand `persist`/MMKV came off all three stores** (`itineraryStore`,
   `routineStore`, `settingsStore`) when they moved to Firestore — there is no
@@ -352,7 +387,7 @@ links back here.
   wouldn't crash the boot path — but with no logging either, a rejected
   `signInAnonymously()` (e.g. Anonymous auth left disabled in the Firebase
   console: `[auth/unknown] This operation is restricted to administrators
-  only.`) or a rules-denied listener left every screen on `<Skeleton>`
+only.`) or a rules-denied listener left every screen on `<Skeleton>`
   forever with nothing in the logs to say why. `cloudSyncStore`'s
   `bootstrapError` now catches both paths — `useCloudBootstrap`'s catch block
   and `cloudListeners`' per-listener `onError` — and every skeleton screen
@@ -402,9 +437,9 @@ links back here.
   environment variables whose value at build time is the path to the uploaded
   file. Two things have to be true at once, and each fails the same way
   (`"GoogleService-Info.plist" is missing, make sure that the file exists`):
-  the dynamic config has to be *tracked by git* (an untracked `app.config.js`
+  the dynamic config has to be _tracked by git_ (an untracked `app.config.js`
   is not uploaded, so EAS reads `app.json` alone and looks for the gitignored
-  relative path), and the file variables have to *exist on EAS* for the
+  relative path), and the file variables have to _exist on EAS_ for the
   environment the build profile names in `eas.json` (`production` →
   `"environment": "production"`). Both are set now, on `production`, `preview`,
   and `development`, via
@@ -414,12 +449,12 @@ links back here.
   pins the override precedence in both directions so a refactor cannot quietly
   drop it.
 - **That bridge covers the builder, not the machine that runs `eas build`.**
-  `eas build` evaluates the app config *locally* before uploading anything, so
+  `eas build` evaluates the app config _locally_ before uploading anything, so
   a CI runner needs `GoogleService-Info.plist` on disk too — and it will not
   get it from the EAS file variable, because those are `secret`-visibility and
   EAS keeps secrets on the builder. The build log names what it did send:
   `Environment variables with visibility "Plain text" and "Sensitive" loaded
-  from the "production" environment`. With the variable unset, `app.config.js`
+from the "production" environment`. With the variable unset, `app.config.js`
   falls back to `app.json`'s gitignored relative path and the run dies on
   `withIosInfoPlistBaseMod: ENOENT ... GoogleService-Info.plist`. The iOS
   release workflow writes the file from a base64 repo secret before building.
@@ -439,8 +474,8 @@ links back here.
 - **The iOS release workflow authenticates to Apple through an App Store
   Connect API key held on EAS, not through an Apple ID in repo secrets.** This
   repo is public, so the Apple account email and an app-specific password both
-  stay out of it. `eas credentials --platform ios` → *App Store Connect: Manage
-  your API Key* → *Set up your project to use an API Key for EAS Submit* stores
+  stay out of it. `eas credentials --platform ios` → _App Store Connect: Manage
+  your API Key_ → _Set up your project to use an API Key for EAS Submit_ stores
   the key against the project; from then on `EXPO_TOKEN` is the only secret the
   workflow needs, and `eas submit --non-interactive` reads the key itself. The
   earlier `EXPO_APPLE_ID` env var on the submit step is gone — restoring it
@@ -470,7 +505,7 @@ links back here.
   native dependency moves the fingerprint**, so it needs a new build before an
   OTA can follow — including the commit that added `expo-updates` itself
   (`4a3684c…` → `661ed17…`).
-- **The fingerprint hashes `GoogleService-Info.plist`'s *contents*, not its
+- **The fingerprint hashes `GoogleService-Info.plist`'s _contents_, not its
   path — which is the only reason the `app.config.js` file-variable bridge
   above does not break it.** The builder reads the plist from an absolute EAS
   path and a runner reads `./GoogleService-Info.plist`, but both are recorded
@@ -482,7 +517,7 @@ links back here.
   `GOOGLE_SERVICES_INFO_PLIST_BASE64` repo secret must stay byte-identical.
   Rotate one and not the other and every subsequent update computes a runtime
   version no build has. The guard above turns that from a silent no-op into a
-  failed run, but it cannot tell you *which* of the two drifted;
+  failed run, but it cannot tell you _which_ of the two drifted;
   `eas fingerprint:compare --build-id <ID>` can.
 - **`--environment` is mandatory on `eas update` from SDK 55 on**, and it has
   to name the same EAS environment the target channel's build profile uses in
@@ -646,7 +681,7 @@ crash.
   which the API already returned and the app discarded; `WeatherBadge` shows
   wind and "Updated 12m ago". New `liveConditions` service reads the real-time
   rainfall / air-temperature / relative-humidity / wind-speed station feeds
-  (nearest *reporting* station — the station list includes sensors absent from
+  (nearest _reporting_ station — the station list includes sensors absent from
   the readings batch, and the nearest one is often one of them), and
   `airQuality` reads PSI and UV. `LiveConditionsCard` shows them anchored to
   the stop the user is at or heading to, so no new location permission is
@@ -657,7 +692,7 @@ crash.
   appeared and cancelling for rain that cleared — previously an alert was
   scheduled once at creation time, possibly against a 4-day outlook, and fired
   regardless of what the weather did afterwards. A failed forecast fetch is
-  explicitly *not* read as "no rain", so a network blip can't silently strip an
+  explicitly _not_ read as "no rain", so a network blip can't silently strip an
   alert. Quiet hours suppress rather than delay (a delayed umbrella warning
   arrives after the slot started), and the daily digest is a one-shot DATE
   trigger re-created each foreground, because a repeating DAILY trigger would
@@ -675,7 +710,7 @@ Two reported problems, both about the app not telling the truth about itself.
   wrong affordance to begin with: a day's order is a fact about the clock, not
   a preference. `sortSlotsByStart` in
   [planSelectors.ts](src/utils/planSelectors.ts) is now the only ordering, and
-  it runs *at render on both tabs* as well as on write — installs that predate
+  it runs _at render on both tabs_ as well as on write — installs that predate
   this still have a hand-dragged order persisted in MMKV, and sorting only on
   write would leave it there forever. `SortableItineraryList`, `utils/reorder`
   and the store's `reorderSlots` were deleted; Today maps `ItineraryCard`
@@ -685,7 +720,7 @@ Two reported problems, both about the app not telling the truth about itself.
 - **Every mutation now reports success or failure**, via `saveWithFeedback` +
   `ToastHost`. Three things about this are worth knowing before touching it:
   - **The failure branch is real, not decorative.** Both stores are wrapped in
-    zustand's `persist`, which calls `mmkvStorage.setItem` *synchronously*
+    zustand's `persist`, which calls `mmkvStorage.setItem` _synchronously_
     from inside `set(...)` and does not catch — so a failed write throws out
     of the action itself. Before this it took the screen down; now it raises
     an error toast. Conversely, on the success path the change is already on
@@ -697,7 +732,7 @@ Two reported problems, both about the app not telling the truth about itself.
     user typed.
   - **Modals need their own toast host.** `plan/new`, `plan/[id]` and
     `settings` are `presentation: "modal"`, which on iOS is a real view
-    controller presented over the window, so a host at the root is *behind*
+    controller presented over the window, so a host at the root is _behind_
     them — a Settings toast would never be seen. Each modal mounts a
     `<ToastHost />` and the root mounts `<ToastHost root />`, which draws only
     while `modalHosts` is empty. That's a flag rather than "last host to
@@ -710,7 +745,7 @@ Two reported problems, both about the app not telling the truth about itself.
 
 The lists showed everything ever planned, forever. A stop that finished at 11am
 held the top of Today until midnight, and past days were reachable only through
-a "Show N past plans" toggle at the very *bottom* of the Plans list — so a month
+a "Show N past plans" toggle at the very _bottom_ of the Plans list — so a month
 of upcoming plans stood between you and it.
 
 - **Finished stops move to their own screen.** [past.tsx](src/app/past.tsx) is
@@ -722,7 +757,7 @@ of upcoming plans stood between you and it.
 - **The cut is per stop, on end time.** `splitPlansByDate` cut on the date key,
   which is why a morning stop stayed "upcoming" all day.
   [splitPlansByTime](src/utils/splitPlansByTime.ts) replaces it and lets today
-  appear in *both* halves — morning in the archive, evening still ahead. All
+  appear in _both_ halves — morning in the archive, evening still ahead. All
   three screens read the two halves of one call, so a stop is in exactly one
   place and the boundary cannot drift between them. `splitPlansByDate` and its
   test are gone.
@@ -735,7 +770,7 @@ of upcoming plans stood between you and it.
   that drops the weather query (`useWeatherForSlot` gained an `enabled`
   option), the badge, the pill and the accent bar. NEA publishes forecasts, not
   history, so every archived card would otherwise fire a request to render "No
-  forecast". It does *not* dim the card — everything on that screen is past, so
+  forecast". It does _not_ dim the card — everything on that screen is past, so
   dimming distinguishes it from nothing and only costs contrast.
 - **Day headings are a tested util now.** `formatSectionDate` was private to
   the Plans screen and read the clock internally;
@@ -751,7 +786,7 @@ of upcoming plans stood between you and it.
 
 Everything that was under "Not started" is done except the widget, plus the
 open items from `UX.md` listed at the end of this section. See `UX.md` for the
-per-item status; what follows is what a future round needs to *know*.
+per-item status; what follows is what a future round needs to _know_.
 
 - **A stop leads with how soon it is.** `describeSlotTiming` puts "in 40 min" /
   "Now" ahead of the clock times, and falls back to the times alone past a
@@ -792,7 +827,7 @@ per-item status; what follows is what a future round needs to *know*.
   the button" needs neither. Import has one problem worth knowing: a calendar
   event carries free-text location and no coordinates, and a slot is useless
   without them — so `resolveEventLocation` runs the text through the same
-  Places lookup the form uses, and events it can't resolve are *reported*
+  Places lookup the form uses, and events it can't resolve are _reported_
   rather than imported without a forecast. All-day events are skipped for the
   same reason (no start time to pick a forecast tier from).
 - **Settings can now be checked rather than trusted.**
@@ -823,7 +858,7 @@ per-item status; what follows is what a future round needs to *know*.
   follows it. Four things are load-bearing. `zIndex` on the **Location field**,
   because the Label field below it is a later sibling and later siblings paint
   on top. `zIndex` on the **input's own wrapper**, because "Use my location" is
-  a later sibling *within* the field and did exactly the same thing one level
+  a later sibling _within_ the field and did exactly the same thing one level
   down — its text rendered over the first suggestion. `elevation` for Android,
   where it is the stacking order as well as the shadow. And
   `keyboardShouldPersistTaps="handled"` on the form's `ScrollView`, already
@@ -846,7 +881,7 @@ per-item status; what follows is what a future round needs to *know*.
 ### Round 11 — a stop says whether it's under a roof
 
 The per-stop "Rain alerts" switch already carried this idea in its own comment —
-*"Rain matters for a park and not for a mall"* — but only as a preference someone
+_"Rain matters for a park and not for a mall"_ — but only as a preference someone
 had to set by hand each time, on a switch whose reason was recorded nowhere. The
 tag stores the fact; the switch stays the preference.
 
@@ -862,14 +897,14 @@ tag stores the fact; the switch stays the preference.
   this are load-bearing. If only Indoor moved the switch, correcting a mis-tap
   would leave alerts silently off — and a warning that never arrives says
   nothing about why it didn't, which is the worse of the two ways to be wrong.
-  And because the coupling is on the *press* and not in an effect, reopening an
+  And because the coupling is on the _press_ and not in an effect, reopening an
   indoor stop whose alerts were deliberately re-enabled doesn't re-apply the
   default and quietly undo the choice on the next save. That is the one bug here
   that nothing on screen would have revealed, so it has its own test.
 - **Absent means outdoor, and it is read through a function.**
   `resolveSlotKind` exists because the card, the form and the search index all
   have to agree about what an untagged slot is, and three copies of `?? "outdoor"`
-  is three chances to disagree. Search indexes the *resolved* kind for exactly
+  is three chances to disagree. Search indexes the _resolved_ kind for exactly
   that reason — indexing the stored one would make "outdoor" quietly mean
   "tagged outdoor" and hide every plan predating the field.
 - **Only indoor is marked on the card.** Outdoor is the default and most of the
@@ -894,7 +929,7 @@ indistinguishable from five typed by hand.
 
 - **Half of round 9's argument survived, and it is the half that mattered.**
   Every part of this app works over concrete slots, so it still does: the rule
-  decides *which slots exist* and nothing else changed.
+  decides _which slots exist_ and nothing else changed.
   `splitPlansByTime`, `planNotificationResync`, `filterPlans` and the archive
   were not touched and know nothing about routines. What was wrong was the leap
   from "downstream needs concrete slots" to "there must be no rule at all" —
@@ -911,7 +946,7 @@ indistinguishable from five typed by hand.
   nothing predating routines needs a migration. It also carries the "this day
   only" answer: detaching clears it, and after that the stop is as ordinary as a
   hand-made one and nothing may sweep or rewrite it. Which is why an exception
-  is recorded *as well* — a gap in the calendar means "not filled in yet", so
+  is recorded _as well_ — a gap in the calendar means "not filled in yet", so
   without the exception the next top-up would put a deleted day straight back.
   That trap is the one thing here that would have shipped broken and looked
   fine for a fortnight.
@@ -929,7 +964,7 @@ indistinguishable from five typed by hand.
   stops.
 - **`usePlaceSearch` was rebuilding its debounce every render**, found by a
   test that only failed under load. `debounce` closes over its own `timer`, so
-  a fresh one per render gave `cancel()` a *different* timer from the one
+  a fresh one per render gave `cancel()` a _different_ timer from the one
   pending: every re-render between a keystroke and its 350ms deadline orphaned
   a search nothing could then call off. Blurring the field could fire the
   request it had just cancelled, and picking a suggestion could still spend a
@@ -940,7 +975,7 @@ indistinguishable from five typed by hand.
   turning up inside an unrelated test 350ms later. Unrelated to routines; it
   surfaced because the gate was run repeatedly.
 - **Testing.** 799 tests across 71 suites. One RNTL trap: Save and Delete now
-  *await* the prompt, so `await fireEvent.press(...)` and only then answering
+  _await_ the prompt, so `await fireEvent.press(...)` and only then answering
   the mocked `Alert` leaves the press promise pending — and the render never
   recovers for the next test in the file. The prompt has to answer itself from
   the mock's implementation instead.
@@ -996,7 +1031,7 @@ round needs to know.
   The backup service uses `Paths.cache` and `shareAsync`.
   **`importBackup` exists but is not wired to anything** — Settings' Backup
   section has an "Export data" button and no import counterpart. (The
-  `isImporting` flag in `settings.tsx` belongs to the *calendar* sync, which is
+  `isImporting` flag in `settings.tsx` belongs to the _calendar_ sync, which is
   what made this look done. It was recorded here as "wired in Settings" until
   round 15 found otherwise.)
 - **Archive pruning** on the Past plans screen. A "Clear before this date"
@@ -1054,8 +1089,8 @@ button was wired up, and the Firebase plan keeps `importBackup`.
 - **Every restored stop lost its rain alert.** `exportBackup` wrote slots
   verbatim, notification handles included, and the import handed them straight
   to `restoreSlot` — which does not strip, because the stripping lived in the
-  *other* caller, `useDeleteSlotWithUndo`. See the trap above for what carrying
-  the handle costs. Fixed by stripping on export *and* on import (files written
+  _other_ caller, `useDeleteSlotWithUndo`. See the trap above for what carrying
+  the handle costs. Fixed by stripping on export _and_ on import (files written
   by earlier builds already carry the ids, and the import is the only place
   those can be cleaned up), with the knowledge moved into
   `stripNotificationHandles` so there is one place that knows what is
@@ -1067,7 +1102,7 @@ button was wired up, and the Firebase plan keeps `importBackup`.
   passing a variable (rather than an object literal) to an
   `Omit<Routine, "id" | "exceptions">` parameter skips excess-property
   checking, so the extra `id`/`exceptions` were silently overwritten by the
-  spread. Two consequences: the imported slots still carried the *old*
+  spread. Two consequences: the imported slots still carried the _old_
   `routineId`, so `planRoutineMaterialization` read every upcoming stop as
   belonging to a rule that no longer existed and swept it; and the lost
   exceptions meant every day the user had deliberately deleted came back on the
@@ -1104,7 +1139,7 @@ plan. What follows is the condensed version, folded in per this file's usual
   returns the new slot immediately; `set()` runs first for an instant local
   update, and a fire-and-forget Firestore write happens underneath it.
   `onSnapshot` listeners keep each store a live mirror of its cloud
-  doc/collection, so no screen changed how it *reads* data — only the loading
+  doc/collection, so no screen changed how it _reads_ data — only the loading
   state changed, see the skeleton point below. Firestore writes are
   per-document (`users/{uid}/slots/{slotId}`, `.../routines/{routineId}`), not
   a whole-store blob, specifically so two devices editing concurrently merge
@@ -1119,7 +1154,7 @@ plan. What follows is the condensed version, folded in per this file's usual
   (`src/components/Skeleton.tsx`) ahead of every screen's existing empty
   state, because without a seed a store starts at its Zustand defaults and an
   empty state with a CTA would otherwise render confidently before the first
-  snapshot arrives. It waits on Keychain auth restore plus the first *cached*
+  snapshot arrives. It waits on Keychain auth restore plus the first _cached_
   `onSnapshot` delivery, never the network — an offline cold boot still clears
   the skeleton and shows real plans from the Firestore cache.
 - **The one-time local→cloud migration splits into an enqueue half and a
@@ -1221,7 +1256,7 @@ talks to the real rules engine.
   the device-local `notificationId`/`notificationLeadMinutes`/
   `digestNotificationId` keys). `testEnv.withSecurityRulesDisabled()` seeds
   fixture docs directly where a test needs one to already exist (e.g. to then
-  assert a *different* user can't read or delete it) — the only place rules
+  assert a _different_ user can't read or delete it) — the only place rules
   are bypassed on purpose, since seeding through the rules themselves would
   make the seed itself part of what's under test.
 - This suite is deliberately **not** part of `yarn test`: it needs a running
@@ -1229,7 +1264,7 @@ talks to the real rules engine.
   `firebase emulators:exec --only firestore`, and it needs its own
   `jest.emulator.config.js` — `jest.setup.js` mocks
   `@react-native-firebase/firestore` out entirely for every other test, which
-  is exactly what this suite must *not* have happen, so it can't share the
+  is exactly what this suite must _not_ have happen, so it can't share the
   main `jest` config in `package.json`. It also runs against the `firebase`
   web SDK, not `@react-native-firebase`, since `@firebase/rules-unit-testing`
   only speaks the web SDK's modular API — irrelevant to what's under test
@@ -1273,17 +1308,17 @@ Today and Plans headers. Moved to `src/app/(tabs)/settings.tsx`, a fourth
 - **`BottomTabInset` (50 on iOS) was stale.** Settings' Backup section is the
   screen most likely to hit the bottom of the scroll, and it surfaced that the
   constant no longer cleared the tab bar: content's last few points rendered
-  *behind* it. Confirmed on a real iOS 26.5 simulator (`xcrun simctl` install
-  + `openurl` deep link to drive it, since there's no touch-input path
-  available headlessly) that the gap between content and the pill's top edge
-  was ~4pt — visually indistinguishable from zero. iOS 26's tab bar floats
-  clear of the edge (the "Liquid Glass" pill) rather than docking flush like
-  the tab bar `BottomTabInset` was originally tuned against in
-  [round 14](#round-14--the-archive-becomes-a-tab), so it needs more
-  clearance than a standard bar. Raised to 84 — measured against a
-  screenshot, so it's a real number rather than a guess — which every tab
-  shares via the one constant, so Today/Plans/History got the same fix for
-  free.
+  _behind_ it. Confirmed on a real iOS 26.5 simulator (`xcrun simctl` install
+  - `openurl` deep link to drive it, since there's no touch-input path
+    available headlessly) that the gap between content and the pill's top edge
+    was ~4pt — visually indistinguishable from zero. iOS 26's tab bar floats
+    clear of the edge (the "Liquid Glass" pill) rather than docking flush like
+    the tab bar `BottomTabInset` was originally tuned against in
+    [round 14](#round-14--the-archive-becomes-a-tab), so it needs more
+    clearance than a standard bar. Raised to 84 — measured against a
+    screenshot, so it's a real number rather than a guess — which every tab
+    shares via the one constant, so Today/Plans/History got the same fix for
+    free.
 
 ### Round 19 — weather works outside Singapore
 
@@ -1348,7 +1383,7 @@ datetime picker instead.
 
 - Each cell is now a `Pressable` wrapping the existing `ThemedView`/text/badge
   markup unchanged, so the "today cell has a border" test (which walks up
-  from the `Text` node one level) still passes: the `Pressable` sits *outside*
+  from the `Text` node one level) still passes: the `Pressable` sits _outside_
   that parent, not between it and the text.
 - `WeekStrip` takes a new required `onSelectDate(dateKey)` prop instead of
   reading `router` itself, matching how the component took `plans` as a prop
@@ -1362,7 +1397,7 @@ datetime picker instead.
 
 ### Round 21 — one corner for how stale the forecast is
 
-The card's top-right clock only took a *live* reading's age. An outlook or an
+The card's top-right clock only took a _live_ reading's age. An outlook or an
 offline one spelled itself out under the temperature instead, on the reasoning
 that "just now" beside a clock icon would misstate a 4-day outlook. The word
 was right; the placement wasn't.
@@ -1372,7 +1407,7 @@ was right; the placement wasn't.
   outlook (`source: "4day"`), while `fetchOpenMeteoForecast` keeps the hourly
   tag for a full week (`HOURLY_CONFIDENCE_DAYS = 7`). So a Singapore stop
   tomorrow got "Outlook · 1h ago" buried under its temperature, and an
-  overseas stop *further* ahead got a tidy corner clock. Same card, same
+  overseas stop _further_ ahead got a tidy corner clock. Same card, same
   question, two different places to look — and in practice the buried one was
   always the Singapore plan.
 - **`ForecastTimestamp` now takes every reading that has an age.** Freshness
@@ -1424,7 +1459,7 @@ Your app cannot contain standalone executables or libraries."
   the app really links is a dyld crash at launch.
 - **The CI failure that started this was unrelated and already fixed.** The
   one red `iOS Release` run died on `An Expo user account is required to
-  proceed` — it ran twelve minutes before the `EXPO_TOKEN` secret existed. Not
+proceed` — it ran twelve minutes before the `EXPO_TOKEN` secret existed. Not
   a credentials problem, and not the reason the submission failed.
 
 ### Round 23 — a run's result reaches a phone instead of a browser tab
@@ -1435,7 +1470,7 @@ account beyond the one already there, and delivers in seconds.
 
 - **One reusable workflow, not a copied step.** `notify-telegram.yml` is a
   `workflow_call` workflow that both `ci.yml` and `ios-release.yml` end with.
-  Inside a reusable workflow `github.workflow` resolves to the *caller's*
+  Inside a reusable workflow `github.workflow` resolves to the _caller's_
   name, so one copy labels every message correctly without being told which
   workflow it is reporting on.
 - **`if: always()` is the whole point.** A job with `needs` defaults to
@@ -1461,7 +1496,7 @@ have shown. Worth listing together, because the shape repeats: every one was
 the runner having less than a working copy does.
 
 - **`EXPO_TOKEN` did not exist yet.** The first run died on `An Expo user
-  account is required to proceed` twelve minutes before the secret was created
+account is required to proceed` twelve minutes before the secret was created
   (`created_at` and `updated_at` both say so). `expo/expo-github-action` does
   not fail on an empty token; it just does not authenticate.
 - **ITMS-90171 came from a build that succeeded.** Rejected at `eas submit`,
@@ -1533,7 +1568,7 @@ leg — with a banner the user can do nothing about, because they are on a plane
 
 The fix is a suppression, not a bigger number. Raising the speed limit to
 something a plane could hit would blind the check to the case it was written
-for; the leg has to be *classified* first, and only ground legs measured.
+for; the leg has to be _classified_ first, and only ground legs measured.
 
 Two signals do the classifying, and the interesting part is why neither works
 alone.
@@ -1542,7 +1577,7 @@ alone.
   optional slot field read straight off the Places lookup's `country` address
   component. But optional means it is missing on every stop made before this
   round, on every calendar import, and on "Use my location" — and a missing code
-  has to read as *unknown*, never as `"SG"`. Defaulting it to Singapore is the
+  has to read as _unknown_, never as `"SG"`. Defaulting it to Singapore is the
   same assumption that caused the bug.
 - **A `GROUND_TRANSPORT_LIMIT_KM = 500` ceiling** covers those unknowns, and
   also covers what a country code cannot describe at all: a domestic flight,
@@ -1559,12 +1594,47 @@ Two things worth knowing if this is picked up again:
   this added a field without adding a cent. That was checked against Google's
   SKU table, and the component's shape against a live response: the country
   entry is `{ longText: "Singapore", shortText: "SG", types: ["country",
-  "political"] }`, so `longText` is the country's *name* and only `shortText`
+"political"] }`, so `longText` is the country's _name_ and only `shortText`
   is the code.
 - **Routines carry it too.** A rule stores one location, so `Routine` grew the
   same optional field and `routineSlotForDate` passes it down. Without that,
   a routine's stops would have been the only ones in the app permanently
   unknown, and every leg to one would have fallen back to the distance ceiling.
+
+### Round 27 — a toolchain upgrade breaks the build, and blames SwiftUI
+
+Nothing changed in the repo. Xcode moved from 26.5 to 26.6, and the local iOS
+build stopped linking with `cannot link directly with 'SwiftUICore' because
+product being built is not an allowed client of it`.
+
+The error is a good example of a symptom pointing away from its cause. Grepping
+the repo for SwiftUICore finds nothing; so does `otool -l` over every prebuilt
+binary in `Pods/`. The one place the string appears is inside
+`ExpoModulesCore.xcframework`'s `.swiftinterface` — a text file that only gets
+compiled when the binary `.swiftmodule` beside it cannot be loaded, which is
+exactly what a compiler version bump causes. Expo built SDK 57's precompiled
+modules with Swift 6.3.1; Xcode 26.6 ships 6.3.3. Rebuilding that interface
+drags `SwiftUICore` in as a direct dependency of every client, and Apple's
+`.tbd` only permits `SwiftUI` to link it.
+
+Compiling a one-line file that imports the framework is what turned an
+inference into a fact — `swiftc` says `this SDK is not supported by the
+compiler` and names both versions, where the linker only complains about the
+downstream consequence. Worth reaching for whenever a prebuilt binary is in the
+picture: the linker sees the last step, not the first.
+
+The fix is `ios.usePrecompiledModules: false`, which trades build time for not
+depending on a version match Expo makes no promise about. It is set globally
+rather than only for local builds, so EAS and this machine keep compiling the
+same thing — the alternative saves CI minutes and reintroduces exactly the
+class of local/EAS divergence that round 12 and the RNFirebase `post_integrate`
+plugin were about.
+
+One self-inflicted detour is worth recording, since the first fix attempt
+looked like a new failure: `ios/build/` holds `pod install`'s codegen output,
+so clearing it before rebuilding produced a missing `NitroModulesSpec.h` that
+had nothing to do with the change. Both this and the SwiftUICore chain are in
+the traps section.
 
 ## Shipped from the feature-idea list
 
@@ -1576,9 +1646,9 @@ the sketch. The open ones live in `PLAN.md`.
 
 - **Wind + freshness on the slot card.** `TwentyFourHrForecast.general.wind`
   and `updatedTimestamp` were parsed into our types and then never read.
-  *Freshness stayed; wind came back off the card — it never fed the umbrella
+  _Freshness stayed; wind came back off the card — it never fed the umbrella
   verdict and it was the reading that pushed the meta line into wrapping.
-  `SlotForecast.wind` is still parsed, and `formatWind` was deleted with it.*
+  `SlotForecast.wind` is still parsed, and `formatWind` was deleted with it._
 - **Live station readings, not just forecasts.** `data.gov.sg` exposes
   real-time `rainfall`, `air-temperature`, `relative-humidity` and
   `wind-speed` station feeds in the same `/v2/real-time/api` namespace as
@@ -1617,17 +1687,17 @@ the sketch. The open ones live in `PLAN.md`.
 - **Indoor/outdoor tag per slot.** A `kind: "indoor" | "outdoor"` field on
   `ItinerarySlot` — rain doesn't matter for a slot inside a mall. The sketch
   suggested defaulting by Google Places type.
-  *Built manually rather than from Places types, and as an input to the
+  _Built manually rather than from Places types, and as an input to the
   existing mute rather than a second suppression beside it — see
   [round 11](#round-11--a-stop-says-whether-its-under-a-roof).
   The persisted-data note turned out not to bite: an optional field with a
-  default is what the two before it did too.*
+  default is what the two before it did too._
 - **Now / next highlighting on Today.** The Today list rendered every slot
   identically regardless of the clock.
-  *Done with the `findCurrentOrNextSlot` that already existed — it was
+  _Done with the `findCurrentOrNextSlot` that already existed — it was
   being computed to anchor the live readings and thrown away. The card
   takes an outline rather than a fill, and `describeSlotTiming` puts "Now"
-  or "in 40 min" ahead of the clock times on every card.*
+  or "in 40 min" ahead of the clock times on every card._
 
 ### Data lifecycle
 
@@ -1635,10 +1705,10 @@ the sketch. The open ones live in `PLAN.md`.
   was already the single choke point for every delete site, so an undo buffer
   had exactly one seam to thread through — including re-scheduling the
   notification it cancelled.
-  *Done as predicted, and it also removed the edit screen's confirmation
+  _Done as predicted, and it also removed the edit screen's confirmation
   dialog — see [round 9](#round-9--the-backlog-minus-the-one-thing-that-needs-xcode).
   No buffer was needed: the deleted slot is closed over by the toast's action,
-  and `restoreSlot` puts it back under its own id.*
+  and `restoreSlot` puts it back under its own id._
 
 ### Store schema versioning — resolved in round 13, superseded in round 16
 
