@@ -20,6 +20,29 @@ const CHANNEL_NAMES: Record<string, string> = {
 
 const readyChannels = new Set<string>();
 
+/**
+ * Registers how an incoming notification behaves when the app is in the
+ * foreground. Without this, both iOS and Android suppress the banner entirely
+ * (see the v57 docs:
+ * https://docs.expo.dev/versions/v57.0.0/sdk/notifications/), which is exactly
+ * the case a "send a test alert" tap hits — the alert fires seconds later with
+ * the app still open, so it would silently do nothing and look broken. Must run
+ * once at startup, before any notification can fire.
+ *
+ * v57 replaced the single `shouldShowAlert` with `shouldShowBanner` (the
+ * heads-up banner) and `shouldShowList` (the notification centre entry).
+ */
+export function configureNotificationHandler(): void {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+
 async function ensureAndroidChannel(channelId: string): Promise<void> {
   if (Platform.OS !== "android" || readyChannels.has(channelId)) return;
   await Notifications.setNotificationChannelAsync(channelId, {

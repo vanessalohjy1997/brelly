@@ -11,9 +11,14 @@ import { useNotificationSync } from "@/hooks/useNotificationSync";
 import { useRoutineSync } from "@/hooks/useRoutineMaterializer";
 import { useAppColorScheme } from "@/hooks/useTheme";
 import { configureGoogleSignIn } from "@/services/auth";
+import { configureNotificationHandler } from "@/services/notifications";
 
 SplashScreen.preventAutoHideAsync();
 configureGoogleSignIn();
+// Without a foreground handler, a notification that arrives while the app is
+// open is suppressed by the OS — including the test alert, which fires seconds
+// after the tap with the app still in the foreground.
+configureNotificationHandler();
 
 const queryClient = new QueryClient({
   defaultOptions: {
