@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import {
   cancelAndDeleteSlot,
   cancelNotification,
+  configureNotificationHandler,
   countScheduledNotifications,
   scheduleDigestNotification,
   scheduleRainNotification,
@@ -17,6 +18,7 @@ jest.mock("expo-notifications", () => ({
   cancelScheduledNotificationAsync: jest.fn(),
   getAllScheduledNotificationsAsync: jest.fn(),
   setNotificationChannelAsync: jest.fn(),
+  setNotificationHandler: jest.fn(),
   SchedulableTriggerInputTypes: { DATE: "date", TIME_INTERVAL: "timeInterval" },
   AndroidImportance: { DEFAULT: 3 },
 }));
@@ -27,6 +29,7 @@ const mockSchedule = Notifications.scheduleNotificationAsync as jest.Mock;
 const mockCancel = Notifications.cancelScheduledNotificationAsync as jest.Mock;
 const mockGetAllScheduled =
   Notifications.getAllScheduledNotificationsAsync as jest.Mock;
+const mockSetHandler = Notifications.setNotificationHandler as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -290,6 +293,23 @@ describe("sendTestNotification", () => {
 
     expect(sent).toBe(false);
     expect(mockSchedule).not.toHaveBeenCalled();
+  });
+});
+
+describe("configureNotificationHandler", () => {
+  it("tells the OS to show a banner in the foreground, where it is otherwise suppressed", async () => {
+    configureNotificationHandler();
+
+    expect(mockSetHandler).toHaveBeenCalledTimes(1);
+    const { handleNotification } = mockSetHandler.mock.calls[0][0];
+    // v57 replaced shouldShowAlert with shouldShowBanner/shouldShowList; a
+    // handler missing these leaves foreground alerts silent.
+    await expect(handleNotification()).resolves.toEqual({
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    });
   });
 });
 
