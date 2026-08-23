@@ -57,6 +57,19 @@ links back here.
   `shouldStackDateTimeFields`, `planNotificationResync`, `buildDigestMessage`,
   `isWithinQuietHours` and the `planSelectors` all exist as separate functions
   for this reason; the components and stores just call them.
+- **Native tabs keep every screen mounted, so per-screen `useState` is a
+  per-screen _copy_.** Today and Plans are both alive at once, and both call
+  `useNearbyForecast`. While the location permission lived in that hook's
+  `useState`, granting it on one tab left the other still offering "Show
+  weather near me" — two independent state machines, and the OS answer reached
+  only the one that asked. Device state that any screen can change belongs in a
+  store (`deviceLocationStore`), never in a hook that more than one mounted
+  screen calls. Anything sharing that shape needs two things the local version
+  never did: an in-flight guard, since every consumer syncs in the same commit,
+  and a generation counter, since a read started before the user answered will
+  otherwise resolve after the grant and overwrite it. A suite can be green and
+  still miss all of this — mount two consumers in one `renderHook` or it isn't
+  tested.
 - **Don't put lookups on a zustand store.** A store method that returns a fresh
   object can't be selected: `useItineraryStore((s) => s.findSlotById(id))`
   re-runs every render, returns a new reference each time, and
@@ -1635,6 +1648,51 @@ looked like a new failure: `ios/build/` holds `pod install`'s codegen output,
 so clearing it before rebuilding produced a missing `NitroModulesSpec.h` that
 had nothing to do with the change. Both this and the SwiftUICore chain are in
 the traps section.
+
+### Round 28 — one location permission for the whole app
+
+The last outright bug in `UX.md`: grant location on Plans and Today carried on
+asking for it. The cause is a fact about the navigator rather than about the
+permission — native tabs keep every screen mounted, so `useNearbyForecast`'s
+component-local `useState` existed twice, and the OS answer reached whichever
+copy had asked for it. Today mounts first, reads "not granted", and its effect
+deps never change again, so it never looks a second time.
+
+Three symptoms, one cause, which is why `UX.md` filed them as one item: the
+per-tab grant, the onboarding primer calling `expo-location` directly and
+discarding the result, and "Open Settings" leading somewhere that changed
+nothing until the app was killed. Lifting the state into `deviceLocationStore`
+fixes the first, routing the primer through the store's `request()` fixes the
+second, and an `AppState` `"active"` re-read — the same move
+`useNotificationPermission` already makes, for the same reason — fixes the
+third.
+
+The re-read is scoped to `denied` and `unavailable`. Adding `unprompted` looks
+harmless and is wrong: iOS doesn't list an app under Location Services until it
+has asked once, so there is nothing a user could have changed while we were
+backgrounded, and polling for it on every foreground would be work that can
+never find anything.
+
+Two problems appeared only because the state became shared, and both are worth
+knowing before anything else moves into a store this way.
+
+- **Every consumer syncs in the same commit.** Two mounted tabs meant two
+  `getForegroundPermissionsAsync` calls where the old code's duplication at
+  least kept them in separate components. `sync()` returns the in-flight
+  promise instead, so N consumers cost one round trip — but only while that
+  promise is still current, or a read superseded by a grant would be handed to
+  a later caller and silently swallow its request.
+- **A stale read can overwrite a fresh answer.** The foreground listener fires
+  a read while the permission is denied; the user taps "Show weather near me"
+  and grants it; the read comes back with the denial it was sent to fetch and
+  writes it over the grant. Nothing about the per-screen version could produce
+  this, because nothing else wrote to that state. Every write now carries a
+  generation and a superseded one is dropped.
+
+The regression test the item asked for — two consumers of the hook in one
+`renderHook` — is what makes the original bug expressible at all. The suite was
+green through the whole life of the bug because no test ever mounted the hook
+twice.
 
 ## Shipped from the feature-idea list
 

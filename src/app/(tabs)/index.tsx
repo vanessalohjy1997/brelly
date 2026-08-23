@@ -1,4 +1,3 @@
-import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet } from "react-native";
@@ -30,6 +29,7 @@ import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
 import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
+import { useDeviceLocationStore } from "@/store/deviceLocationStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { todayKey } from "@/utils/dateKeys";
@@ -60,6 +60,11 @@ export default function TodayScreen() {
     "location" | "notification" | null
   >(null);
   const { request: requestNotification } = useNotificationPermission();
+  // The primer goes through the same action the empty state's button does.
+  // It used to call `expo-location` directly and throw the answer away, so
+  // allowing it here — what a new install actually does — still left Today
+  // asking for a permission the OS had already granted.
+  const requestLocation = useDeviceLocationStore((state) => state.request);
 
   // Only once `ready` (settings are rehydrated) do we trust
   // `hasSeenOnboarding` enough to decide the flow should start.
@@ -68,14 +73,19 @@ export default function TodayScreen() {
 
   const handleOnboardingAllow = useCallback(async () => {
     if (activeOnboardingStep === "location") {
-      await Location.requestForegroundPermissionsAsync();
+      await requestLocation();
       setOnboardingStep("notification");
     } else if (activeOnboardingStep === "notification") {
       await requestNotification();
       setOnboardingStep(null);
       setHasSeenOnboarding(true);
     }
-  }, [activeOnboardingStep, requestNotification, setHasSeenOnboarding]);
+  }, [
+    activeOnboardingStep,
+    requestLocation,
+    requestNotification,
+    setHasSeenOnboarding,
+  ]);
 
   const handleOnboardingSkip = useCallback(() => {
     if (activeOnboardingStep === "location") {
@@ -103,7 +113,6 @@ export default function TodayScreen() {
     forecasts: nearbyForecasts,
     coords: nearbyCoords,
     permission: locationPermission,
-    requestPermission: requestLocation,
   } = useNearbyForecast(!hasSlotsToday);
 
   // With plans, the live readings are anchored to the stop the user is at (or

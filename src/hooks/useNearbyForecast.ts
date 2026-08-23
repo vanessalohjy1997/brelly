@@ -1,17 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import * as Location from "expo-location";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
+import { AppState } from "react-native";
 
-import { getRegionFromCoordinates } from "@/constants/neaRegions";
 import { getUpcomingForecast } from "@/services/weather";
+import { useDeviceLocationStore } from "@/store/deviceLocationStore";
 import type { NeaRegion } from "@/types/weather";
-
-export type PermissionState =
-  | "checking"
-  | "unprompted"
-  | "granted"
-  | "denied"
-  | "unavailable";
 
 /**
  * Weather for whatever's coming up nearby, used for the "no plans yet" empty
@@ -23,70 +16,42 @@ export type PermissionState =
  * first five seconds. Instead this reports `unprompted` and waits for
  * `requestPermission()`, so the caller can explain first and offer a way to
  * recover afterwards.
+ *
+ * The permission itself lives in `deviceLocationStore`, not here: native tabs
+ * keep both consuming screens mounted at once, and component-local state gave
+ * each of them its own copy that the other's grant never reached.
  */
 export function useNearbyForecast(enabled: boolean, hours: number = 6) {
-  const [permission, setPermission] = useState<PermissionState>("checking");
-  const [region, setRegion] = useState<NeaRegion | null>(null);
-  // Exposed alongside the region so callers that need a point rather than a
-  // region (nearest-station readings) can reuse this one permission flow
-  // instead of prompting again.
-  const [coords, setCoords] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
-
-  const locate = useCallback(async () => {
-    try {
-      const position = await Location.getCurrentPositionAsync({});
-      setCoords({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
-      setRegion(
-        getRegionFromCoordinates(
-          position.coords.latitude,
-          position.coords.longitude,
-        ),
-      );
-      setPermission("granted");
-    } catch {
-      // Permission is held but no fix came back — a different failure from a
-      // refusal, and not one re-prompting would fix.
-      setPermission("unavailable");
-    }
-  }, []);
+  const permission = useDeviceLocationStore((state) => state.permission);
+  const region = useDeviceLocationStore((state) => state.region);
+  const coords = useDeviceLocationStore((state) => state.coords);
+  const sync = useDeviceLocationStore((state) => state.sync);
+  const requestPermission = useDeviceLocationStore((state) => state.request);
 
   // Read the existing status without prompting. Someone who already granted
-  // it on a previous run shouldn't have to press a button again.
+  // it on a previous run — or on the onboarding primer, or on the other tab —
+  // shouldn't have to press a button again.
   useEffect(() => {
     if (!enabled) return;
+    void sync();
+  }, [enabled, sync]);
 
-    let cancelled = false;
-    (async () => {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (cancelled) return;
-      if (status === "granted") {
-        await locate();
-        return;
-      }
-      setPermission(status === "denied" ? "denied" : "unprompted");
-    })();
+  // The only way back from a refusal is the system Settings app, and the only
+  // way back from a missing fix is walking somewhere with a view of the sky.
+  // Both change the answer while we are backgrounded and neither tells us, so
+  // re-read on the way in — the same reason `useNotificationPermission` does.
+  // A recheck is pointless in the other three states: `unprompted` can't be
+  // granted from Settings (an app that has never asked isn't listed there),
+  // and the rest are already settled.
+  const isRecoverable = permission === "denied" || permission === "unavailable";
+  useEffect(() => {
+    if (!enabled || !isRecoverable) return;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, locate]);
-
-  /** Prompts for permission. Call this from an affordance that says why. */
-  const requestPermission = useCallback(async () => {
-    setPermission("checking");
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      setPermission("denied");
-      return;
-    }
-    await locate();
-  }, [locate]);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void sync();
+    });
+    return () => subscription.remove();
+  }, [enabled, isRecoverable, sync]);
 
   const query = useQuery({
     queryKey: ["nearbyForecast", region, hours],

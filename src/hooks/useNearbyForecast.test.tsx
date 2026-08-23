@@ -2,9 +2,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import * as Location from "expo-location";
 import type { ReactNode } from "react";
+import { AppState } from "react-native";
 
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { getUpcomingForecast } from "@/services/weather";
+import {
+  resetDeviceLocationStore,
+  useDeviceLocationStore,
+} from "@/store/deviceLocationStore";
 
 jest.mock("@/services/weather", () => ({
   getUpcomingForecast: jest.fn().mockResolvedValue([]),
@@ -24,8 +29,18 @@ function wrapper({ children }: { children: ReactNode }) {
   );
 }
 
+/** Drives the AppState listener the hook registers while it can recover. */
+async function foreground() {
+  const addEventListener = AppState.addEventListener as unknown as jest.Mock;
+  const handler = addEventListener.mock.calls.at(-1)?.[1];
+  await act(async () => {
+    handler?.("active");
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  resetDeviceLocationStore();
   mockGetPermission.mockResolvedValue({ status: "undetermined" });
   mockRequestPermission.mockResolvedValue({ status: "granted" });
   mockPosition.mockResolvedValue({
@@ -33,6 +48,13 @@ beforeEach(() => {
     // region — the mapping itself is covered in neaRegions.test.ts.
     coords: { latitude: 1.2833, longitude: 103.8607 },
   });
+  jest.spyOn(AppState, "addEventListener").mockReturnValue({
+    remove: jest.fn(),
+  } as unknown as ReturnType<typeof AppState.addEventListener>);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe("useNearbyForecast", () => {
@@ -118,5 +140,89 @@ describe("useNearbyForecast", () => {
     expect(mockGetPermission).not.toHaveBeenCalled();
     expect(mockRequestPermission).not.toHaveBeenCalled();
     expect(result.current.forecasts).toEqual([]);
+  });
+
+  // The regression this hook was rewritten for. Native tabs keep every screen
+  // mounted, so Today and Plans both hold a live copy of this hook at once.
+  it("grants once for the whole app, not once per screen", async () => {
+    const { result } = await renderHook(
+      () => ({
+        today: useNearbyForecast(true),
+        plans: useNearbyForecast(true),
+      }),
+      { wrapper },
+    );
+
+    await waitFor(() =>
+      expect(result.current.today.permission).toBe("unprompted"),
+    );
+    expect(result.current.plans.permission).toBe("unprompted");
+    // Two consumers, one round trip.
+    expect(mockGetPermission).toHaveBeenCalledTimes(1);
+
+    // Granted from Plans…
+    await act(async () => {
+      await result.current.plans.requestPermission();
+    });
+
+    // …and Today has it too, without a second prompt.
+    await waitFor(() => expect(result.current.today.isAvailable).toBe(true));
+    expect(result.current.today.region).toBe("south");
+    expect(result.current.plans.isAvailable).toBe(true);
+    expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it("picks up a grant made outside the hook, like the onboarding primer's", async () => {
+    const { result } = await renderHook(() => useNearbyForecast(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.permission).toBe("unprompted"));
+
+    await act(async () => {
+      await useDeviceLocationStore.getState().request();
+    });
+
+    await waitFor(() => expect(result.current.isAvailable).toBe(true));
+    expect(result.current.region).toBe("south");
+  });
+
+  it("re-reads on the way back from Settings, so a denial can recover", async () => {
+    mockGetPermission.mockResolvedValue({ status: "denied" });
+    const { result } = await renderHook(() => useNearbyForecast(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.permission).toBe("denied"));
+
+    mockGetPermission.mockResolvedValue({ status: "granted" });
+    await foreground();
+
+    await waitFor(() => expect(result.current.permission).toBe("granted"));
+    // Recovered by re-reading, not by prompting again — iOS wouldn't show the
+    // dialog a second time anyway.
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+  });
+
+  it("re-reads on the way back when no fix came back either", async () => {
+    mockGetPermission.mockResolvedValue({ status: "granted" });
+    mockPosition.mockRejectedValueOnce(new Error("no fix"));
+    const { result } = await renderHook(() => useNearbyForecast(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.permission).toBe("unavailable"));
+
+    await foreground();
+
+    await waitFor(() => expect(result.current.permission).toBe("granted"));
+  });
+
+  it("doesn't listen for the foreground while there is nothing to recover", async () => {
+    const { result } = await renderHook(() => useNearbyForecast(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.permission).toBe("unprompted"));
+
+    // An app that has never asked isn't listed in system Settings, so there is
+    // no answer out there to come back and find.
+    expect(AppState.addEventListener).not.toHaveBeenCalled();
   });
 });

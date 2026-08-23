@@ -3,8 +3,11 @@
 A review of the shipped design from a user's perspective, recorded so the work
 can be picked up in any order. Each item names the file it lives in.
 
-Nothing here is a bug — `tsc`, `lint` and `test` all pass on this code. These
-are places where the app is correct but harder to use than it needs to be.
+Almost nothing here is a bug — `tsc`, `lint` and `test` all pass on this code.
+These are mostly places where the app is correct but harder to use than it
+needs to be. The one exception was flagged as such below — a green suite there
+meant the gap was untested, not that it wasn't real — and is now fixed, with
+the test that would have caught it.
 
 Status key: `[ ]` open · `[x]` done · `[~]` partially addressed.
 
@@ -13,8 +16,9 @@ lead-time setting, the contrast fixes, the drag-to-reorder removal, save
 feedback, the dark-theme surfaces, the native pickers' theming — and, in the
 latest round, undo on delete, the whole add/edit form, both remaining Plans
 items, search, the notification-permission and test-alert gaps, relative times,
-now/next emphasis, reduce-motion, the `border` token — and, most recently, the
-form's location dropdown and the gap it left behind.
+now/next emphasis, reduce-motion, the `border` token, the form's location
+dropdown and the gap it left behind — and, most recently, the per-screen
+location grant, which was the last outright bug in this file.
 
 Item descriptions below are left as originally written — they describe the
 problem, not the current code, so a `[x]` item's file references point at what
@@ -131,6 +135,63 @@ system settings) when the status is denied.
 ---
 
 ## Today screen
+
+- [x] **Nearby weather is granted per screen, not per app.** The one item in
+  this file that is an outright bug rather than a design gap. Grant location
+  from the Plans tab and Plans shows the forecast; switch to Today and it still
+  offers "Show weather near me". Tapping it again is the only way through.
+
+  [useNearbyForecast.ts:28-36](src/hooks/useNearbyForecast.ts#L28-L36) keeps
+  `permission`, `region` and `coords` in component-local `useState`, and both
+  tabs call the hook independently
+  ([index.tsx:106](src/app/%28tabs%29/index.tsx#L106),
+  [plans.tsx:98](src/app/%28tabs%29/plans.tsx#L98)). Native tabs keep both
+  screens mounted, so there are two copies of the state machine and a grant
+  reaches only one of them. Today mounts first, reads the status before
+  anything is granted, and its effect deps (`[enabled, locate]`) never change —
+  so it never looks again.
+
+  Two more symptoms, same cause, which is why this is one item and not three:
+
+  - **A first-run grant doesn't count.** The onboarding primer calls
+    `Location.requestForegroundPermissionsAsync()` directly at
+    [index.tsx:70](src/app/%28tabs%29/index.tsx#L70) and throws the result
+    away, so allowing it on the primer still leaves Today asking. This is what
+    a new install actually hits.
+  - **"Open Settings" is still a dead end.** P0 item 3 above added the deep link,
+    but nothing re-reads the permission on return, so granting in system
+    Settings changes nothing until the app is killed. The recovery path exists
+    and doesn't recover.
+
+  **Do:** lift permission/region/coords out of the hook into a shared store in
+  [src/store/](src/store/) — client state about the device, so zustand, while
+  the forecast itself stays in its query. Route the onboarding primer through
+  the same action instead of calling `expo-location` directly, and re-read the
+  status on `AppState` `"active"` while denied or unavailable, the way
+  [useNotificationPermission.ts:40-63](src/hooks/useNotificationPermission.ts#L40-L63)
+  already does for exactly this reason. Note the suite passes today only
+  because no test mounts two consumers of the hook at once — a two-consumer
+  test is the regression to write first.
+
+  Done as written. Permission, region and coords live in
+  [deviceLocationStore](src/store/deviceLocationStore.ts); the hook is now a
+  reader of it plus the forecast query, so there is one state machine however
+  many screens are mounted. The primer calls the store's `request()` rather
+  than `expo-location`, and an `AppState` `"active"` listener re-reads while
+  the state is `denied` or `unavailable` — the two that something outside the
+  app can fix. It deliberately does *not* listen while `unprompted`: an app
+  that has never asked isn't listed in system Settings, so there is no answer
+  out there to come back and find.
+
+  Two things the move to shared state forced that the per-screen version never
+  had to think about. Both tabs call `sync()` in the same commit, so an
+  in-flight read is shared rather than repeated — three consumers cost one
+  round trip. And a read that is already out when the user answers the prompt
+  would otherwise land *after* the grant and overwrite it with the stale
+  "denied" it was sent to fetch, so every write carries a generation and a
+  superseded one is dropped. The regression test the item asked for is
+  "grants once for the whole app, not once per screen"; the primer and
+  return-from-Settings paths have one each.
 
 - [ ] **The header eats 108px and never collapses.** `HeaderHeight = 108` is
   fixed and the 48pt `title` sits above the `ScrollView` — on a small phone
