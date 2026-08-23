@@ -160,6 +160,41 @@ links back here.
   restart Metro with `--clear`: Reanimated/Worklets bumps throw "[Worklets]
   Mismatch between JavaScript code version and Worklets Babel plugin version"
   from a cached transform that still embeds the old plugin version otherwise.
+- **Expo's precompiled modules are built by one exact Swift compiler, and a
+  newer Xcode cannot load them.** `ios.usePrecompiledModules` is `false` in
+  `app.json`'s `expo-build-properties` for that reason, and the failure it
+  prevents names the wrong culprit: `cannot link directly with 'SwiftUICore'
+  because product being built is not an allowed client of it`, then `Undefined
+  symbols for architecture arm64`. Nothing in this repo, or in any prebuilt
+  binary it links, mentions SwiftUICore. The chain is that a binary
+  `.swiftmodule` only loads in the compiler that produced it — SDK 57's
+  xcframeworks ship Swift 6.3.1 (Xcode 26.5), so Xcode 26.6 (Swift 6.3.3)
+  falls back to rebuilding `ExpoModulesCore` from its `.swiftinterface`, and
+  that interface is full of `SwiftUICore.View` and `SwiftUICore.Color` from
+  `ExpoSwiftUI`. The rebuild makes every client autolink `-framework
+  SwiftUICore`, and `SwiftUICore.tbd` allows `SwiftUI` as its only client.
+  Six frameworks carry the mismatch: `ExpoModulesCore`, `ExpoImage`,
+  `ExpoFont`, `ExpoLocation`, `ExpoFileSystem`, `ExpoModulesWorklets`. Don't
+  reach for a version bump — `expo-modules-core` was already on the newest 57
+  patch. To see the real error instead of the linker's, compile one line that
+  imports the framework: `xcrun --sdk iphonesimulator swiftc -target
+  arm64-apple-ios16.4-simulator -F <xcframework slice> -c t.swift` says `this
+  SDK is not supported by the compiler` and names both versions. The cost is
+  that Expo modules build from source; React Native itself stays prebuilt,
+  since `RCT_USE_PREBUILT_RNCORE` is a separate property. The property can go
+  when Expo's prebuilds match the local toolchain — flip it back, `pod
+  install`, and compare `head -2` of any shipped `.swiftinterface` against
+  `swift --version`.
+- **`ios/build/` is not scratch space — `pod install` generates the codegen
+  headers into it.** `ios/build/generated/ios/ReactCodegen/` holds
+  `NitroModulesSpec.h` and every component's `States.h`. Deleting `ios/build`
+  *after* a `pod install` fails the next build with `The file
+  "NitroModulesSpec.h" couldn't be opened because there is no such file. (in
+  target 'ReactCodegen')`, which reads like a `react-native-nitro-modules`
+  problem and is not one — the build's own codegen phase does not put them
+  back. The `rm -rf Pods Podfile.lock build` in the bullet above is safe only
+  because `pod install` runs after it; in the other order, run `pod install`
+  again.
 - **`@expo/ui` can't see React's Objective-C headers, and the fix is a
   Podfile patch.** Compiling `ExpoUITouchHandlerHelper.mm` fails with
   `'React/RCTSurfaceTouchHandler.h' file not found`, which reads like an
@@ -1512,6 +1547,41 @@ Two things came out of building it that were not obvious going in.
 The workflow is manual, matching `ios-release.yml`. Publishing from every merge
 would make a deliberate update indistinguishable from an incidental one, and
 the fingerprint guard is meant to be a second opinion rather than the only one.
+
+### Round 26 — a toolchain upgrade breaks the build, and blames SwiftUI
+
+Nothing changed in the repo. Xcode moved from 26.5 to 26.6, and the local iOS
+build stopped linking with `cannot link directly with 'SwiftUICore' because
+product being built is not an allowed client of it`.
+
+The error is a good example of a symptom pointing away from its cause. Grepping
+the repo for SwiftUICore finds nothing; so does `otool -l` over every prebuilt
+binary in `Pods/`. The one place the string appears is inside
+`ExpoModulesCore.xcframework`'s `.swiftinterface` — a text file that only gets
+compiled when the binary `.swiftmodule` beside it cannot be loaded, which is
+exactly what a compiler version bump causes. Expo built SDK 57's precompiled
+modules with Swift 6.3.1; Xcode 26.6 ships 6.3.3. Rebuilding that interface
+drags `SwiftUICore` in as a direct dependency of every client, and Apple's
+`.tbd` only permits `SwiftUI` to link it.
+
+Compiling a one-line file that imports the framework is what turned an
+inference into a fact — `swiftc` says `this SDK is not supported by the
+compiler` and names both versions, where the linker only complains about the
+downstream consequence. Worth reaching for whenever a prebuilt binary is in the
+picture: the linker sees the last step, not the first.
+
+The fix is `ios.usePrecompiledModules: false`, which trades build time for not
+depending on a version match Expo makes no promise about. It is set globally
+rather than only for local builds, so EAS and this machine keep compiling the
+same thing — the alternative saves CI minutes and reintroduces exactly the
+class of local/EAS divergence that round 12 and the RNFirebase `post_integrate`
+plugin were about.
+
+One self-inflicted detour is worth recording, since the first fix attempt
+looked like a new failure: `ios/build/` holds `pod install`'s codegen output,
+so clearing it before rebuilding produced a missing `NitroModulesSpec.h` that
+had nothing to do with the change. Both this and the SwiftUICore chain are in
+the traps section.
 
 ## Shipped from the feature-idea list
 
