@@ -5,6 +5,8 @@ import {
 } from "@/services/notifications";
 import { getForecastForSlot, type SlotForecast } from "@/services/weather";
 import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import { writeWidgetSnapshot } from "@/services/widgetBridge";
+import { buildWidgetSnapshot } from "@/services/widgetSnapshot";
 import { buildDigestMessage } from "@/utils/buildDigestMessage";
 import { toDateKey } from "@/utils/dateKeys";
 import { planNotificationResync } from "@/utils/planNotificationResync";
@@ -55,6 +57,12 @@ export async function runNotificationSync(
 
   await applyRainActions(context, entries);
   await syncDigest(context, entries);
+
+  // The lock-screen/home-screen widget rides on the same schedule: this sync
+  // already re-reads every upcoming stop's forecast on mount and on every
+  // foreground, so publishing the next-stop glance here costs no extra fetch
+  // and keeps the widget as fresh as the app itself. See `widgetBridge.ts`.
+  writeWidgetSnapshot(buildWidgetSnapshot(entries, context.now));
 }
 
 async function fetchForecasts(

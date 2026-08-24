@@ -23,6 +23,9 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.sg.brelly.app"]
       }
     },
     "android": {
@@ -98,7 +101,8 @@
       ],
       "./plugins/withExplicitModulesDisabled",
       "./plugins/withExpoUiReactHeaderFix",
-      "./plugins/withFirebaseSpmPostIntegrate"
+      "./plugins/withFirebaseSpmPostIntegrate",
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true,
