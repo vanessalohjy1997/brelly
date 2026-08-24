@@ -589,6 +589,22 @@ system settings) when the status is denied.
 
 ---
 
+## Navigation & chrome
+
+- [ ] **The tab bar is iOS 26 Liquid Glass.** `AppTabs` renders `NativeTabs`
+  from `expo-router/unstable-native-tabs`
+  ([appTabs.tsx](src/components/appTabs.tsx)) — a native `UITabBar` that iOS 26
+  styles as translucent liquid glass on its own; nothing here asks for it. The
+  content behind the bar bleeds through and the icons/labels lose contrast over
+  a scrolling list. Opt out on the bar alone (not the whole app, so no
+  `UIDesignRequiresCompatibility`) with props `NativeTabs` already exposes:
+  `blurEffect="none"` plus `disableTransparentOnScrollEdge` over the existing
+  opaque `backgroundColor={colors.background}`, and `shadowColor={colors.border}`
+  for a hairline so the now-opaque bar still separates from the page it shares a
+  colour with. Verified against the v57 native-tabs docs.
+
+---
+
 ## Loading, errors & staleness
 
 - [x] **Cards jump on load.** `isLoading` returns a bare `ActivityIndicator`
