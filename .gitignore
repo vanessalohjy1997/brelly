@@ -48,5 +48,11 @@ example
 /ios
 /android
 
+# @bacons/apple-targets regenerates these into the widget target dir on every
+# prebuild (from expo-target.config.js) — build artifacts like /ios, not source.
+# The source that IS tracked: expo-target.config.js and index.swift.
+targets/*/Info.plist
+targets/*/Assets.xcassets/
+
 # test coverage
 /coverage
