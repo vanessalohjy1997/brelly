@@ -335,6 +335,36 @@ system settings) when the status is denied.
 
 ## Add / edit plan form
 
+- [ ] **Typing in Label shoves the Starts/Ends pickers up over their labels.**
+  A real layout bug, not a design gap. Type into the LABEL field and the two
+  time pickers jump upward and overlap their "STARTS"/"ENDS" captions. The
+  native `DateTimePicker` (`@expo/ui/community/datetime-picker`) is a SwiftUI
+  host that reports no intrinsic height to Yoga — the same reason its width is
+  hand-set — and `styles.timePicker` / `styles.datePicker`
+  ([SlotForm.tsx:855-862](src/components/itinerary/SlotForm.tsx#L855-L862)) set
+  `width` only, so the field box has no stable height and the capsule floats,
+  centred in a box the layout engine can't size. Every Label keystroke
+  re-renders the whole form (`onChangeText` fires `setLabel` + `setLabelIsMine`
+  + `setErrors` at
+  [SlotForm.tsx:545-553](src/components/itinerary/SlotForm.tsx#L545-L553), and
+  each render recomputes `dirty` and runs `onDirtyChange`), and on that
+  relayout the height-less pickers creep up over the captions sitting only
+  `Spacing.one` (4px) above them.
+
+  **Do:** pin the picker box height — a `DateTimePickerHeight` constant beside
+  the width tokens in
+  [shouldStackDateTimeFields.ts](src/utils/shouldStackDateTimeFields.ts) (the
+  vertical twin of the "no intrinsic size" workaround already documented
+  there), applied to both `timePicker` and `datePicker` boxes, and to the same
+  height-less pickers in
+  [RepeatField.tsx](src/components/itinerary/RepeatField.tsx) and
+  [CopyToDateAction.tsx](src/components/itinerary/CopyToDateAction.tsx) so they
+  can't regress the same way. The Jest picker mock
+  ([jest.setup.js:159](jest.setup.js#L159)) drops `style`, so the height would
+  be untestable and could regress silently — forward `style` on the mock and
+  assert the height in `SlotForm.test.tsx`, the guard the `themeVariant` fix
+  above already needed for the same reason.
+
 - [x] **A picked location looks the same as typed text.** `selectedPlace` is
   required to submit but the field renders identically whether it is set or
   null
