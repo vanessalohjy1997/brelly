@@ -622,6 +622,28 @@ system settings) when the status is denied.
   long enough — Location, Label, Day, Starts, Ends, Repeat, Indoor/outdoor,
   Rain alerts — that this is worth a look alongside the collapsing-header work.
 
+- [ ] **A repeat can only be weekly.** `RepeatField`
+  ([RepeatField.tsx](src/components/itinerary/RepeatField.tsx)) offers "Every
+  week" and a row of weekday toggles, and that is the only cadence the whole
+  engine knows — the rule stores `weekdays: number[]` and
+  `routineOccurrenceDates`
+  ([routineOccurrences.ts:62](src/utils/routineOccurrences.ts#L62)) matches it
+  day-by-day against `getDay()`. A monthly commitment — rent on the 1st, a
+  standing invoice on the 15th — has no expression, so it has to be re-entered
+  by hand every month, the exact chore a routine exists to remove.
+
+  **Do:** give the rule a `frequency` discriminator (`weekly` / `monthly`,
+  absent = weekly, so no migration — the `resolveSlotKind` trick) plus a
+  `dayOfMonth`, add a third **Monthly** chip beside Just once / Weekly, and
+  branch the occurrence predicate: monthly matches `getDate() === dayOfMonth`.
+  Scope for a first cut is **by date** (the 15th), seeded from the day the stop
+  already sits on, with short months skipping (the 31st produces no February
+  stop — falls out of the day-by-day scan for free); *not* "Nth weekday" (2nd
+  Tuesday). Everything downstream (materialisation, notifications, edit/delete
+  scope, the Routines screen) reads concrete slots or `describeRoutine` and
+  inherits monthly untouched. Full plan in
+  `~/.claude/plans/can-you-assess-the-cached-waffle.md`.
+
 ---
 
 ## Plans screen

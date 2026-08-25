@@ -1839,6 +1839,49 @@ Two `UX.md` items, one clean and one that turned out to rest on a false premise.
   turns the `appTabs.tsx` props back into no-ops and the bleed-through returns
   with a green suite.
 
+### Round 31 — the widget gets the plan card's skin, and two bugs under it
+
+Making the home-screen widget look like a plan card surfaced two things that had
+never actually worked on a device.
+
+- **The colour assets were writing empty — the config keys were wrong.**
+  `expo-target.config.js` declared its colours as
+  `umbrellaRain: { color, darkColor }`, matching the `@bacons/apple-targets`
+  JSDoc `@example`. The JSDoc lies. The plugin's *type* is
+  `DynamicColor = { light: string; dark?: string }` and `with-widget.js` reads
+  `color.light` / `color.dark` — so `{ color, darkColor }` gave both `undefined`
+  and the plugin wrote `{ "colors": [] }` into every `.colorset`. A missing named
+  colour renders as the widget's default white, which is why a "fresh build" came
+  up white and the umbrella accent tints (`Color("umbrellaRain")`) had silently
+  never shown either. The keys are `light` / `dark` now. This only bites through
+  `expo prebuild` + a native build — the `.colorset/Contents.json` files are
+  generated (gitignored), so a JS reload can't fix it, and the exact
+  "typechecks and is still wrong" trap: the wrong shape typed fine against
+  `Record<string, string | DynamicColor>` because the object was assignable to
+  neither arm cleanly yet TS let it through the union.
+
+- **The next stop never reached the widget on a cold start.** The store hydrates
+  from Firestore (`useCloudBootstrap`'s `onSnapshot`) *after* the root mounts,
+  and `useNotificationSync` only synced on mount and on foreground. The mount
+  sync raced hydration and ran against `plans: []`, publishing an empty glance;
+  nothing re-published until the app was backgrounded and refocused. The hook now
+  also re-syncs, debounced (300ms), whenever a *structural* plan signature
+  (`slot.id:slot.startTime` joined) changes — so hydration and any add/remove/
+  re-time gets the real glance out, while a label or mute-toggle keystroke does
+  not trigger a forecast fetch. `getForecastForSlot` has no local cache and hits
+  island-wide NEA endpoints, which is why the signature is structural and the
+  sync is debounced rather than keyed on the whole `plans` array.
+
+- **What the widget draws now.** `cardBackground` (the app's `backgroundElement`,
+  the violet a plan card sits on) fills the home-screen families; the lock-screen
+  (accessory) families stay `Color.clear` because the system tints them. A real
+  rain/sun verdict also earns the card's two at-a-glance marks, rebuilt in the
+  `containerBackground` so the system clips them to the widget's rounded corners
+  the way `ItineraryCard`'s `overflow: "hidden"` clips its own: a 4pt
+  verdict-tinted bar down the leading edge, and the verdict's SF Symbol as a
+  faint (0.14) watermark bleeding off the bottom-right. A clear stop or a missing
+  forecast draws neither, matching the card (`decoration(for:)` returns nil).
+
 ## Shipped from the feature-idea list
 
 The feature ideas were derived from what was already built — each named the seam
