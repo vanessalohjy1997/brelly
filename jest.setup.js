@@ -156,12 +156,16 @@ jest.mock("@expo/ui/community/datetime-picker", () => {
   const React = require("react");
   const { View } = require("react-native");
   return {
-    DateTimePicker: ({ themeVariant, mode, value, onValueChange }) =>
+    DateTimePicker: ({ themeVariant, mode, value, style, onValueChange }) =>
       React.createElement(View, {
         testID: `datetime-picker-${mode ?? "date"}`,
         themeVariant,
         mode,
         value,
+        // Forwarded so a test can assert the pinned box height — the host
+        // reports no intrinsic height, so a dropped `height` regresses the
+        // floating-capsule bug silently, the same trap `themeVariant` has.
+        style,
         // The real picker's first argument is a native change event nobody
         // reads; the date is the second.
         onValueChange: (date) =>

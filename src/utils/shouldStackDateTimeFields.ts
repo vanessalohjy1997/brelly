@@ -23,6 +23,17 @@ export const DateTimePickerWidth = 208;
 export const DatePickerWidth = 116;
 
 /**
+ * Height to pin the picker box at — the vertical twin of the width workaround
+ * above. The SwiftUI host reports no intrinsic *height* to Yoga either, so a
+ * box that sets `width` only has no stable height: the capsule floats, centred
+ * in a box the layout engine can't size, and drifts upward over the field's
+ * caption on any relayout (e.g. every keystroke in the Label field). Giving the
+ * box a fixed height keeps the capsule parked. Measured to clear a rendered
+ * time/date capsule at the default locale and text size.
+ */
+export const DateTimePickerHeight = 40;
+
+/**
  * Whether the Starts/Ends pickers have to be laid out one above the other.
  *
  * @param availableWidth width the two pickers share, i.e. the form's content

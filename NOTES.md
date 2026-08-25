@@ -1784,6 +1784,61 @@ question came first: what does one glance say, and what writes it.
   `@bacons/apple-targets` faked in `__mocks__/@bacons/apple-targets.js` the same
   way the other native modules are. 1233 tests across 113 suites.
 
+### Round 30 — the floating time capsule, and a tab bar the docs lied about
+
+Two `UX.md` items, one clean and one that turned out to rest on a false premise.
+
+- **The pickers now have a pinned height, not just a width.** Typing in the
+  Label field made the Starts/Ends capsules drift up over their captions. Same
+  root cause the width tokens already document: the `@expo/ui` `DateTimePicker`
+  is a SwiftUI host that reports *no intrinsic size* to Yoga — width was
+  hand-set, height was not, so the box had no stable height and the capsule
+  floated, creeping up on every relayout (a Label keystroke re-renders the whole
+  form). `DateTimePickerHeight = 40` now sits beside the width tokens in
+  `shouldStackDateTimeFields.ts` and is applied to all three pickers'
+  boxes — `SlotForm`'s date/time, `RepeatField`'s end-date (which had a stray
+  hardcoded `40`), and `CopyToDateAction`'s (which had no height at all) — so
+  none can regress the float on its own. The Jest picker mock dropped `style`,
+  which is why this was untestable; it now forwards it and `SlotForm.test.tsx`
+  asserts the height, the same silent-regression guard `themeVariant` already
+  needed.
+
+- **The Liquid Glass tab bar: the plan's fix was a no-op on the OS it
+  targeted.** `UX.md` said to opt the bar out of iOS 26 Liquid Glass with
+  `blurEffect="none"` + `disableTransparentOnScrollEdge` + `shadowColor`,
+  "verified against the v57 native-tabs docs." The v57 docs say the opposite,
+  verbatim: *"The `backgroundColor`, `blurEffect`, `shadowColor`, and
+  `disableTransparentOnScrollEdge` props affect the iOS tab bar only on iOS 18
+  and earlier"* — on iOS 26 the system derives the bar from the content behind
+  it and those props do nothing. Exactly the "typechecks and is still wrong"
+  trap `AGENTS.md` opens with. There is no per-bar JS lever for opacity on 26.
+  The fix turned out to be **two parts, and the flag alone is not enough** —
+  which the first attempt got wrong, shipping only the flag and finding the bar
+  still bled through after a rebuild:
+
+  1. `ios.infoPlist.UIDesignRequiresCompatibility: true` in `app.json` opts the
+     *whole* app out of the iOS 26 redesign, forcing iOS 18-style rendering.
+     This is a native change: it only reaches the app through `expo prebuild`
+     (the `ios/` dir is gitignored/generated) *and* a fresh native build — a JS
+     reload can't pick up an `Info.plist` baked into the binary.
+  2. The flag alone doesn't make the bar opaque — an iOS 18 tab bar still
+     defaults to a translucent blur that content shows through when it scrolls
+     underneath. `blurEffect="none"`, `disableTransparentOnScrollEdge` and
+     `shadowColor={colors.border}` (a hairline separator) on `NativeTabs` in
+     `appTabs.tsx` are what make it opaque — and these are the very props the
+     v57 docs call no-ops on iOS 26. That is not a contradiction: with the flag
+     forcing iOS 18 mode, "iOS 18 and earlier" now describes the running bar, so
+     they apply. Flag without props → still translucent; props without flag →
+     no-ops on 26. Both are required.
+
+  Caveats worth knowing — the flag opts the *whole* app out of the redesign
+  (bars, sheets, system chrome), not just the tab bar, and Apple has signalled
+  it's a temporary compatibility aid slated for removal in a future Xcode.
+  `app.json` can't carry a comment, so a test in `app.config.test.js` asserts
+  the flag is present and survives the config merge, since a silent removal
+  turns the `appTabs.tsx` props back into no-ops and the bleed-through returns
+  with a green suite.
+
 ## Shipped from the feature-idea list
 
 The feature ideas were derived from what was already built — each named the seam

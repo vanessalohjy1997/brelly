@@ -10,8 +10,22 @@ export default function AppTabs() {
     // same colour every other action in the app uses. Unselected tabs sit on
     // `textSecondary` rather than a faded `text`, so the pair reads as a
     // deliberate contrast and both clear AA on `background`.
+    //
+    // The bar is made opaque so a scrolling list doesn't bleed through it and
+    // cost the icons their contrast. This is a two-part fix: on iOS 26 the
+    // system draws the bar as translucent Liquid Glass and these props are
+    // no-ops, so the whole app is opted out of the redesign with
+    // `UIDesignRequiresCompatibility` in app.json — and *that* is what makes
+    // `blurEffect`, `shadowColor` and `disableTransparentOnScrollEdge` take
+    // effect here (they apply to the iOS 18-style bar only). Without the flag
+    // these do nothing; without these the flagged bar still keeps iOS 18's
+    // default translucent blur. `shadowColor` is the hairline that separates
+    // the now-opaque bar from the page it shares a colour with.
     <NativeTabs
       backgroundColor={colors.background}
+      blurEffect="none"
+      disableTransparentOnScrollEdge
+      shadowColor={colors.border}
       tintColor={colors.primary}
       iconColor={{ default: colors.textSecondary, selected: colors.primary }}
       labelStyle={{

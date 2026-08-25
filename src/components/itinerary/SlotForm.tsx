@@ -30,6 +30,7 @@ import { computeNotificationTriggerTime } from "@/utils/computeNotificationTrigg
 import { formatLeadTime } from "@/utils/formatLeadTime";
 import {
   DatePickerWidth,
+  DateTimePickerHeight,
   shouldStackDateTimeFields,
 } from "@/utils/shouldStackDateTimeFields";
 import {
@@ -852,13 +853,19 @@ const styles = StyleSheet.create({
   // moment someone picks an explicit theme in Settings — the label stays black
   // on a form that has gone dark. `accentColor` is passed for the same reason:
   // the selection tint would otherwise be the system blue rather than ours.
+  // `height` is as load-bearing as `width` — see `DateTimePickerHeight`. The
+  // host reports no intrinsic height, so without it the capsule drifts up over
+  // the "Day"/"Starts"/"Ends" caption on every relayout (a Label keystroke
+  // re-renders the whole form).
   datePicker: {
     width: DatePickerWidth,
+    height: DateTimePickerHeight,
   },
   // A time capsule is narrower than the date + time pair these fields used to
   // render, which is what makes two of them fit side by side on a phone.
   timePicker: {
     width: 96,
+    height: DateTimePickerHeight,
   },
   input: {
     borderRadius: Spacing.two,

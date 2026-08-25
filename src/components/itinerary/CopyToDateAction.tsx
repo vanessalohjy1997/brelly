@@ -6,7 +6,7 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { Spacing } from "@/constants/theme";
 import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
-import { DatePickerWidth } from "@/utils/shouldStackDateTimeFields";
+import { DatePickerWidth, DateTimePickerHeight } from "@/utils/shouldStackDateTimeFields";
 
 type Props = {
   onDuplicate: (targetDate: Date) => void;
@@ -63,8 +63,11 @@ const styles = StyleSheet.create({
   // `themeVariant` is what stops the chip rendering in the device's appearance
   // while the modal around it renders in the app's — the same fix `SlotForm`
   // carries, and this picker sits on the same screen as those two.
+  // `height` pinned as well as `width` — see `DateTimePickerHeight`. The host
+  // reports no intrinsic height, so a width-only box lets the capsule float.
   picker: {
     width: DatePickerWidth,
+    height: DateTimePickerHeight,
   },
   row: {
     flexDirection: "row",

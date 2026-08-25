@@ -1,4 +1,5 @@
 const appConfig = require('./app.config');
+const appJson = require('./app.json');
 
 const baseConfig = () => ({
   name: 'brelly',
@@ -73,5 +74,22 @@ describe('app.config', () => {
     expect(() => appConfig({ config: { name: 'brelly' } })).not.toThrow();
     expect(appConfig({ config: { name: 'brelly' } }).ios.googleServicesFile).
       toBeUndefined();
+  });
+
+  // The tab bar is a native UITabBar that iOS 26 styles as translucent Liquid
+  // Glass on its own — content bleeds through and the icons lose contrast. The
+  // per-bar props that would opt out (blurEffect, disableTransparentOnScrollEdge)
+  // are no-ops on iOS 26 per the v57 native-tabs docs, so this app-wide flag is
+  // the only lever that forces an opaque bar there. Assert it here so it can't
+  // be dropped from app.json silently — a removal reintroduces the bleed-through
+  // with a green suite.
+  it('opts the whole app out of Liquid Glass on iOS 26', () => {
+    expect(appJson.expo.ios.infoPlist.UIDesignRequiresCompatibility).toBe(true);
+  });
+
+  it('carries the Liquid Glass opt-out through the config merge', () => {
+    const config = appConfig({ config: appJson.expo });
+
+    expect(config.ios.infoPlist.UIDesignRequiresCompatibility).toBe(true);
   });
 });
