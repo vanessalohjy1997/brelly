@@ -95,6 +95,29 @@ Each names the seam it hangs off — none of them need new architecture.
       existing stops and on calendar imports — absent means _unknown_, not `SG`,
       and falls through to the distance ceiling, which is why both signals are
       needed rather than either alone. `overlap` is unaffected.
+- [ ] **Swipe a stop to mute as well as delete.** The card's left-swipe reveals
+      only Delete; muting a stop is view-only from the list (`ItineraryCard`
+      draws the bell-slash but changing it needs the full edit form). Add a
+      second swipe action — Mute/Unmute — beside Delete. `ReanimatedSwipeable`'s
+      `renderRightActions` already passes `swipeableMethods` to close the row
+      after a mute tap. One-off stops toggle instantly with an undo toast,
+      through a new mute seam alongside `useDeleteSlotWithUndo` (`updateSlot` +
+      `stripNotificationHandles` and `cancelNotification` on mute;
+      `useRainNotificationScheduler` to re-schedule on unmute). Routine stops
+      can't take a silent per-day flag — Rule 4 of `planRoutineMaterialization`
+      compares `notificationsMuted` and replaces any routine slot that disagrees
+      with its rule, so the mute would vanish on the next top-up — so muting or
+      deleting one raises the same `askEditScope` day/series prompt the edit
+      form (`plan/[id].tsx`) already uses: series edits the rule via
+      `updateRoutine`/`deleteRoutine` + `materializeRoutines`, day detaches the
+      slot (`addException` + `routineId: undefined`). Fold the routine-scope
+      prompt into `useDeleteSlotWithUndo` so every delete path shares one seam —
+      which changes swipe-delete on a routine from today's silent this-day to a
+      prompt. Gate Mute on `!past` (History has no future alert to mute); add a
+      `hapticToggle` and a `toggle-mute` accessibility action. This is the
+      quick-mute item from the UX review (`UX.md`, Today screen), promoted here
+      because it also reworks the delete seam and routine scope, not just a
+      screen.
 
 ### Data lifecycle
 

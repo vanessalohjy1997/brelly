@@ -265,6 +265,34 @@ system settings) when the status is denied.
 - [ ] **No day outlook when plans exist.** `NearbyForecastPreview` only
   renders in the empty state, so having plans loses the rest-of-day view.
 
+- [ ] **"Right now" shows the next stop's location, not yours.** With plans on
+  screen, `LiveConditionsCard` is anchored to the current-or-next stop's
+  coordinates ([index.tsx:119-132](src/app/%28tabs%29/index.tsx#L119-L132)), but
+  the card is labelled only "Right now"
+  ([LiveConditionsCard.tsx:70-72](src/components/weather/LiveConditionsCard.tsx#L70-L72))
+  — so a reader takes it as the weather where they are, when it is really the
+  weather at a place they haven't reached yet. "Right now" should mean *here*:
+  the device's current location, whether or not there are plans.
+
+  This changes the terms of a deliberate choice, so it is worth stating. Anchoring
+  to the slot means the readings work with **no location permission**, because
+  every slot carries its own coordinates (the comment at
+  [index.tsx:119-122](src/app/%28tabs%29/index.tsx#L119-L122) says exactly that).
+  Reading the device location makes "Right now" need the same foreground
+  permission the empty state already asks for
+  ([deviceLocationStore](src/store/deviceLocationStore.ts),
+  [NearbyWeatherPrompt](src/components/weather/NearbyWeatherPrompt.tsx)).
+
+  **Do:** point `useLiveConditions` at `nearbyCoords` (the device point) in both
+  branches and drop the `focusSlot`-derived `conditionsPoint`. `focusSlot` still
+  earns its keep — it draws the emphasis outline on the current/next card, which
+  is what answers "where am I headed"; this card is the separate "where I am now"
+  reading, and each stop's own forecast already lives on its `ItineraryCard`.
+  When location is ungranted or denied, fall back to the prompt/recovery path
+  rather than silently borrowing a stop's coordinates — otherwise the card is
+  back to showing a place that isn't here. (UV is island-wide and needs no
+  location, so it can still show on its own.)
+
 - [x] **The verdict was a sentence in the middle of the card.** "Umbrella —
   rain" set at 17pt bold competed with the plan's own name for the eye, and
   read as prose where the information is a status. It is now a pill in the
