@@ -16,6 +16,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # EAS sets up signing credentials for both targets (com.sg.brelly.app and
+    # com.sg.brelly.app.widget) by authenticating to Apple with the App Store
+    # Connect API key stored on EAS. Non-interactively it reads the team from
+    # EXPO_APPLE_TEAM_ID; without it the auth falls back to an `Apple Team ID:`
+    # prompt and the build dies on unreadable stdin. `ios.appleTeamId` in
+    # app.json only sets the native DEVELOPMENT_TEAM — a different code path —
+    # so it doesn't cover this. The ID is already public in the committed
+    # pbxproj (it's not a secret), so it lives here in plain text.
+    env:
+      EXPO_APPLE_TEAM_ID: PC223N993Y
     steps:
       - uses: actions/checkout@v7
 
