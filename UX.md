@@ -265,6 +265,34 @@ system settings) when the status is denied.
 - [ ] **No day outlook when plans exist.** `NearbyForecastPreview` only
   renders in the empty state, so having plans loses the rest-of-day view.
 
+- [ ] **"Right now" shows the next stop's location, not yours.** With plans on
+  screen, `LiveConditionsCard` is anchored to the current-or-next stop's
+  coordinates ([index.tsx:119-132](src/app/%28tabs%29/index.tsx#L119-L132)), but
+  the card is labelled only "Right now"
+  ([LiveConditionsCard.tsx:70-72](src/components/weather/LiveConditionsCard.tsx#L70-L72))
+  — so a reader takes it as the weather where they are, when it is really the
+  weather at a place they haven't reached yet. "Right now" should mean *here*:
+  the device's current location, whether or not there are plans.
+
+  This changes the terms of a deliberate choice, so it is worth stating. Anchoring
+  to the slot means the readings work with **no location permission**, because
+  every slot carries its own coordinates (the comment at
+  [index.tsx:119-122](src/app/%28tabs%29/index.tsx#L119-L122) says exactly that).
+  Reading the device location makes "Right now" need the same foreground
+  permission the empty state already asks for
+  ([deviceLocationStore](src/store/deviceLocationStore.ts),
+  [NearbyWeatherPrompt](src/components/weather/NearbyWeatherPrompt.tsx)).
+
+  **Do:** point `useLiveConditions` at `nearbyCoords` (the device point) in both
+  branches and drop the `focusSlot`-derived `conditionsPoint`. `focusSlot` still
+  earns its keep — it draws the emphasis outline on the current/next card, which
+  is what answers "where am I headed"; this card is the separate "where I am now"
+  reading, and each stop's own forecast already lives on its `ItineraryCard`.
+  When location is ungranted or denied, fall back to the prompt/recovery path
+  rather than silently borrowing a stop's coordinates — otherwise the card is
+  back to showing a place that isn't here. (UV is island-wide and needs no
+  location, so it can still show on its own.)
+
 - [x] **The verdict was a sentence in the middle of the card.** "Umbrella —
   rain" set at 17pt bold competed with the plan's own name for the eye, and
   read as prose where the information is a status. It is now a pill in the
@@ -277,6 +305,56 @@ system settings) when the status is denied.
   in the same place to scan down. The full sentence survives as the pill's
   `accessibilityLabel`, and `WeatherBadge` now leads with NEA's own wording.
 
+- [ ] **The verdict is no longer written in words anywhere on the card.** The
+  pill above became an icon watermark, so the umbrella answer now reaches a
+  sighted user only as a 4px accent bar, a 14%-opacity umbrella watermark, and
+  an `accessibilityLabel` — never in words. `WeatherBadge` leads with NEA's raw
+  string ("Thundery Showers", "Fair (Night)")
+  ([WeatherBadge.tsx:92-94](src/components/weather/WeatherBadge.tsx#L92-L94)),
+  which is the *condition*, not the *decision* — so the app named after an
+  umbrella is back to asking the reader to translate meteorology, the exact
+  thing P0 item 1 set out to end. The sun case is worse than neutral: a
+  "Fair (Day)" stop at UV 10 needs an umbrella, but "Fair" reads as no-umbrella
+  and the NEA string never carries UV.
+
+  **Do:** put a short verdict word back as the headline of the weather column
+  and demote the NEA string beneath it — "demote the raw NEA string", as P0
+  item 1 asked, not delete it. `describeUmbrella`
+  ([describeUmbrella.ts](src/utils/describeUmbrella.ts)) already returns a
+  pill-length `shortLabel` ("Rain" / "Sun" / "Rain + sun" / "Clear"), the same
+  string the iOS widget uses ([widgetSnapshot.ts:95](src/services/widgetSnapshot.ts#L95))
+  — reuse it rather than deriving a second vocabulary in the card. Change the
+  "both" case to **"Rain · sun"** (middot) in `describeUmbrella` so the card and
+  the widget share one spelling; the widget's snapshot tests don't assert that
+  case, so nothing there breaks. Render `shortLabel` in
+  [WeatherBadge.tsx](src/components/weather/WeatherBadge.tsx) above
+  `weather.forecast`, coloured with the verdict's `themeColor`
+  (`colors[verdict.themeColor]`, the map already used in
+  [ItineraryCard.tsx:153](src/components/itinerary/ItineraryCard.tsx#L153)), and
+  drop the forecast string to the secondary meta weight below it. Keep the
+  existing container `accessibilityLabel` (the full `verdict.label` sentence) so
+  the now-visible word collapses into that one node rather than being announced
+  twice, and keep the loading / `error` / `unavailable` early returns as they
+  are — no forecast, no verdict.
+
+  **Clear stops stay wordless** — no verdict word, badge unchanged — matching
+  the restraint a clear stop already gets (no accent bar, no watermark); the
+  word appears only when an umbrella is actually needed. The widest case is
+  "Rain · sun" against the weather column's `maxWidth: 40%`
+  ([ItineraryCard.tsx:382-387](src/components/itinerary/ItineraryCard.tsx#L382-L387)),
+  so give it `numberOfLines={1}` and check it on a small phone.
+
+  Tests to update: the two "both" assertions in
+  [describeUmbrella.test.ts](src/utils/describeUmbrella.test.ts) (`"Rain + sun"`
+  → `"Rain · sun"`); add visible-word assertions to
+  [WeatherBadge.test.tsx](src/components/weather/WeatherBadge.test.tsx) (the
+  existing `queryByText(/Umbrella —/)` null check still holds — we render the
+  short word, not the sentence) and to
+  [ItineraryCard.test.tsx](src/components/itinerary/ItineraryCard.test.tsx)
+  (rain → "Rain", overseas sun → "Sun", clear → no word); and update the
+  hardcoded `"Rain + sun"` preview label in
+  [dev-weather-preview.tsx:42](src/app/dev-weather-preview.tsx#L42).
+
 - [x] **Wind was on the stop card.** It is the one forecast reading that
   cannot change the umbrella answer, and it was what pushed the badge's meta
   line into wrapping. Gone from `WeatherBadge`, along with `formatWind`. The
@@ -286,6 +364,30 @@ system settings) when the status is denied.
   second icon rather than as weather. `UmbrellaVerdictIcon` now scatters
   several small drops above and past the edges of the umbrella (three at list
   sizes, five above 30px, three when a sun shares the frame).
+
+---
+
+## iOS widget
+
+- [ ] **The small widget wraps the verdict word mid-letter.** On the home-screen
+  small widget the umbrella verdict ("Clear") and the temperature range
+  ("26–35°") share one horizontal row, split by a `Spacer`
+  ([targets/widget/index.swift:170-187](targets/widget/index.swift#L170-L187)).
+  The row is too narrow for both, so the fixed-width temperature starves the
+  verdict of space and it breaks across two lines — the glance reads "Clea / r".
+  Both home families go through the same `homeView(_:)`, but only the small one
+  is tight enough to wrap.
+
+  **Do:** in `homeView`, branch on the `family`
+  ([index.swift:120](targets/widget/index.swift#L120)) already in scope. For
+  `.systemSmall`, put the temperature `Text` on its own line **above** the
+  verdict `Label` (a leading-aligned `VStack`) so each gets the full width and
+  "Clear" — and the longer "Rain · sun" — render on one line. Keep the existing
+  side-by-side `HStack` for the wider medium family unchanged. No JS/snapshot
+  changes: `style.label`, `style.symbol`, `style.tint` and `slot.temperature`
+  are already in scope, and `verdictStyle(for:)` is untouched. Swift-only, so no
+  Jest test accompanies it — verify visually in a native build across the
+  `.systemSmall` and `.systemMedium` families.
 
 ---
 
@@ -335,7 +437,7 @@ system settings) when the status is denied.
 
 ## Add / edit plan form
 
-- [ ] **Typing in Label shoves the Starts/Ends pickers up over their labels.**
+- [x] **Typing in Label shoves the Starts/Ends pickers up over their labels.**
   A real layout bug, not a design gap. Type into the LABEL field and the two
   time pickers jump upward and overlap their "STARTS"/"ENDS" captions. The
   native `DateTimePicker` (`@expo/ui/community/datetime-picker`) is a SwiftUI
@@ -364,6 +466,17 @@ system settings) when the status is denied.
   be untestable and could regress silently — forward `style` on the mock and
   assert the height in `SlotForm.test.tsx`, the guard the `themeVariant` fix
   above already needed for the same reason.
+
+  Done as written. `DateTimePickerHeight` (40) now sits beside the width tokens
+  in [shouldStackDateTimeFields.ts](src/utils/shouldStackDateTimeFields.ts) and
+  is applied to the `datePicker`/`timePicker` boxes in `SlotForm`, the
+  `datePicker` in [RepeatField](src/components/itinerary/RepeatField.tsx) (which
+  replaces a stray hardcoded `40`), and the `picker` in
+  [CopyToDateAction](src/components/itinerary/CopyToDateAction.tsx) (which had no
+  height at all) — so none of the three can regress the float independently. The
+  Jest mock now forwards `style`, and `SlotForm.test.tsx` asserts the pinned
+  height on all three pickers, the same silent-regression guard `themeVariant`
+  needed.
 
 - [x] **A picked location looks the same as typed text.** `selectedPlace` is
   required to submit but the field renders identically whether it is set or
@@ -537,6 +650,28 @@ system settings) when the status is denied.
   long enough — Location, Label, Day, Starts, Ends, Repeat, Indoor/outdoor,
   Rain alerts — that this is worth a look alongside the collapsing-header work.
 
+- [ ] **A repeat can only be weekly.** `RepeatField`
+  ([RepeatField.tsx](src/components/itinerary/RepeatField.tsx)) offers "Every
+  week" and a row of weekday toggles, and that is the only cadence the whole
+  engine knows — the rule stores `weekdays: number[]` and
+  `routineOccurrenceDates`
+  ([routineOccurrences.ts:62](src/utils/routineOccurrences.ts#L62)) matches it
+  day-by-day against `getDay()`. A monthly commitment — rent on the 1st, a
+  standing invoice on the 15th — has no expression, so it has to be re-entered
+  by hand every month, the exact chore a routine exists to remove.
+
+  **Do:** give the rule a `frequency` discriminator (`weekly` / `monthly`,
+  absent = weekly, so no migration — the `resolveSlotKind` trick) plus a
+  `dayOfMonth`, add a third **Monthly** chip beside Just once / Weekly, and
+  branch the occurrence predicate: monthly matches `getDate() === dayOfMonth`.
+  Scope for a first cut is **by date** (the 15th), seeded from the day the stop
+  already sits on, with short months skipping (the 31st produces no February
+  stop — falls out of the day-by-day scan for free); *not* "Nth weekday" (2nd
+  Tuesday). Everything downstream (materialisation, notifications, edit/delete
+  scope, the Routines screen) reads concrete slots or `describeRoutine` and
+  inherits monthly untouched. Full plan in
+  `~/.claude/plans/can-you-assess-the-cached-waffle.md`.
+
 ---
 
 ## Plans screen
@@ -621,7 +756,7 @@ system settings) when the status is denied.
 
 ## Navigation & chrome
 
-- [ ] **The tab bar is iOS 26 Liquid Glass.** `AppTabs` renders `NativeTabs`
+- [x] **The tab bar is iOS 26 Liquid Glass.** `AppTabs` renders `NativeTabs`
   from `expo-router/unstable-native-tabs`
   ([appTabs.tsx](src/components/appTabs.tsx)) — a native `UITabBar` that iOS 26
   styles as translucent liquid glass on its own; nothing here asks for it. The
@@ -632,6 +767,24 @@ system settings) when the status is denied.
   opaque `backgroundColor={colors.background}`, and `shadowColor={colors.border}`
   for a hairline so the now-opaque bar still separates from the page it shares a
   colour with. Verified against the v57 native-tabs docs.
+
+  **The "verified" claim above was wrong, and the fix isn't the one written.**
+  The v57 native-tabs docs say verbatim that `backgroundColor`, `blurEffect`,
+  `shadowColor` and `disableTransparentOnScrollEdge` *"affect the iOS tab bar
+  only on iOS 18 and earlier"* — on iOS 26 the system derives the bar from the
+  content behind it and those props are no-ops, so the "bar-alone" opt-out this
+  item describes does nothing on the exact OS it targets. The fix is two parts,
+  and the flag alone isn't enough: (1) `ios.infoPlist.UIDesignRequiresCompatibility:
+  true` in [app.json](app.json) opts the *whole* app out of the iOS 26 redesign,
+  forcing iOS 18-style rendering — a native change that needs a prebuild and a
+  fresh build, not a JS reload; and (2) `blurEffect="none"`,
+  `disableTransparentOnScrollEdge` and `shadowColor` on `NativeTabs` in
+  [appTabs.tsx](src/components/appTabs.tsx), which make the bar opaque and *only
+  apply* once the flag has forced iOS 18 mode (they are the same props the docs
+  call no-ops on 26). The flag is guarded by a test in
+  [app.config.test.js](app.config.test.js). It's a temporary Apple compatibility
+  flag slated for removal in a future Xcode — see
+  [round 30](NOTES.md#round-30--the-floating-time-capsule-and-a-tab-bar-the-docs-lied-about).
 
 ---
 

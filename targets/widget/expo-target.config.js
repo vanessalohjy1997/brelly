@@ -33,8 +33,17 @@ module.exports = () => ({
   // The umbrella pair from `src/constants/theme.ts`, generated as light/dark
   // colour assets so the home-screen widget reads the same in both themes.
   // Referenced from Swift as `Color("umbrellaRain")` / `Color("umbrellaSun")`.
+  // `cardBackground` is the app's `backgroundElement` — the violet fill a plan
+  // card sits on — so the home-screen widget reads as the same surface.
+  //
+  // The keys are `light` / `dark`: that is what `@bacons/apple-targets` v5
+  // reads (`DynamicColor` in its types, and `with-widget.js` reads
+  // `color.light` / `color.dark`). Its JSDoc `@example` still shows the old
+  // `color` / `darkColor` names — those write an empty colorset, which renders
+  // as the widget's default white. See NOTES round 30.
   colors: {
-    umbrellaRain: { color: "#2E6FB5", darkColor: "#7FB3E8" },
-    umbrellaSun: { color: "#B2650A", darkColor: "#F0B45C" },
+    umbrellaRain: { light: "#2E6FB5", dark: "#7FB3E8" },
+    umbrellaSun: { light: "#B2650A", dark: "#F0B45C" },
+    cardBackground: { light: "#ECE7F5", dark: "#332C44" },
   },
 });

@@ -8,7 +8,7 @@ import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
 import type { RepeatRule } from "@/types/routine";
 import { parseDateKey, shiftDays, toDateKey } from "@/utils/dateKeys";
 import { describeRoutine, WEEKDAY_INITIALS, WEEKDAY_LABELS, WEEKDAY_ORDER } from "@/utils/describeRoutine";
-import { DatePickerWidth } from "@/utils/shouldStackDateTimeFields";
+import { DatePickerWidth, DateTimePickerHeight } from "@/utils/shouldStackDateTimeFields";
 
 /**
  * One tap for the two shapes a week almost always takes. Everything else is
@@ -252,8 +252,9 @@ const styles = StyleSheet.create({
     minWidth: 40,
     alignItems: "center",
   },
+  // Height pinned for the same reason as the width — see `DateTimePickerHeight`.
   datePicker: {
     width: DatePickerWidth,
-    height: 40,
+    height: DateTimePickerHeight,
   },
 });

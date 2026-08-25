@@ -321,6 +321,25 @@ describe("SlotForm", () => {
     },
   );
 
+  // The SwiftUI host reports no intrinsic height, so a width-only box lets the
+  // capsule float and drift up over its "Day"/"Starts"/"Ends" caption on every
+  // relayout. A pinned height is the fix; without it the bug regresses silently,
+  // so the height is asserted here the same way `themeVariant` is above.
+  it("pins a fixed height on the Day, Starts and Ends pickers so the capsule can't float", async () => {
+    const view = await renderWithProviders(
+      <SlotForm submitLabel="Add" onSubmit={jest.fn()} />,
+    );
+
+    const pickers = [
+      view.getByTestId("datetime-picker-date"),
+      ...view.getAllByTestId("datetime-picker-time"),
+    ];
+    expect(pickers).toHaveLength(3);
+    for (const picker of pickers) {
+      expect(StyleSheet.flatten(picker.props.style).height).toBe(40);
+    }
+  });
+
   describe("the picked location", () => {
     it("reads as confirmed rather than as text someone typed", async () => {
       const view = await renderWithProviders(

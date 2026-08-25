@@ -114,6 +114,31 @@ private func verdictStyle(for slot: NextSlot) -> VerdictStyle {
     }
 }
 
+// MARK: - Card decoration
+
+// The accent bar and watermark that only a real rain/sun verdict earns. A clear
+// stop or a missing forecast gets neither, the same restraint `ItineraryCard`
+// applies — its `accent` is null and its watermark is guarded on
+// `reason !== "none"`. Kept apart from `verdictStyle` because that one still
+// answers for the "clear" (checkmark) and "No forecast" states, which draw no
+// decoration here.
+private struct Decoration {
+    let symbol: String
+    let tint: Color
+}
+
+private func decoration(for slot: NextSlot) -> Decoration? {
+    guard let umbrella = slot.umbrella else { return nil }
+    switch umbrella.reason {
+    case "rain", "both":
+        return Decoration(symbol: "umbrella.fill", tint: Color("umbrellaRain"))
+    case "sun":
+        return Decoration(symbol: "sun.max.fill", tint: Color("umbrellaSun"))
+    default:
+        return nil
+    }
+}
+
 // MARK: - Views
 
 struct BrellyWidgetView: View {
@@ -135,15 +160,45 @@ struct BrellyWidgetView: View {
                 emptyView
             }
         }
-        .widgetBackground(backgroundColor)
+        .widgetBackground { backgroundView }
     }
 
-    private var backgroundColor: Color {
+    // The plan card's surface, rebuilt for the widget: the violet fill, a
+    // verdict-tinted bar down the leading edge, and the same umbrella/sun mark
+    // as a faint watermark bleeding off the bottom-right corner. Placed in the
+    // container background so it sits behind the glance, and the system clips it
+    // to the widget's rounded corners — the way `ItineraryCard`'s
+    // `overflow: "hidden"` clips its own bar and watermark.
+    @ViewBuilder
+    private var backgroundView: some View {
         // Lock-screen (accessory) families are rendered by the system in a
         // desaturated/tinted mode, so a background there only fights it.
-        family == .systemSmall || family == .systemMedium
-            ? Color(.systemBackground)
-            : Color.clear
+        if family == .systemSmall || family == .systemMedium {
+            ZStack {
+                Color("cardBackground")
+                if let slot = entry.snapshot?.next,
+                   let decoration = decoration(for: slot) {
+                    Rectangle()
+                        .fill(decoration.tint)
+                        .frame(width: 4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+                    // The verdict as a picture bleeding off the corner, matching
+                    // the card's watermark: large, faint (0.14), clipped by the
+                    // rounded container. A single SF Symbol stands in for the
+                    // card's drawn umbrella-and-marks — the same symbol the
+                    // glance already uses for this verdict.
+                    Image(systemName: decoration.symbol)
+                        .font(.system(size: 96))
+                        .foregroundStyle(decoration.tint)
+                        .opacity(0.14)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .offset(x: 20, y: 24)
+                }
+            }
+        } else {
+            Color.clear
+        }
     }
 
     // Home-screen small/medium: the full glance.
@@ -240,11 +295,13 @@ struct BrellyWidgetView: View {
 // edge-to-edge; on iOS 16 the family still renders without it.
 private extension View {
     @ViewBuilder
-    func widgetBackground(_ color: Color) -> some View {
+    func widgetBackground<Background: View>(
+        @ViewBuilder _ background: () -> Background
+    ) -> some View {
         if #available(iOS 17.0, *) {
-            containerBackground(color, for: .widget)
+            containerBackground(for: .widget) { background() }
         } else {
-            background(color)
+            self.background { background() }
         }
     }
 }

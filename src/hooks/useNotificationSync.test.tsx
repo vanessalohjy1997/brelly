@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react-native";
+import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { AppState } from "react-native";
 
 import { useNotificationSync } from "@/hooks/useNotificationSync";
@@ -73,6 +73,42 @@ describe("useNotificationSync", () => {
         settings: expect.objectContaining({ rainAlertsEnabled: true }),
       }),
     );
+  });
+
+  it("re-syncs when stops arrive after mount (Firestore hydration)", async () => {
+    // The store starts empty and is filled by the cloud snapshot *after* the
+    // hook mounts — the mount sync must not be the last word.
+    useItineraryStore.setState({ plans: [] });
+    await renderHook(() => useNotificationSync());
+    await waitFor(() => expect(mockRun).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      useItineraryStore.setState({ plans: [PLAN] });
+    });
+
+    await waitFor(() => expect(mockRun).toHaveBeenCalledTimes(2));
+    expect(mockRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ plans: [PLAN] }),
+    );
+  });
+
+  it("does not re-sync when only an unrelated field changes", async () => {
+    await renderHook(() => useNotificationSync());
+    await waitFor(() => expect(mockRun).toHaveBeenCalledTimes(1));
+
+    // Same stop id and start time, different label — the forecast window is
+    // unchanged, so this must not trigger another round of fetches.
+    const renamed = {
+      ...PLAN,
+      slots: [{ ...PLAN.slots[0], label: "Beach day" }],
+    };
+    await act(async () => {
+      useItineraryStore.setState({ plans: [renamed] });
+    });
+
+    // Wait past the debounce window; still only the mount sync.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mockRun).toHaveBeenCalledTimes(1);
   });
 
   it("syncs again when the app returns to the foreground", async () => {
