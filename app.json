@@ -20,6 +20,7 @@
         "tinted": "./assets/icon/tinted-hook.png"
       },
       "bundleIdentifier": "com.sg.brelly.app",
+      "appleTeamId": "PC223N993Y",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "usesNonExemptEncryption": false

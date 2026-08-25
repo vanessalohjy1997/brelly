@@ -12,9 +12,11 @@
  * (`ios.entitlements`) and `WIDGET_APP_GROUP` in
  * `src/services/widgetBridge.ts` — the app writes the glance into that shared
  * container and the widget reads it back. `appleTeamId` is intentionally
- * omitted: it defaults to the main app target's team, which EAS resolves from
- * the project credentials, and a hardcoded placeholder would be forwarded to
- * signing verbatim (see the App Store Connect note in NOTES.md).
+ * omitted here: `ios.appleTeamId` in `app.json` sets the team for *all* native
+ * targets, so this one inherits it. It is NOT left to EAS to resolve from the
+ * project credentials — a non-interactive `eas build` cannot answer the
+ * "Apple Team ID:" prompt that resolution falls back to, and the build fails
+ * before signing (see the App Store Connect note in NOTES.md).
  *
  * @type {import('@bacons/apple-targets/app.plugin').ConfigFunction}
  */
