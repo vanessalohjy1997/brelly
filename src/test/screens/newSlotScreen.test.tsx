@@ -111,12 +111,13 @@ describe("NewSlotScreen", () => {
       const view = await renderWithProviders(<NewSlotScreen />);
       await pickAPlace(view);
 
-      await fireEvent.press(view.getByText("Every week"));
+      await fireEvent.press(view.getByText("Weekly"));
       await fireEvent.press(view.getByText("Mon–Fri"));
       await fireEvent.press(view.getByText("Add plan"));
 
       const [routine] = useRoutineStore.getState().routines;
       expect(routine.label).toBe("East Coast Park");
+      expect(routine.frequency).toBe("weekly");
       expect(routine.weekdays).toEqual([1, 2, 3, 4, 5]);
       // No end date: a routine runs until it's turned off, which is the whole
       // difference from the fixed-count repeat this replaced.
@@ -127,7 +128,7 @@ describe("NewSlotScreen", () => {
       const view = await renderWithProviders(<NewSlotScreen />);
       await pickAPlace(view);
 
-      await fireEvent.press(view.getByText("Every week"));
+      await fireEvent.press(view.getByText("Weekly"));
       await fireEvent.press(view.getByText("Mon–Fri"));
       await fireEvent.press(view.getByText("Add plan"));
 
@@ -146,7 +147,7 @@ describe("NewSlotScreen", () => {
       const view = await renderWithProviders(<NewSlotScreen />);
       await pickAPlace(view);
 
-      await fireEvent.press(view.getByText("Every week"));
+      await fireEvent.press(view.getByText("Weekly"));
       await fireEvent.press(view.getByText("Mon–Fri"));
       await fireEvent.press(view.getByText("Add plan"));
 
@@ -159,7 +160,7 @@ describe("NewSlotScreen", () => {
       const view = await renderWithProviders(<NewSlotScreen />);
       await pickAPlace(view);
 
-      await fireEvent.press(view.getByText("Every week"));
+      await fireEvent.press(view.getByText("Weekly"));
       // Clear the day it seeded itself with, leaving the rule meaningless.
       const seeded = view.getAllByRole("checkbox", { checked: true });
       for (const day of seeded) await fireEvent.press(day);
@@ -168,6 +169,37 @@ describe("NewSlotScreen", () => {
       expect(view.getByText("Pick at least one day")).toBeTruthy();
       expect(useRoutineStore.getState().routines).toHaveLength(0);
       expect(router.back).not.toHaveBeenCalled();
+    });
+
+    it("stores a monthly rule on the stop's own day, needing no day picked", async () => {
+      const view = await renderWithProviders(<NewSlotScreen />);
+      await pickAPlace(view);
+
+      await fireEvent.press(view.getByText("Monthly"));
+      // No day toggles to satisfy — a monthly rule falls on the stop's date.
+      await fireEvent.press(view.getByText("Add plan"));
+
+      expect(view.queryByText("Pick at least one day")).toBeNull();
+      const [routine] = useRoutineStore.getState().routines;
+      expect(routine.frequency).toBe("monthly");
+      expect(routine.weekdays).toEqual([]);
+      // The day of the month comes from the day the stop sits on.
+      expect(routine.dayOfMonth).toBe(Number(routine.startDate.split("-")[2]));
+      expect(router.back).toHaveBeenCalled();
+    });
+
+    it("names the monthly rule in the toast", async () => {
+      const view = await renderWithProviders(<NewSlotScreen />);
+      await pickAPlace(view);
+
+      await fireEvent.press(view.getByText("Monthly"));
+      await fireEvent.press(view.getByText("Add plan"));
+
+      // The exact day depends on the run date, so match the shape rather than
+      // a fixed ordinal.
+      expect(useToastStore.getState().toast?.message).toMatch(
+        /^Added East Coast Park · Repeats on the \d+(st|nd|rd|th)$/,
+      );
     });
 
     it("defaults to a single stop and no routine", async () => {

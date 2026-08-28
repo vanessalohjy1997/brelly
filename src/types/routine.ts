@@ -1,3 +1,4 @@
+import type { RoutineFrequency } from "@/utils/routineFrequency";
 import type { SlotKind } from "@/utils/slotKind";
 
 /**
@@ -23,12 +24,25 @@ export type Routine = {
    */
   countryCode?: string;
   /**
+   * How often it recurs. Absent means weekly — see `resolveFrequency`, the
+   * same absent-means-default trick `kind` uses. A weekly rule falls on
+   * `weekdays`; a monthly one falls on `dayOfMonth`.
+   */
+  frequency?: RoutineFrequency;
+  /**
    * Which days it falls on, as `Date.getDay()` — 0 is Sunday, 6 is Saturday.
+   * Used when `frequency` is weekly; empty on a monthly rule.
    *
    * An array rather than a bitmask so the persisted JSON is readable, and
    * because the form works in terms of "which chips are on" anyway.
    */
   weekdays: number[];
+  /**
+   * Day of the month a monthly rule falls on, 1–31. A month with no such day —
+   * the 31st in February — simply produces no stop that month: the day-by-day
+   * occurrence scan never matches it, which is the standard RRULE behaviour.
+   */
+  dayOfMonth?: number;
   /**
    * Times of day, `"HH:MM"` 24-hour — the same shape `QuietHours` and
    * `DigestSettings` use in the settings store.
@@ -57,6 +71,11 @@ export type Routine = {
 
 /** The part of a routine the add-plan form collects. */
 export type RepeatRule = {
+  /** Absent means weekly — see `resolveFrequency`. */
+  frequency?: RoutineFrequency;
+  /** The selected weekdays, when weekly; empty when monthly. */
   weekdays: number[];
+  /** Day of the month, when monthly. */
+  dayOfMonth?: number;
   endDate?: string; // YYYY-MM-DD; absent = ongoing
 };
