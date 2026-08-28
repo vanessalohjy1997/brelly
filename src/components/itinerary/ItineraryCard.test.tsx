@@ -118,6 +118,16 @@ describe("ItineraryCard", () => {
     expect(view.getAllByTestId("symbol-water_drop").length).toBeGreaterThan(0);
   });
 
+  it("writes the verdict as a word in the weather column, not only as a watermark", async () => {
+    const view = await renderWithProviders(
+      <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
+    );
+
+    // The word answers the umbrella question for a sighted reader — the
+    // watermark and accent bar can't carry it alone.
+    expect(await view.findByText("Rain")).toBeTruthy();
+  });
+
   it("spells the verdict out for a screen reader, as the full sentence", async () => {
     const view = await renderWithProviders(
       <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
@@ -157,6 +167,9 @@ describe("ItineraryCard", () => {
 
     expect(await view.findByLabelText(/^You're clear\. /)).toBeTruthy();
     expect(view.queryByTestId("symbol-umbrella")).toBeNull();
+    // Wordless too — no verdict word on a clear stop, only NEA's own wording.
+    expect(view.queryByText("Clear")).toBeNull();
+    expect(view.getByText("Fair (Day)")).toBeTruthy();
   });
 
   it("still identifies the stop when it is past", async () => {
@@ -339,6 +352,8 @@ describe("ItineraryCard", () => {
       // test environment, so a sun verdict here can only have come from
       // the Open-Meteo forecast's own inline uvIndex.
       expect(await view.findByLabelText(/^Umbrella — sun\. /)).toBeTruthy();
+      // And it reaches a sighted reader as the word, not only the label.
+      expect(view.getByText("Sun")).toBeTruthy();
     });
   });
 

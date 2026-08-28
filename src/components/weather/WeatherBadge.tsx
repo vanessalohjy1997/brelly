@@ -86,10 +86,33 @@ export function WeatherBadge({ weather, isLoading, uvIndex, onRetry }: Props) {
       accessibilityRole="text"
       accessibilityLabel={accessibilityLabel}
     >
-      {/* NEA's own wording leads, then the numbers and how stale they are.
-          Wind is gone — it never fed the umbrella question, and it was the
-          reading that pushed this line into wrapping. */}
-      <ThemedText style={styles.forecast} numberOfLines={1}>
+      {/* The umbrella answer in a word, coloured by the verdict — the app
+          named after an umbrella should say the decision, not leave the
+          reader to translate NEA's condition into one. Only when an umbrella
+          is actually needed: a clear stop stays wordless, matching the
+          restraint it already gets on the card (no accent bar, no watermark).
+          The widest case, "Rain · sun", is held to one line against the
+          weather column's 40% cap. */}
+      {verdict.themeColor && (
+        <ThemedText
+          style={[styles.forecast, { color: colors[verdict.themeColor] }]}
+          numberOfLines={1}
+        >
+          {verdict.shortLabel}
+        </ThemedText>
+      )}
+      {/* NEA's own wording, demoted beneath the verdict word to secondary
+          weight when there is one and leading in its own right when the stop
+          is clear. Wind is gone — it never fed the umbrella question, and it
+          was the reading that pushed this line into wrapping. */}
+      <ThemedText
+        style={
+          verdict.needed
+            ? [styles.meta, { color: colors.textSecondary }]
+            : styles.forecast
+        }
+        numberOfLines={1}
+      >
         {weather.forecast}
       </ThemedText>
       {/* Every reading's age now lives in the card's top corner next to the

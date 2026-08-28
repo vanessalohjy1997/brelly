@@ -33,14 +33,14 @@ describe("describeUmbrella", () => {
       reason: "both",
       needed: true,
       label: "Umbrella — rain and sun",
-      shortLabel: "Rain + sun",
+      shortLabel: "Rain · sun",
     });
   });
 
   it("carries a pill-length form of every verdict, not just the sentence", () => {
     expect(describeUmbrella(RAINY, 3).shortLabel).toBe("Rain");
     expect(describeUmbrella(FAIR, 9).shortLabel).toBe("Sun");
-    expect(describeUmbrella(PASSING, 10).shortLabel).toBe("Rain + sun");
+    expect(describeUmbrella(PASSING, 10).shortLabel).toBe("Rain · sun");
     expect(describeUmbrella(CLOUDY, 4).shortLabel).toBe("Clear");
   });
 

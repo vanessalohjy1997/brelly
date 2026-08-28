@@ -39,7 +39,7 @@ const MOCKS: { label: string; weather: SlotForecast; uvIndex?: number }[] = [
     uvIndex: 9,
   },
   {
-    label: "Rain + sun",
+    label: "Rain · sun",
     weather: {
       forecast: "Passing Showers",
       source: "24hr",
