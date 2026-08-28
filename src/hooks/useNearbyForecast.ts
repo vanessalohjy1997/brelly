@@ -21,7 +21,18 @@ import type { NeaRegion } from "@/types/weather";
  * keep both consuming screens mounted at once, and component-local state gave
  * each of them its own copy that the other's grant never reached.
  */
-export function useNearbyForecast(enabled: boolean, hours: number = 6) {
+export function useNearbyForecast(
+  enabled: boolean,
+  {
+    hours = 6,
+    // Whether to fetch the upcoming-forecast preview on top of resolving the
+    // device location. Today keeps the location machinery on even with plans
+    // — the "Right now" live-conditions card is anchored to the device point,
+    // not a stop — but only wants the forecast preview in its empty state.
+    // Defaults to `enabled`, so `useNearbyForecast(true)` still gets both.
+    fetchForecast = enabled,
+  }: { hours?: number; fetchForecast?: boolean } = {},
+) {
   const permission = useDeviceLocationStore((state) => state.permission);
   const region = useDeviceLocationStore((state) => state.region);
   const coords = useDeviceLocationStore((state) => state.coords);
@@ -56,7 +67,7 @@ export function useNearbyForecast(enabled: boolean, hours: number = 6) {
   const query = useQuery({
     queryKey: ["nearbyForecast", region, hours],
     queryFn: () => getUpcomingForecast(region as NeaRegion, hours),
-    enabled: enabled && permission === "granted" && !!region,
+    enabled: enabled && fetchForecast && permission === "granted" && !!region,
     staleTime: 1000 * 60 * 10,
   });
 

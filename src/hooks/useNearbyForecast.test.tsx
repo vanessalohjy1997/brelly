@@ -142,6 +142,29 @@ describe("useNearbyForecast", () => {
     expect(result.current.forecasts).toEqual([]);
   });
 
+  it("resolves the device location but skips the forecast preview when only the location is wanted", async () => {
+    // Today keeps location on even with plans — the "Right now" card is
+    // anchored to the device point — but only wants the empty-state forecast
+    // preview when there are no plans.
+    mockGetPermission.mockResolvedValue({ status: "granted" });
+
+    const { result } = await renderHook(
+      () => useNearbyForecast(true, { fetchForecast: false }),
+      { wrapper },
+    );
+
+    // The location resolved: coords and region are there for the live card…
+    await waitFor(() => expect(result.current.isAvailable).toBe(true));
+    expect(result.current.region).toBe("south");
+    expect(result.current.coords).toEqual({
+      latitude: 1.2833,
+      longitude: 103.8607,
+    });
+    // …but the upcoming-forecast preview was never fetched.
+    expect(getUpcomingForecast).not.toHaveBeenCalled();
+    expect(result.current.forecasts).toEqual([]);
+  });
+
   // The regression this hook was rewritten for. Native tabs keep every screen
   // mounted, so Today and Plans both hold a live copy of this hook at once.
   it("grants once for the whole app, not once per screen", async () => {
