@@ -17,8 +17,10 @@ feedback, the dark-theme surfaces, the native pickers' theming — and, in the
 latest round, undo on delete, the whole add/edit form, both remaining Plans
 items, search, the notification-permission and test-alert gaps, relative times,
 now/next emphasis, reduce-motion, the `border` token, the form's location
-dropdown and the gap it left behind — and, most recently, the per-screen
-location grant, which was the last outright bug in this file.
+dropdown and the gap it left behind, the per-screen location grant — and, in
+the latest round, the verdict word back on the card, "Right now" reading the
+device instead of the next stop, the small widget's mid-letter wrap, and
+monthly routines.
 
 Item descriptions below are left as originally written — they describe the
 problem, not the current code, so a `[x]` item's file references point at what
@@ -265,7 +267,7 @@ system settings) when the status is denied.
 - [ ] **No day outlook when plans exist.** `NearbyForecastPreview` only
   renders in the empty state, so having plans loses the rest-of-day view.
 
-- [ ] **"Right now" shows the next stop's location, not yours.** With plans on
+- [x] **"Right now" shows the next stop's location, not yours.** With plans on
   screen, `LiveConditionsCard` is anchored to the current-or-next stop's
   coordinates ([index.tsx:119-132](src/app/%28tabs%29/index.tsx#L119-L132)), but
   the card is labelled only "Right now"
@@ -293,6 +295,18 @@ system settings) when the status is denied.
   back to showing a place that isn't here. (UV is island-wide and needs no
   location, so it can still show on its own.)
 
+  Done as written. `useLiveConditions` now reads `nearbyCoords` (the device
+  point) in both branches and the `focusSlot`-derived `conditionsPoint` is
+  gone; `focusSlot` stays only to outline the current/next card. The
+  with-plans branch mirrors the empty state: `hasWeatherNearby` shows the live
+  card, else it renders `NearbyWeatherPrompt` (recovery) plus a UV-only card.
+  For that to work with plans on screen, the device-location machinery has to
+  stay enabled — Today now calls `useNearbyForecast(true, { fetchForecast:
+  !hasSlotsToday })`, so the permission/coords/foreground-recovery run whatever
+  the plan state, while the empty-state forecast preview is the only thing
+  gated on being plan-free. A denial on Today can now recover from Settings
+  even with plans, which the disabled hook never allowed.
+
 - [x] **The verdict was a sentence in the middle of the card.** "Umbrella —
   rain" set at 17pt bold competed with the plan's own name for the eye, and
   read as prose where the information is a status. It is now a pill in the
@@ -305,7 +319,7 @@ system settings) when the status is denied.
   in the same place to scan down. The full sentence survives as the pill's
   `accessibilityLabel`, and `WeatherBadge` now leads with NEA's own wording.
 
-- [ ] **The verdict is no longer written in words anywhere on the card.** The
+- [x] **The verdict is no longer written in words anywhere on the card.** The
   pill above became an icon watermark, so the umbrella answer now reaches a
   sighted user only as a 4px accent bar, a 14%-opacity umbrella watermark, and
   an `accessibilityLabel` — never in words. `WeatherBadge` leads with NEA's raw
@@ -355,6 +369,18 @@ system settings) when the status is denied.
   hardcoded `"Rain + sun"` preview label in
   [dev-weather-preview.tsx:42](src/app/dev-weather-preview.tsx#L42).
 
+  Done as written. `describeUmbrella`'s `shortLabel` is `"Rain · sun"` (middot)
+  so the card and the widget snapshot share one spelling, and
+  [WeatherBadge](src/components/weather/WeatherBadge.tsx) leads with that word
+  in `colors[verdict.themeColor]` above NEA's own string, which drops to
+  secondary weight beneath it. A clear stop stays wordless — no verdict word,
+  the NEA string still leads — matching the accent-bar/watermark restraint it
+  already gets; the word is gated on `verdict.themeColor`, non-null only when
+  an umbrella is actually needed. The container `accessibilityLabel` still
+  carries the full sentence, so the now-visible word collapses into that one
+  node rather than being announced twice. The widest case, `"Rain · sun"`, is
+  held to one line against the weather column's 40% cap.
+
 - [x] **Wind was on the stop card.** It is the one forecast reading that
   cannot change the umbrella answer, and it was what pushed the badge's meta
   line into wrapping. Gone from `WeatherBadge`, along with `formatWind`. The
@@ -369,7 +395,7 @@ system settings) when the status is denied.
 
 ## iOS widget
 
-- [ ] **The small widget wraps the verdict word mid-letter.** On the home-screen
+- [x] **The small widget wraps the verdict word mid-letter.** On the home-screen
   small widget the umbrella verdict ("Clear") and the temperature range
   ("26–35°") share one horizontal row, split by a `Spacer`
   ([targets/widget/index.swift:170-187](targets/widget/index.swift#L170-L187)).
@@ -388,6 +414,15 @@ system settings) when the status is denied.
   are already in scope, and `verdictStyle(for:)` is untouched. Swift-only, so no
   Jest test accompanies it — verify visually in a native build across the
   `.systemSmall` and `.systemMedium` families.
+
+  Done as written. `homeView` now branches on `family`: `.systemSmall` stacks
+  the temperature above the verdict in a leading-aligned `VStack`, the medium
+  family keeps its side-by-side `HStack`. The verdict `Label` and temperature
+  `Text` are extracted into `verdictLabel(_:)`/`temperatureText(_:)` so both
+  layouts share one definition, and the verdict text carries `lineLimit(1)` so
+  it can't wrap mid-letter again. `verdictStyle(for:)` and the JS snapshot are
+  untouched. Swift-only — still wants a native-build visual check across both
+  home families, which the JS toolchain here can't run.
 
 ---
 
@@ -650,7 +685,7 @@ system settings) when the status is denied.
   long enough — Location, Label, Day, Starts, Ends, Repeat, Indoor/outdoor,
   Rain alerts — that this is worth a look alongside the collapsing-header work.
 
-- [ ] **A repeat can only be weekly.** `RepeatField`
+- [x] **A repeat can only be weekly.** `RepeatField`
   ([RepeatField.tsx](src/components/itinerary/RepeatField.tsx)) offers "Every
   week" and a row of weekday toggles, and that is the only cadence the whole
   engine knows — the rule stores `weekdays: number[]` and
@@ -671,6 +706,24 @@ system settings) when the status is denied.
   scope, the Routines screen) reads concrete slots or `describeRoutine` and
   inherits monthly untouched. Full plan in
   `~/.claude/plans/can-you-assess-the-cached-waffle.md`.
+
+  Done as planned. The rule gained a `frequency` discriminator (absent =
+  weekly, via a new `resolveFrequency` mirroring `resolveSlotKind`) and a
+  `dayOfMonth`; `routineOccurrenceDates` branches the predicate on frequency,
+  so short months and leap years fall out of the day-by-day scan for free.
+  `RepeatField` now offers Just once / Weekly / Monthly — the monthly branch
+  drops the weekday toggles and tracks the stop's own date (a guarded effect
+  keeps `dayOfMonth` synced to the Day field), and its "On a date" end-date
+  seeds months out rather than the weekly four weeks. `describeRoutine` speaks
+  monthly ("Repeats on the 15th", with a new `ordinal` helper) so the toast,
+  the edit note, the scope prompts and the Routines screen all inherit it; the
+  form's "Pick at least one day" check is now weekly-only. Materialisation,
+  notifications and Firestore needed no change — they read concrete slots or
+  the rule, and `omitUndefinedFields` serialises the new optional fields
+  cleanly. New/extended tests cover the frequency resolver, monthly
+  occurrences (31st-skips-Feb, leap-year 29 Feb, bounds/exceptions), the
+  ordinals, the `RepeatField` monthly branch, monthly materialisation, and
+  creating a monthly routine end-to-end.
 
 ---
 

@@ -60,7 +60,9 @@ export function describeUmbrella(
       reason: "both",
       needed: true,
       label: "Umbrella — rain and sun",
-      shortLabel: "Rain + sun",
+      // Middot, not "+", so the card headline and the iOS widget's snapshot
+      // (widgetSnapshot.ts reuses this exact string) share one spelling.
+      shortLabel: "Rain · sun",
       // Rain wins the tint when both apply: it is the trigger with a cost
       // attached to ignoring it, and a two-tone badge reads as neither.
       themeColor: "umbrellaRain",

@@ -1,6 +1,7 @@
 import type { ItinerarySlot } from "@/types/itinerary";
 import type { Routine } from "@/types/routine";
 import { parseDateKey, shiftDays } from "@/utils/dateKeys";
+import { resolveFrequency } from "@/utils/routineFrequency";
 
 /**
  * How far ahead a routine is filled in.
@@ -58,6 +59,12 @@ function isBetween(date: string, from: string, to: string | undefined) {
  * Bounded by the routine's own `startDate`/`endDate` as well as the window, and
  * with `exceptions` removed — a day the user deleted stays deleted, which is
  * the whole reason exceptions are stored rather than inferred from a gap.
+ *
+ * The cadence is the one thing that branches here: a weekly rule matches on the
+ * weekday, a monthly one on the day of the month. Everything else — the bounds,
+ * the exceptions, the day-by-day scan — is shared, so a monthly rule's short
+ * months (no 31st in February) and leap years fall out for free: the scan just
+ * never produces a date whose `getDate()` is the one it's looking for.
  */
 export function routineOccurrenceDates(
   routine: Routine,
@@ -65,11 +72,15 @@ export function routineOccurrenceDates(
   days: number,
 ): string[] {
   const dates: string[] = [];
+  const monthly = resolveFrequency(routine.frequency) === "monthly";
 
   for (let offset = 0; offset <= days; offset += 1) {
     const date = shiftDays(from, offset);
     if (!isBetween(date, routine.startDate, routine.endDate)) continue;
-    if (!routine.weekdays.includes(parseDateKey(date).getDay())) continue;
+    const falls = monthly
+      ? parseDateKey(date).getDate() === routine.dayOfMonth
+      : routine.weekdays.includes(parseDateKey(date).getDay());
+    if (!falls) continue;
     if (routine.exceptions.includes(date)) continue;
     dates.push(date);
   }

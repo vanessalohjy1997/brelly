@@ -28,6 +28,7 @@ import { useSettingsStore } from "@/store/settingsStore";
 import type { RepeatRule } from "@/types/routine";
 import { computeNotificationTriggerTime } from "@/utils/computeNotificationTriggerTime";
 import { formatLeadTime } from "@/utils/formatLeadTime";
+import { resolveFrequency } from "@/utils/routineFrequency";
 import {
   DatePickerWidth,
   DateTimePickerHeight,
@@ -299,9 +300,15 @@ export function SlotForm({
     if (range.end.getTime() <= range.start.getTime()) {
       nextErrors.time = "End time must be after start time";
     }
-    // A repeat with no day selected has no meaning, and silently saving it as a
-    // one-off would drop a choice the user made on purpose.
-    if (allowRepeat && repeat && repeat.weekdays.length === 0) {
+    // A weekly repeat with no day selected has no meaning, and silently saving
+    // it as a one-off would drop a choice the user made on purpose. A monthly
+    // repeat needs no such check — its day comes from the stop's own date.
+    if (
+      allowRepeat &&
+      repeat &&
+      resolveFrequency(repeat.frequency) === "weekly" &&
+      repeat.weekdays.length === 0
+    ) {
       nextErrors.repeat = "Pick at least one day";
     }
 

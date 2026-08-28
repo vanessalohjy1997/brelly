@@ -1,10 +1,13 @@
-import { fireEvent } from "@testing-library/react-native";
+import { fireEvent, waitFor } from "@testing-library/react-native";
 
 import { RepeatField } from "@/components/itinerary/RepeatField";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { RepeatRule } from "@/types/routine";
 
-/** 5 Aug 2026 is a Wednesday — day 3, so a fresh repeat should start there. */
+/**
+ * 5 Aug 2026 is a Wednesday — day 3 of the week, the 5th of the month. A fresh
+ * weekly repeat should start on the Wednesday; a monthly one on the 5th.
+ */
 const WEDNESDAY = new Date(2026, 7, 5, 9, 0);
 
 async function renderField(value: RepeatRule | null, error?: string) {
@@ -29,13 +32,16 @@ describe("RepeatField", () => {
     expect(view.queryByLabelText("Mon")).toBeNull();
   });
 
-  it("seeds a new repeat with the day the stop is already on", async () => {
+  it("seeds a new weekly repeat with the day the stop is already on", async () => {
     // Repeating on some *other* day than the one just picked is a surprise.
     const { onChange, ...view } = await renderField(null);
 
-    await fireEvent.press(view.getByText("Every week"));
+    await fireEvent.press(view.getByText("Weekly"));
 
-    expect(onChange).toHaveBeenCalledWith({ weekdays: [3] });
+    expect(onChange).toHaveBeenCalledWith({
+      frequency: "weekly",
+      weekdays: [3],
+    });
   });
 
   it("returns to a one-off, dropping the rule", async () => {
@@ -124,5 +130,85 @@ describe("RepeatField", () => {
 
     expect(view.getByText("Pick at least one day")).toBeTruthy();
     expect(view.queryByText("Just this one.")).toBeNull();
+  });
+
+  describe("monthly", () => {
+    it("seeds a monthly repeat with the stop's own day of the month", async () => {
+      // The 5th, because the stop sits on 5 Aug — the same "start from the day
+      // you picked" rule the weekly seed follows.
+      const { onChange, ...view } = await renderField(null);
+
+      await fireEvent.press(view.getByText("Monthly"));
+
+      expect(onChange).toHaveBeenCalledWith({
+        frequency: "monthly",
+        weekdays: [],
+        dayOfMonth: 5,
+      });
+    });
+
+    it("drops the weekday toggles and presets — a monthly rule has no days to pick", async () => {
+      const view = await renderField({
+        frequency: "monthly",
+        weekdays: [],
+        dayOfMonth: 5,
+      });
+
+      expect(view.queryByLabelText("Mon")).toBeNull();
+      expect(view.queryByText("Mon–Fri")).toBeNull();
+      // The Ends control still belongs to a monthly rule.
+      expect(view.getByText("Never")).toBeTruthy();
+    });
+
+    it("says the monthly rule in words", async () => {
+      const view = await renderField({
+        frequency: "monthly",
+        weekdays: [],
+        dayOfMonth: 5,
+      });
+
+      expect(view.getByText("Repeats on the 5th")).toBeTruthy();
+    });
+
+    it("moves the recurrence date when the stop's day moves", async () => {
+      // The rule falls on the stop's own date, so pushing the Day field to the
+      // 20th has to move the recurrence to the 20th with it.
+      const onChange = jest.fn();
+      const TWENTIETH = new Date(2026, 7, 20, 9, 0);
+      await renderWithProviders(
+        <RepeatField
+          value={{ frequency: "monthly", weekdays: [], dayOfMonth: 5 }}
+          onChange={onChange}
+          anchor={TWENTIETH}
+        />,
+      );
+
+      await waitFor(() =>
+        expect(onChange).toHaveBeenCalledWith({
+          frequency: "monthly",
+          weekdays: [],
+          dayOfMonth: 20,
+        }),
+      );
+    });
+
+    it("opens its end-date months out, not the weekly four weeks", async () => {
+      // +28d barely reaches one monthly occurrence, so "On a date" seeds a few
+      // months ahead instead: 5 Aug → 5 Nov.
+      const { onChange, ...view } = await renderField({
+        frequency: "monthly",
+        weekdays: [],
+        dayOfMonth: 5,
+      });
+
+      await fireEvent.press(view.getByText("On a date"));
+
+      expect(onChange).toHaveBeenCalledWith({
+        frequency: "monthly",
+        weekdays: [],
+        dayOfMonth: 5,
+        endDate: "2026-11-05",
+      });
+    });
   });
 });

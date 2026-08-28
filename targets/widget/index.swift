@@ -222,26 +222,51 @@ struct BrellyWidgetView: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 6) {
-                Label {
-                    Text(style.label)
-                        .font(.subheadline.weight(.semibold))
-                } icon: {
-                    Image(systemName: style.symbol)
+            // The small family is too narrow to seat the verdict and the
+            // fixed-width temperature on one row: the temperature starves the
+            // verdict, and "Clear" — or the longer "Rain · sun" — breaks
+            // mid-word ("Clea / r"). Stack them there so each gets the full
+            // width and stays on one line. The medium family has the room, so
+            // it keeps the side-by-side row.
+            if family == .systemSmall {
+                VStack(alignment: .leading, spacing: 2) {
+                    temperatureText(slot)
+                    verdictLabel(style)
                 }
-                .foregroundStyle(style.tint)
-                .labelStyle(.titleAndIcon)
-
-                Spacer(minLength: 0)
-
-                if let temperature = slot.temperature {
-                    Text("\(Int(temperature.low.rounded()))–\(Int(temperature.high.rounded()))°")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 6) {
+                    verdictLabel(style)
+                    Spacer(minLength: 0)
+                    temperatureText(slot)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // The umbrella verdict — icon plus word, in the verdict's own tint. Held to
+    // one line so the small family can never wrap it mid-letter again.
+    @ViewBuilder
+    private func verdictLabel(_ style: VerdictStyle) -> some View {
+        Label {
+            Text(style.label)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+        } icon: {
+            Image(systemName: style.symbol)
+        }
+        .foregroundStyle(style.tint)
+        .labelStyle(.titleAndIcon)
+    }
+
+    // The stop's temperature range, or nothing when the forecast carried none.
+    @ViewBuilder
+    private func temperatureText(_ slot: NextSlot) -> some View {
+        if let temperature = slot.temperature {
+            Text("\(Int(temperature.low.rounded()))–\(Int(temperature.high.rounded()))°")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // Lock-screen rectangular: two tight lines, no colour.

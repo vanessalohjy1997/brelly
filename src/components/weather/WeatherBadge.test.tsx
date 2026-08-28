@@ -49,7 +49,7 @@ describe("WeatherBadge", () => {
     expect(view.queryByText("No forecast")).toBeNull();
   });
 
-  it("shows the weather behind the verdict — the verdict itself is the card's icon watermark", async () => {
+  it("leads with the verdict word and demotes NEA's own wording beneath it", async () => {
     const weather: SlotForecast = {
       forecast: "Thundery Showers",
       source: "24hr",
@@ -60,11 +60,13 @@ describe("WeatherBadge", () => {
       <WeatherBadge weather={weather} isLoading={false} uvIndex={3} />,
     );
 
+    // The umbrella answer in a word — the headline the app is named for —
+    // with NEA's condition still there beneath it and the numbers below that.
+    expect(view.getByText("Rain")).toBeTruthy();
     expect(view.getByText("Thundery Showers")).toBeTruthy();
     expect(view.getByText("25–34°C")).toBeTruthy();
-    // Spelled out visibly here it would compete with the plan's own name;
-    // `ItineraryCard`'s watermark carries it instead, and the sentence
-    // survives for screen readers as the field's accessibility label.
+    // The short word, not the full sentence: that stays for the screen reader
+    // as the field's accessibility label.
     expect(view.queryByText(/Umbrella —/)).toBeNull();
   });
 
@@ -83,7 +85,7 @@ describe("WeatherBadge", () => {
     ).toBeTruthy();
   });
 
-  it("speaks the sun verdict when UV is what's driving it", async () => {
+  it("leads with the sun word when UV is what's driving the verdict", async () => {
     const verdict = describeUmbrella("Fair (Day)", 9);
     const view = await render(
       <WeatherBadge
@@ -93,12 +95,15 @@ describe("WeatherBadge", () => {
       />,
     );
 
+    // "Fair (Day)" reads as no-umbrella on its own — the sun word is the only
+    // thing on the card that says an umbrella is needed at all.
+    expect(view.getByText("Sun")).toBeTruthy();
     expect(
       view.getByLabelText(new RegExp(`^${verdict.label}\\. `)),
     ).toBeTruthy();
   });
 
-  it("still speaks the verdict on a clear stop, just with nothing to tint", async () => {
+  it("stays wordless on a clear stop — the verdict word appears only when an umbrella is needed", async () => {
     const view = await render(
       <WeatherBadge
         weather={{ forecast: "Partly Cloudy (Day)", source: "2hr" }}
@@ -107,10 +112,15 @@ describe("WeatherBadge", () => {
       />,
     );
 
+    // No "Clear" word: NEA's own wording leads, matching the restraint a clear
+    // stop already gets (no accent bar, no watermark). The sentence still
+    // survives for the screen reader.
+    expect(view.queryByText("Clear")).toBeNull();
+    expect(view.getByText("Partly Cloudy (Day)")).toBeTruthy();
     expect(view.getByLabelText(/^You're clear\. /)).toBeTruthy();
   });
 
-  it("names both triggers when both fire", async () => {
+  it("names both triggers with the middot spelling the widget shares", async () => {
     const verdict = describeUmbrella("Passing Showers", 10);
     const view = await render(
       <WeatherBadge
@@ -120,6 +130,7 @@ describe("WeatherBadge", () => {
       />,
     );
 
+    expect(view.getByText("Rain · sun")).toBeTruthy();
     expect(
       view.getByLabelText(new RegExp(`^${verdict.label}\\. `)),
     ).toBeTruthy();

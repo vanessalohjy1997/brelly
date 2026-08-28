@@ -108,27 +108,30 @@ export default function TodayScreen() {
   // stops have all finished is a different situation from an empty one, and
   // saying so is what stops the archive from looking like data loss.
   const dayIsDone = !hasSlotsToday && !!findPlanByDate(past, todaysDate);
+  // Location stays enabled whether or not there are plans — "Right now" means
+  // *here*, so the live-conditions card is anchored to the device the whole
+  // time, not just in the empty state. The forecast preview, though, is only
+  // fetched in the empty state; with plans it isn't shown.
   const {
     isAvailable: hasWeatherNearby,
     forecasts: nearbyForecasts,
     coords: nearbyCoords,
     permission: locationPermission,
-  } = useNearbyForecast(!hasSlotsToday);
+  } = useNearbyForecast(true, { fetchForecast: !hasSlotsToday });
 
-  // With plans, the live readings are anchored to the stop the user is at (or
-  // heading to) — no location permission needed, since every slot carries its
-  // own coordinates. Without plans, they follow the device, reusing the
-  // permission the empty state already asks for.
+  // "Right now" is a reading of *where you are*, so it follows the device
+  // point in both branches. `focusSlot` earns its keep separately — it draws
+  // the emphasis outline on the current/next card ("where am I headed"),
+  // which is a different question from "what's it doing on me now". Each stop's
+  // own forecast already lives on its `ItineraryCard`; this card must not
+  // borrow a stop's coordinates and label them as here.
   const focusSlot = todaysPlan
     ? findCurrentOrNextSlot(todaysPlan.slots, now)
     : undefined;
-  const conditionsPoint = focusSlot
-    ? { latitude: focusSlot.latitude, longitude: focusSlot.longitude }
-    : nearbyCoords;
 
   const { data: liveConditions } = useLiveConditions(
-    conditionsPoint?.latitude ?? null,
-    conditionsPoint?.longitude ?? null,
+    nearbyCoords?.latitude ?? null,
+    nearbyCoords?.longitude ?? null,
   );
   // No region, no permission gate — NEA publishes one island-wide UV
   // figure, so this resolves even with no plans and no location.
@@ -270,10 +273,25 @@ export default function TodayScreen() {
               />
             }
           >
-            <LiveConditionsCard
-              conditions={liveConditions}
-              uvIndex={uvIndex}
-            />
+            {/* "Right now" is the weather where you are, so it needs the same
+                location grant the empty state asks for. When it isn't granted,
+                offer the prompt/recovery path rather than silently borrowing a
+                stop's coordinates — the current/next stop's own forecast is on
+                its card already. UV is island-wide, so it shows regardless. */}
+            {hasWeatherNearby ? (
+              <LiveConditionsCard
+                conditions={liveConditions}
+                uvIndex={uvIndex}
+              />
+            ) : (
+              <>
+                <NearbyWeatherPrompt
+                  permission={locationPermission}
+                  onRequest={requestLocation}
+                />
+                <LiveConditionsCard conditions={null} uvIndex={uvIndex} />
+              </>
+            )}
             {/* Start time first, always — a day is read as a timeline, and
                 the drag-to-reorder this replaces produced an order that
                 contradicted the clock and the Plans tab both. */}

@@ -32,17 +32,6 @@ lint warnings/errors, and a test for every new component and function.
 
 ## Tasks
 
-### Platform
-
-- [ ] **Register the widget's App Group in the Apple Developer account.** The
-      widget itself is built and `ios.appleTeamId` is set in `app.json` (team
-      `PC223N993Y`), so the non-interactive `eas build` no longer stalls on the
-      `Apple Team ID:` prompt — see
-      [round 29](NOTES.md#round-29--the-widget-the-one-thing-appjson-couldnt-reach).
-      The last step before the native build signs is enabling the App Group
-      `group.com.sg.brelly.app` on both the `com.sg.brelly.app` and
-      `com.sg.brelly.app.widget` App IDs in the portal.
-
 ### Itinerary intelligence
 
 - [ ] **Swipe a stop to mute as well as delete.** The card's left-swipe reveals

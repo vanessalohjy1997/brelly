@@ -100,6 +100,72 @@ describe("routineOccurrenceDates", () => {
 
     expect(dates).toEqual(["2026-08-24", "2026-08-31", "2026-09-07"]);
   });
+
+  describe("monthly", () => {
+    function monthlyRoutine(overrides: Partial<Routine> = {}): Routine {
+      return routine({
+        frequency: "monthly",
+        weekdays: [],
+        dayOfMonth: 15,
+        ...overrides,
+      });
+    }
+
+    it("hits the day of the month once inside the window", () => {
+      const dates = routineOccurrenceDates(monthlyRoutine(), "2026-08-10", 13);
+
+      expect(dates).toEqual(["2026-08-15"]);
+    });
+
+    it("skips a month that has no such day — the 31st in February", () => {
+      // Scanning all of February 2026 (28 days) for a 31st finds nothing, which
+      // is the standard RRULE behaviour and needs no special case here.
+      const dates = routineOccurrenceDates(
+        monthlyRoutine({ dayOfMonth: 31, startDate: "2026-02-01" }),
+        "2026-02-01",
+        27,
+      );
+
+      expect(dates).toEqual([]);
+    });
+
+    it("lands on 29 February in a leap year", () => {
+      // 2028 is a leap year, so the 29th exists that February.
+      const dates = routineOccurrenceDates(
+        monthlyRoutine({ dayOfMonth: 29, startDate: "2028-02-01" }),
+        "2028-02-01",
+        28,
+      );
+
+      expect(dates).toEqual(["2028-02-29"]);
+    });
+
+    it("respects the routine's start and end dates", () => {
+      const dates = routineOccurrenceDates(
+        monthlyRoutine({
+          dayOfMonth: 15,
+          startDate: "2026-09-16", // after September's 15th
+          endDate: "2026-11-14", // before November's 15th
+        }),
+        "2026-08-01",
+        120,
+      );
+
+      // Only October's 15th falls inside [start, end].
+      expect(dates).toEqual(["2026-10-15"]);
+    });
+
+    it("leaves out a monthly day the user deleted", () => {
+      const dates = routineOccurrenceDates(
+        monthlyRoutine({ exceptions: ["2026-08-15"] }),
+        "2026-08-01",
+        45,
+      );
+
+      expect(dates).not.toContain("2026-08-15");
+      expect(dates).toContain("2026-09-15");
+    });
+  });
 });
 
 describe("routineSlotForDate", () => {

@@ -1,4 +1,5 @@
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import { useEffect } from "react";
 import { Pressable, StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themedText";
@@ -8,6 +9,7 @@ import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
 import type { RepeatRule } from "@/types/routine";
 import { parseDateKey, shiftDays, toDateKey } from "@/utils/dateKeys";
 import { describeRoutine, WEEKDAY_INITIALS, WEEKDAY_LABELS, WEEKDAY_ORDER } from "@/utils/describeRoutine";
+import { resolveFrequency } from "@/utils/routineFrequency";
 import { DatePickerWidth, DateTimePickerHeight } from "@/utils/shouldStackDateTimeFields";
 
 /**
@@ -23,6 +25,20 @@ const PRESETS: { label: string; weekdays: number[] }[] = [
 
 /** How far out the end-date picker opens when "On a date" is first chosen. */
 const DefaultEndOffsetDays = 28;
+/**
+ * A monthly rule at `+28d` would barely reach one occurrence, so its end-date
+ * picker opens a few months out instead — far enough that "On a date" reads as
+ * a real bound rather than "next month".
+ */
+const DefaultMonthlyEndOffsetMonths = 3;
+
+/** Where the "On a date" picker opens, seeded to the rule's own cadence. */
+function seedEndDate(anchor: Date, monthly: boolean): string {
+  if (!monthly) return shiftDays(toDateKey(anchor), DefaultEndOffsetDays);
+  const end = new Date(anchor);
+  end.setMonth(end.getMonth() + DefaultMonthlyEndOffsetMonths);
+  return toDateKey(end);
+}
 
 type Props = {
   /** The rule, or null for a one-off. */
@@ -50,6 +66,18 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
   const colorScheme = useAppColorScheme();
 
   const repeating = value !== null;
+  const frequency = value ? resolveFrequency(value.frequency) : null;
+  const isMonthly = frequency === "monthly";
+
+  // A monthly rule falls on the stop's own date, so it tracks the Day field:
+  // move the stop to the 20th and the rule repeats on the 20th, no separate
+  // control. Guarded to monthly and to an actual change, so it can't loop.
+  const anchorDayOfMonth = anchor.getDate();
+  useEffect(() => {
+    if (!value || resolveFrequency(value.frequency) !== "monthly") return;
+    if (value.dayOfMonth === anchorDayOfMonth) return;
+    onChange({ ...value, dayOfMonth: anchorDayOfMonth });
+  }, [anchorDayOfMonth, value, onChange]);
 
   const chipStyle = (selected: boolean) => [
     styles.chip,
@@ -60,11 +88,32 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
     },
   ];
 
-  const setRepeating = (next: boolean) => {
-    if (next === repeating) return;
-    // Starting from the day the stop is already on: a routine that repeats on
-    // some *other* day than the one you just picked would be a surprise.
-    onChange(next ? { weekdays: [anchor.getDay()] } : null);
+  const selectOnce = () => {
+    if (!repeating) return;
+    onChange(null);
+  };
+
+  // Both cadences start from the day the stop is already on — a routine that
+  // repeated on some *other* day than the one you just picked would be a
+  // surprise. Re-tapping the current cadence is a no-op, so it doesn't wipe the
+  // days you've toggled.
+  const selectWeekly = () => {
+    if (frequency === "weekly") return;
+    onChange({
+      frequency: "weekly",
+      weekdays: [anchor.getDay()],
+      endDate: value?.endDate,
+    });
+  };
+
+  const selectMonthly = () => {
+    if (frequency === "monthly") return;
+    onChange({
+      frequency: "monthly",
+      weekdays: [],
+      dayOfMonth: anchorDayOfMonth,
+      endDate: value?.endDate,
+    });
   };
 
   const toggleWeekday = (day: number) => {
@@ -94,12 +143,17 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
         {/* Not "Once"/"Repeat": the section is already labelled Repeat, and a
             chip with the same word as its heading reads as the heading. */}
         {[
-          { label: "Just once", on: !repeating },
-          { label: "Every week", on: repeating },
+          { label: "Just once", on: !repeating, onPress: selectOnce },
+          { label: "Weekly", on: frequency === "weekly", onPress: selectWeekly },
+          {
+            label: "Monthly",
+            on: frequency === "monthly",
+            onPress: selectMonthly,
+          },
         ].map((option) => (
           <Pressable
             key={option.label}
-            onPress={() => setRepeating(option.label === "Every week")}
+            onPress={option.onPress}
             accessibilityRole="radio"
             accessibilityState={{ selected: option.on }}
             style={chipStyle(option.on)}
@@ -113,46 +167,55 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
 
       {value && (
         <>
-          <ThemedView
-            style={styles.chipRow}
-            accessibilityRole="none"
-            accessibilityLabel="Days"
-          >
-            {WEEKDAY_ORDER.map((day) => {
-              const selected = value.weekdays.includes(day);
-              return (
-                <Pressable
-                  key={day}
-                  onPress={() => toggleWeekday(day)}
-                  accessibilityRole="checkbox"
-                  // Two days share the letter "T" and two share "S", so the
-                  // glyph can't be the accessible name.
-                  accessibilityLabel={WEEKDAY_LABELS[day]}
-                  accessibilityState={{ checked: selected }}
-                  style={[chipStyle(selected), styles.dayChip]}
-                >
-                  <ThemedText
-                    style={[styles.hint, selected && styles.chipSelected]}
-                  >
-                    {WEEKDAY_INITIALS[day]}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </ThemedView>
-
-          <ThemedView style={styles.chipRow}>
-            {PRESETS.map((preset) => (
-              <Pressable
-                key={preset.label}
-                onPress={() => onChange({ ...value, weekdays: preset.weekdays })}
-                accessibilityRole="button"
-                style={chipStyle(false)}
+          {/* Weekly picks which days; monthly falls on the stop's own date, so
+              it has no day controls at all — moving the Day field above moves
+              the recurrence date with it. */}
+          {!isMonthly && (
+            <>
+              <ThemedView
+                style={styles.chipRow}
+                accessibilityRole="none"
+                accessibilityLabel="Days"
               >
-                <ThemedText style={styles.hint}>{preset.label}</ThemedText>
-              </Pressable>
-            ))}
-          </ThemedView>
+                {WEEKDAY_ORDER.map((day) => {
+                  const selected = value.weekdays.includes(day);
+                  return (
+                    <Pressable
+                      key={day}
+                      onPress={() => toggleWeekday(day)}
+                      accessibilityRole="checkbox"
+                      // Two days share the letter "T" and two share "S", so the
+                      // glyph can't be the accessible name.
+                      accessibilityLabel={WEEKDAY_LABELS[day]}
+                      accessibilityState={{ checked: selected }}
+                      style={[chipStyle(selected), styles.dayChip]}
+                    >
+                      <ThemedText
+                        style={[styles.hint, selected && styles.chipSelected]}
+                      >
+                        {WEEKDAY_INITIALS[day]}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ThemedView>
+
+              <ThemedView style={styles.chipRow}>
+                {PRESETS.map((preset) => (
+                  <Pressable
+                    key={preset.label}
+                    onPress={() =>
+                      onChange({ ...value, weekdays: preset.weekdays })
+                    }
+                    accessibilityRole="button"
+                    style={chipStyle(false)}
+                  >
+                    <ThemedText style={styles.hint}>{preset.label}</ThemedText>
+                  </Pressable>
+                ))}
+              </ThemedView>
+            </>
+          )}
 
           <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
             Ends
@@ -172,7 +235,7 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
                   setEndDate(
                     option.label === "Never"
                       ? undefined
-                      : shiftDays(toDateKey(anchor), DefaultEndOffsetDays),
+                      : seedEndDate(anchor, isMonthly),
                   )
                 }
                 accessibilityRole="radio"

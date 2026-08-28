@@ -197,6 +197,36 @@ describe("planRoutineMaterialization", () => {
     expect(removed([r], plans, 6)).toEqual([]);
   });
 
+  describe("monthly", () => {
+    const monthly = (overrides: Partial<Routine> = {}) =>
+      routine({
+        frequency: "monthly",
+        weekdays: [],
+        dayOfMonth: 5,
+        ...overrides,
+      });
+
+    it("adds the monthly day when it falls inside the horizon", () => {
+      // The 5th is two days out — inside the 14-day window, so it materialises
+      // straight away, the same as a weekly day would.
+      expect(addedDates([monthly()], [])).toEqual(["2026-08-05"]);
+    });
+
+    it("sweeps the monthly stop once the rule ends before it", () => {
+      const r = monthly();
+      const plans = plansOf({
+        date: "2026-08-05",
+        slots: [materialized(r, "2026-08-05")],
+      });
+      // Ended on the 4th, so the 5th is no longer a day the rule wants.
+      const ended = monthly({ endDate: "2026-08-04" });
+
+      expect(removed([ended], plans).map((a) => a.date)).toEqual([
+        "2026-08-05",
+      ]);
+    });
+  });
+
   it("does nothing at all when there are no routines and no routine stops", () => {
     const ordinary: ItinerarySlot = {
       id: "s1",
