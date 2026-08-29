@@ -260,6 +260,11 @@ system settings) when the status is denied.
   rendered on a card, so finding out which stops will warn you means opening
   each one.
 
+  The bell-slash on the card answered the reading half of this. The writing half
+  followed in [round 32](NOTES.md#round-32--a-swipe-can-mute-and-every-delete-asks-the-same-question):
+  the left swipe reveals Mute beside Delete, so the flag the card draws can be
+  changed from the list rather than only through the edit form.
+
 - [x] **Two identical Add buttons.** The header `+ Add` and the empty-state
   `+ Add a plan` share the same `backgroundElement` fill. Neither reads as
   primary, and side by side they read as different actions.

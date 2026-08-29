@@ -1,12 +1,15 @@
 import { fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
+import { Alert } from "react-native";
 
 import PlansScreen from "@/app/(tabs)/plans";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { useRoutineStore } from "@/store/routineStore";
 import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import type { Routine } from "@/types/routine";
 import { toDateKey } from "@/utils/dateKeys";
 
 jest.mock("@/services/weather", () => ({
@@ -62,12 +65,37 @@ function dayPlan(offsetDays: number, slots: ItinerarySlot[]): DayPlan {
 beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
+  useRoutineStore.setState({ routines: [] });
   useToastStore.setState({ toast: null, modalHosts: [] });
   useCloudSyncStore.setState({
     settingsReady: true,
     routinesReady: true,
     slotsReady: true,
   });
+});
+
+/**
+ * Answers the routine scope prompt the moment it is raised.
+ *
+ * Both the swipe actions *await* that answer, so leaving the prompt standing
+ * leaves the press pending — the test times out rather than failing.
+ */
+function answerAlertWith(text: string) {
+  return jest
+    .spyOn(Alert, "alert")
+    .mockImplementation((_title, _message, buttons) => {
+      (buttons as { text: string; onPress?: () => void }[] | undefined)
+        ?.find((button) => button.text === text)
+        ?.onPress?.();
+    });
+}
+
+// `answerAlertWith` installs a real spy, so it has to come back off — it would
+// otherwise auto-answer an alert a later test raises for its own reasons. At
+// file level rather than inside the describe that uses it, so a spy installed
+// anywhere in this file is covered.
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe("PlansScreen", () => {
@@ -208,6 +236,106 @@ describe("PlansScreen", () => {
     const restored = useItineraryStore.getState().plans[0].slots[0];
     expect(restored.notificationId).toBeUndefined();
     expect(restored.notificationLeadMinutes).toBeUndefined();
+  });
+
+  it("mutes a stop from the swipe, without opening the form for it", async () => {
+    // The bell-slash on the card was readable from the list and changeable
+    // only from the edit screen; this is the other half of that.
+    useItineraryStore.setState({ plans: [dayPlan(1, [slot("s1", "Picnic", 1)])] });
+    const view = await renderWithProviders(<PlansScreen />);
+
+    await fireEvent.press(view.getByText("Mute"));
+
+    expect(
+      useItineraryStore.getState().plans[0].slots[0].notificationsMuted,
+    ).toBe(true);
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Rain alerts off for Picnic",
+      action: { label: "Undo" },
+    });
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  describe("a stop a routine filled in", () => {
+    function routine(): Routine {
+      const today = new Date();
+      return {
+        id: "r1",
+        label: "Picnic",
+        location: "Somewhere, Singapore",
+        latitude: 1.3521,
+        longitude: 103.8198,
+        weekdays: [0, 1, 2, 3, 4, 5, 6],
+        startTime: "12:00",
+        endTime: "13:00",
+        startDate: toDateKey(today),
+        exceptions: [],
+      };
+    }
+
+    /** The section date the fixture below is filed under. */
+    function tomorrowKey(): string {
+      const date = new Date();
+      date.setDate(date.getDate() + 1);
+      return toDateKey(date);
+    }
+
+    function seedRoutineStop() {
+      useRoutineStore.setState({ routines: [routine()] });
+      useItineraryStore.setState({
+        plans: [
+          dayPlan(1, [{ ...slot("s1", "Picnic", 1), routineId: "r1" }]),
+        ],
+      });
+    }
+
+    it("asks which days a swipe-delete is meant for, and drops it if the question goes unanswered", async () => {
+      // It used to take the this-day reading silently here while the edit
+      // screen asked — the same gesture meaning two different things
+      // depending on which screen it was made from.
+      //
+      // Answered with Cancel rather than left hanging: the press awaits the
+      // prompt, so an unanswered one never returns.
+      seedRoutineStop();
+      const alertSpy = answerAlertWith("Cancel");
+      const view = await renderWithProviders(<PlansScreen />);
+
+      await fireEvent.press(view.getByText("Delete"));
+
+      expect(alertSpy.mock.calls.at(-1)?.[0]).toBe("Delete Picnic?");
+      expect(useItineraryStore.getState().plans).toHaveLength(1);
+      expect(useToastStore.getState().toast).toBeNull();
+    });
+
+    it("deletes the one day when that is the answer, and remembers it as deleted", async () => {
+      seedRoutineStop();
+      answerAlertWith("Delete this day");
+      const view = await renderWithProviders(<PlansScreen />);
+
+      await fireEvent.press(view.getByText("Delete"));
+
+      expect(useItineraryStore.getState().plans).toHaveLength(0);
+      // Without the exception the next top-up reads the gap as "not
+      // materialised yet" and puts the stop straight back.
+      expect(useRoutineStore.getState().routines[0].exceptions).toEqual([
+        tomorrowKey(),
+      ]);
+    });
+
+    it("asks the same question of a swipe-mute", async () => {
+      // A routine slot can't carry a silent per-day flag — the materialiser
+      // replaces any slot that disagrees with its rule.
+      seedRoutineStop();
+      const alertSpy = answerAlertWith("Cancel");
+      const view = await renderWithProviders(<PlansScreen />);
+
+      await fireEvent.press(view.getByText("Mute"));
+
+      expect(alertSpy.mock.calls.at(-1)?.[0]).toBe("Mute Picnic?");
+      expect(
+        useItineraryStore.getState().plans[0].slots[0].notificationsMuted,
+      ).toBeUndefined();
+    });
   });
 
   it("adds to the day a section header names, rather than making the user scroll a picker to it", async () => {

@@ -21,6 +21,7 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
+import { useMuteSlotWithUndo } from "@/hooks/useMuteSlotWithUndo";
 import { useLiveConditions } from "@/hooks/useLiveConditions";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
@@ -48,6 +49,7 @@ export default function TodayScreen() {
   // what makes this screen re-render when a plan is added or edited.
   const plans = useItineraryStore((state) => state.plans);
   const deleteWithUndo = useDeleteSlotWithUndo();
+  const toggleMuteWithUndo = useMuteSlotWithUndo();
   const hasSeenOnboarding = useSettingsStore((s) => s.hasSeenOnboarding);
   const setHasSeenOnboarding = useSettingsStore((s) => s.setHasSeenOnboarding);
   // Tracks progress *through* the two-step flow once it's underway. It
@@ -304,6 +306,7 @@ export default function TodayScreen() {
                 // about one place rather than two.
                 emphasis={slot.id === focusSlot?.id}
                 onDelete={() => deleteWithUndo(todaysPlan.date, slot)}
+                onToggleMute={() => toggleMuteWithUndo(todaysPlan.date, slot)}
               />
             ))}
           </ScrollView>

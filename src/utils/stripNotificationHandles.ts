@@ -34,3 +34,20 @@ export function stripNotificationHandles(slot: ItinerarySlot): ItinerarySlot {
   const { notificationId, notificationLeadMinutes, ...rest } = slot;
   return rest;
 }
+
+/**
+ * The same two fields as an `updateSlot` patch, for a slot that stays where it
+ * is rather than moving devices.
+ *
+ * `stripNotificationHandles` omits the keys; a partial update has to state them,
+ * because a key left out of a patch means "leave whatever is there alone" —
+ * which on a mute is exactly the stale handle this exists to clear. The
+ * `undefined`s never reach Firestore in any form: both keys are on
+ * `itinerarySync`'s `DEVICE_LOCAL_FIELDS`, which is checked *before* the
+ * `undefined` → `deleteField()` conversion, so they are dropped outright
+ * rather than converted.
+ */
+export const clearedNotificationHandles = {
+  notificationId: undefined,
+  notificationLeadMinutes: undefined,
+} as const;

@@ -40,6 +40,26 @@ links back here.
   `src/test/renderWithProviders.tsx` returns). A missing `await` fails with
   "`render` function has not been called", which reads like a setup problem
   rather than a missing keyword.
+- **Never wrap a handler that starts async work in the *synchronous*
+  `act(() => …)`.** It leaves React's act queue open, and the damage lands
+  somewhere else entirely: every later `render` in that file returns an empty
+  tree, so a test three cases down fails with "unable to find an element" and
+  points at a component that is fine. A toast's `onPress` is the usual culprit
+  — the undo it runs writes to a store, and the seam underneath it
+  (`useMuteSlotWithUndo`, `useDeleteSlotWithUndo`) fires a forecast fetch or a
+  haptic that outlives the callback. Call it bare, the way every existing test
+  does (`useToastStore.getState().toast?.action?.onPress()`), or `await
+act(async () => …)`. The bare call is the house style and produces only an
+  "update not wrapped in act" warning, which this suite already has plenty of.
+- **A gesture-handler method called from a test needs two globals the
+  Reanimated mock can't supply.** `swipeableMethods.close()` — what a swipe
+  action presses to put the row away — reads the bare global `_WORKLET` to
+  decide whether it is already on the UI thread, and builds its spring config
+  with `ReduceMotion.System`. A module mock can't declare a global, so
+  `jest.setup.js` sets `_WORKLET = false` (true of Jest: everything runs on
+  the JS thread) and `__mocks__/react-native-reanimated.js` exports
+  `ReduceMotion`. Without them the press throws `ReferenceError: _WORKLET is
+not defined`, then `Cannot read properties of undefined (reading 'System')`.
 - **Reanimated 4 needs a hand-written test double.** Its own `mock.js`
   re-imports the real entry point, which loads `react-native-worklets`, which
   builds `NativeWorklets` at module scope and throws "Cannot read properties of
@@ -608,7 +628,7 @@ from the "production" environment`. With the variable unset, `app.config.js`
   on-device geocoder kept as an offline fallback — Apple's Singapore placemarks
   are frequently no more specific than "Singapore"),
   Zustand + MMKV store, `SlotForm` shared by the add/edit screens, swipe to
-  delete, and duplicate to another date via `CopyToDateAction` +
+  mute or delete, and duplicate to another date via `CopyToDateAction` +
   `retargetSlotDate` — deliberately a date picker rather than cross-section
   drag physics. A slot is filed under the day its `startTime` falls on, and
   `updateSlot` re-files it when an edit changes that day, so moving a plan is
@@ -619,15 +639,21 @@ from the "production" environment`. With the variable unset, `app.config.js`
   shows a picked place as a confirmed chip, and takes one date plus two times
   (`slotTimeFields`) rather than two `mode="datetime"` pickers.
   Both lists and the archive can be searched (`filterPlans`), and deletes are
-  undoable from the toast (`useDeleteSlotWithUndo`).
+  undoable from the toast (`useDeleteSlotWithUndo`). The card's left swipe
+  reveals Mute beside Delete — `useMuteSlotWithUndo` is the mute seam, and it
+  is withheld on the archive, where there is no future alert to silence.
 - **Routines.** A repeat is stored as a rule (`Routine`, `routineStore`) —
   any set of weekdays plus an optional end date — and materialised into
   ordinary slots a fortnight ahead (`planRoutineMaterialization`,
   `RoutineHorizonDays`), topped up on launch and on foreground by
-  `useRoutineSync`. Every stop carries the `routineId` that made it, so editing
-  or deleting one day asks whether it means the day or the rule
+  `useRoutineSync`. Every stop carries the `routineId` that made it, so editing,
+  muting or deleting one day asks whether it means the day or the rule
   (`askEditScope`); "this day only" detaches the slot and records an exception,
-  which is what stops the next top-up refilling it. Nothing downstream knows
+  which is what stops the next top-up refilling it. The delete and mute
+  prompts live in the seams (`useDeleteSlotWithUndo`, `useMuteSlotWithUndo`),
+  so a swipe on a list asks the same question the form does; the save-scope
+  prompt is still raised by `plan/[id].tsx` itself, since only that screen
+  knows what was edited. Nothing downstream knows
   routines exist. A dedicated routines screen (`src/app/routines.tsx`, modal
   route) lists all rules with `describeRoutine` and exception counts.
 - **Routing.** `(tabs)` group (Today, Plans, History, Settings) + root `Stack`
@@ -1881,6 +1907,113 @@ never actually worked on a device.
   verdict-tinted bar down the leading edge, and the verdict's SF Symbol as a
   faint (0.14) watermark bleeding off the bottom-right. A clear stop or a missing
   forecast draws neither, matching the card (`decoration(for:)` returns nil).
+
+### Round 32 — a swipe can mute, and every delete asks the same question
+
+`notificationsMuted` was readable from a list and changeable only from the edit
+form: the card drew the bell-slash, and turning it off meant opening the stop,
+scrolling to a switch and saving. The left swipe now reveals **Mute** beside
+Delete.
+
+- **The mute is a seam, not a card-level toggle.** `useMuteSlotWithUndo` sits
+  beside `useDeleteSlotWithUndo` and does what a mute actually costs: cancel the
+  scheduled alert and clear `notificationId`/`notificationLeadMinutes`
+  (`clearedNotificationHandles`), because an id left behind reads as "already
+  scheduled" forever — `planNotificationResync` takes `!!notificationId` at its
+  word. Unmuting re-schedules through `useRainNotificationScheduler`, which
+  re-reads the forecast rather than trusting the one the old alert was built on.
+  The card takes a callback rather than the hook, for the same reason `onDelete`
+  is one: the card knows the stop but not the day it is filed under.
+
+- **A routine's stop can't take a silent per-day flag**, which is what makes
+  this more than a switch. Rule 4 of `planRoutineMaterialization` compares
+  `notificationsMuted` against the rule and replaces any slot that disagrees, so
+  a quiet mute would vanish at the next top-up. Muting one therefore raises the
+  same `askEditScope` question the edit form asks: *series* moves the rule
+  (`updateRoutine` + `materializeRoutines`, which rewrites every upcoming day
+  and re-schedules on the way), *day* detaches the stop first (`addException` +
+  `routineId: undefined`) so nothing may rewrite it afterwards.
+
+- **The scope prompt moved into the delete seam too.** It used to live in
+  `plan/[id].tsx`, so the same gesture meant two different things depending on
+  where it was made: the edit screen asked, and the swipe on a list quietly took
+  the this-day reading. `useDeleteSlotWithUndo` owns the prompt now and
+  `handleDelete` is down to awaiting it and navigating. That is a deliberate
+  behaviour change — swipe-deleting a routine's stop asks a question it did not
+  use to ask. It also put "Delete all future days" one swipe and one mis-tap
+  from a standing rule, so that branch gained the undo it never had:
+  `restoreRoutine` puts the rule back under its own id (a fresh one would orphan
+  every stop it ever made) with `exceptions` intact, and a re-materialisation
+  refills the days the sweep took.
+
+- **An awaited prompt makes the slot in your hand stale, and the stale field is
+  the one that matters.** Both seams capture `slot` when the swipe is pressed
+  and then park on `askEditScope` for as long as the user takes to answer.
+  `notificationId` is exactly what gets written in that window —
+  `runNotificationSync` stamps one on after its own awaited forecast fetch — so
+  cancelling the captured copy's id cancels nothing while the update clears the
+  real one. The result is an alert nothing can ever reach again, because every
+  cleanup path finds alerts through `!!slot.notificationId`. Both seams re-read
+  the slot from the store after the answer and cancel *that* one.
+  `useRainNotificationScheduler` is hardened from the other side for the same
+  reason: once its fetch resolves it re-checks the slot, and if the stop has
+  since been muted, deleted or re-keyed it cancels the alert it just scheduled
+  rather than dropping the handle on the floor.
+
+- **The exception is recorded only once the detach has happened.** Ordering the
+  two the other way round leaves the one state nothing recovers from: an
+  exception with no detached slot behind it takes the day out of the routine's
+  occurrences, so the next top-up reads the stop as unwanted and sweeps the
+  thing the user only meant to mute. An `updateSlot` that finds nothing now
+  throws rather than reporting a success the toast would offer to undo.
+
+- **The mute's undo is offered on a one-off only.** The routine paths were asked
+  about before anything happened, and the day one detached the stop on the way
+  through — an "undo" that silently re-attached it would be a third answer to a
+  question that had two. Both stay reversible by the gesture that caused them,
+  which a delete never is. Undoing an *unmute* cancels the alert that unmute
+  scheduled by reading the id off the store at press time, not off the slot the
+  toast's handler closed over: the scheduler is fire-and-forget, so the id
+  arrives after the toast does.
+
+- **Mute is the inner action and is withheld on the archive.** Delete keeps the
+  far edge it has always had — muscle memory for a destructive action should not
+  move because a second one was added beside it — and the reversible one takes
+  the shorter swipe. History passes no handler, because a stop that has ended
+  has no alert left to silence. VoiceOver can't perform the swipe at all, so
+  both actions are also `accessibilityActions` on the card, in the same order
+  the panel puts them in: the rotor opens on the first entry, and that should
+  not be the destructive one.
+
+- **Two things the second action broke quietly.** `rightThreshold` was an
+  explicit half-an-action, which stayed 44 while the panel grew to 176 — a
+  quarter-length nudge latched the whole thing open on Today and Plans but not
+  on History. It is gone; the library's default is half the *measured* panel,
+  which is the only version that can be right on both. And both buttons now
+  `close()` the row before running: Delete used to get away with leaving it open
+  because the card always went with it, but a cancelled routine prompt leaves
+  the panel standing over a stop nothing happened to — and the next tap on that
+  card is swallowed closing the row rather than opening the stop. The accessible
+  name for Mute opens with the word on the button ("Mute — turn rain alerts
+  off"), or Voice Control's "tap Mute" matches nothing.
+
+- **The archive is never asked about.** A materialised stop keeps its
+  `routineId` after it has happened, so folding the prompt into the seam quietly
+  put "delete all future days" on History's swipe — a live rule destroyed from
+  the one screen that only holds a record of what already happened. A stop whose
+  end time has passed skips the question entirely and deletes that one archived
+  day, which is what it always did. Rule 1 of the materialiser is the same
+  reasoning from the other end: nothing before today is ever touched, so there
+  is no top-up that could put the day back and no rule-level reading to choose.
+
+- **Two test-environment globals had to be admitted to.** Closing the row from a
+  test needs `_WORKLET` and `ReduceMotion` — see the traps at the top of this
+  file, along with the `act()` landmine that turned a broken assertion into five
+  unrelated failures three tests further down. `close()` itself is *unobservable*
+  under those globals — `runOnUI` and `withSpring` are identity functions in the
+  stand-in — so `ItineraryCard.test.tsx` mocks `ReanimatedSwipeable` locally and
+  hands `renderRightActions` a spy. Without it, deleting both `close()` calls
+  passes the whole suite; the screens keep exercising the real component.
 
 ## Shipped from the feature-idea list
 

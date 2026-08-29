@@ -2,7 +2,10 @@ import { renderHook } from "@testing-library/react-native";
 
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
 import { getForecastForSlotByProvider } from "@/services/forecastProvider";
-import { scheduleRainNotification } from "@/services/notifications";
+import {
+  cancelNotification,
+  scheduleRainNotification,
+} from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { ItinerarySlot } from "@/types/itinerary";
@@ -12,6 +15,7 @@ jest.mock("@/services/forecastProvider", () => ({
 }));
 jest.mock("@/services/notifications", () => ({
   scheduleRainNotification: jest.fn(),
+  cancelNotification: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("@/services/itinerarySync", () => ({
   writeSlot: jest.fn(),
@@ -21,6 +25,12 @@ jest.mock("@/services/itinerarySync", () => ({
 
 const mockGetForecast = getForecastForSlotByProvider as jest.Mock;
 const mockSchedule = scheduleRainNotification as jest.Mock;
+const mockCancel = cancelNotification as jest.Mock;
+
+/** Files a slot under a date, so the store has something to write the id onto. */
+function seed(date: string, slot: ItinerarySlot) {
+  useItineraryStore.setState({ plans: [{ id: date, date, slots: [slot] }] });
+}
 
 function makeSlot(overrides: Partial<ItinerarySlot> = {}): ItinerarySlot {
   return {
@@ -89,6 +99,59 @@ describe("useRainNotificationScheduler", () => {
     expect(mockGetForecast).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "nea" }),
     );
+  });
+
+  it("persists the handle on the slot the alert was scheduled for", async () => {
+    const slot = makeSlot();
+    seed("2026-08-17", slot);
+    mockSchedule.mockResolvedValueOnce("notif-1");
+    const { result } = await renderHook(() => useRainNotificationScheduler());
+
+    await result.current("2026-08-17", slot);
+
+    const stored = useItineraryStore.getState().plans[0].slots[0];
+    expect(stored.notificationId).toBe("notif-1");
+    expect(stored.notificationLeadMinutes).toBe(45);
+    expect(mockCancel).not.toHaveBeenCalled();
+  });
+
+  it("cancels rather than persists when the stop was muted while the forecast was in flight", async () => {
+    // A swipe-to-mute lands during the fetch. `scheduleRainNotification` read
+    // the muted flag off the copy it was handed, so it scheduled anyway — and
+    // an id that never reaches a slot is an alert nothing can cancel later,
+    // because `planNotificationResync` finds them through `notificationId`.
+    const slot = makeSlot();
+    seed("2026-08-17", slot);
+    mockSchedule.mockImplementationOnce(async () => {
+      useItineraryStore
+        .getState()
+        .updateSlot("2026-08-17", slot.id, { notificationsMuted: true });
+      return "notif-1";
+    });
+    const { result } = await renderHook(() => useRainNotificationScheduler());
+
+    await result.current("2026-08-17", slot);
+
+    expect(mockCancel).toHaveBeenCalledWith("notif-1");
+    expect(
+      useItineraryStore.getState().plans[0].slots[0].notificationId,
+    ).toBeUndefined();
+  });
+
+  it("cancels rather than persists when the stop was deleted or re-keyed meanwhile", async () => {
+    // A "this day only" detach mints a fresh id, so the slot this call knows
+    // about is gone by the time the fetch resolves.
+    const slot = makeSlot();
+    seed("2026-08-17", slot);
+    mockSchedule.mockImplementationOnce(async () => {
+      useItineraryStore.getState().deleteSlot("2026-08-17", slot.id);
+      return "notif-1";
+    });
+    const { result } = await renderHook(() => useRainNotificationScheduler());
+
+    await result.current("2026-08-17", slot);
+
+    expect(mockCancel).toHaveBeenCalledWith("notif-1");
   });
 
   it("does nothing when rain alerts are off", async () => {

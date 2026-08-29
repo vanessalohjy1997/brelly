@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
   useAnimatedStyle,
@@ -24,11 +24,21 @@ import { describeUmbrella } from "@/utils/describeUmbrella";
 import { resolveSlotKind } from "@/utils/slotKind";
 import { resolveSlotProvider } from "@/utils/weatherProvider";
 
-const DELETE_ACTION_WIDTH = 88;
+const ACTION_WIDTH = 88;
 
 type Props = {
   slot: ItinerarySlot;
   onDelete: () => void;
+  /**
+   * Turns this stop's rain alert off, or back on. Omitted on the archive,
+   * where there is no future alert left to mute — the swipe reveals Delete
+   * alone there.
+   *
+   * A callback rather than the hook itself, for the same reason `onDelete` is
+   * one: the card knows the stop but not which day it is filed under, and the
+   * seam that has to cancel and re-schedule an alert needs both.
+   */
+  onToggleMute?: () => void;
   /**
    * The stop has already ended — set on the Past plans archive. It drops
    * everything about the weather: the forecast request, the badge, the icon
@@ -54,34 +64,88 @@ type Props = {
   emphasis?: boolean;
 };
 
-function DeleteAction({
+/**
+ * What the left swipe reveals: Mute, then Delete.
+ *
+ * One transform on the row rather than one per button — the translation the
+ * gesture reports is the row's own offset, so each action would otherwise have
+ * to know how much of the panel sits to its right.
+ *
+ * Mute is the inner one. It is the reversible action of the two, so it takes
+ * the shorter swipe, and Delete keeps the far edge it has always had — muscle
+ * memory for a destructive action should not move because a second one was
+ * added beside it.
+ *
+ * Both actions close the row before they run, and neither waits to hear how it
+ * went. Delete used to get away with leaving it open because the card always
+ * went with it; now that a routine's stop can raise a day/series prompt and be
+ * cancelled, the panel would be left standing over a stop nothing happened to —
+ * and the next tap on that card is swallowed closing the row rather than
+ * opening the stop.
+ */
+function RightActions({
   translation,
   onDelete,
+  onToggleMute,
+  muted,
+  close,
 }: {
   translation: SharedValue<number>;
   onDelete: () => void;
+  onToggleMute?: () => void;
+  muted: boolean;
+  close: () => void;
 }) {
   const colors = useTheme();
+  const width = onToggleMute ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: translation.value + DELETE_ACTION_WIDTH }],
+    transform: [{ translateX: translation.value + width }],
   }));
 
   return (
-    <Animated.View style={[styles.deleteAction, style]}>
-      <Pressable
-        onPress={onDelete}
-        style={[styles.deleteButton, { backgroundColor: colors.danger }]}
-        accessibilityRole="button"
-        accessibilityLabel="Delete plan"
-      >
-        {/* `onDanger`, not a hardcoded white: the dark theme's danger is the
-            lighter of the two, so white on it is 2.34:1. */}
-        <ThemedText
-          style={[styles.deleteButtonText, { color: colors.onDanger }]}
+    <Animated.View style={[styles.actions, style]}>
+      {onToggleMute && (
+        <View style={styles.action}>
+          <Pressable
+            onPress={() => {
+              close();
+              onToggleMute();
+            }}
+            style={[styles.actionButton, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            // Opens with the visible word. An accessible name that doesn't
+            // contain the label on the button is a Voice Control dead end —
+            // "tap Mute" matches nothing — and it made the rotor announce this
+            // action under a different name from the one below it.
+            accessibilityLabel={
+              muted ? "Unmute — turn rain alerts on" : "Mute — turn rain alerts off"
+            }
+          >
+            <ThemedText
+              style={[styles.actionText, { color: colors.onPrimary }]}
+            >
+              {muted ? "Unmute" : "Mute"}
+            </ThemedText>
+          </Pressable>
+        </View>
+      )}
+      <View style={styles.action}>
+        <Pressable
+          onPress={() => {
+            close();
+            onDelete();
+          }}
+          style={[styles.actionButton, { backgroundColor: colors.danger }]}
+          accessibilityRole="button"
+          accessibilityLabel="Delete plan"
         >
-          Delete
-        </ThemedText>
-      </Pressable>
+          {/* `onDanger`, not a hardcoded white: the dark theme's danger is the
+              lighter of the two, so white on it is 2.34:1. */}
+          <ThemedText style={[styles.actionText, { color: colors.onDanger }]}>
+            Delete
+          </ThemedText>
+        </Pressable>
+      </View>
     </Animated.View>
   );
 }
@@ -89,10 +153,15 @@ function DeleteAction({
 export function ItineraryCard({
   slot,
   onDelete,
+  onToggleMute,
   past = false,
   emphasis = false,
 }: Props) {
   const colors = useTheme();
+  const muted = !!slot.notificationsMuted;
+  // Nothing on an archived card can be muted — see `onToggleMute` — and a
+  // screen that offers no handler gets no button either.
+  const toggleMute = past ? undefined : onToggleMute;
 
   const {
     data: weather,
@@ -154,16 +223,37 @@ export function ItineraryCard({
 
   return (
     <Swipeable
-      renderRightActions={(_progress, translation) => (
-        <DeleteAction translation={translation} onDelete={onDelete} />
+      renderRightActions={(_progress, translation, swipeableMethods) => (
+        <RightActions
+          translation={translation}
+          onDelete={onDelete}
+          onToggleMute={toggleMute}
+          muted={muted}
+          close={swipeableMethods.close}
+        />
       )}
-      rightThreshold={DELETE_ACTION_WIDTH / 2}
+      // No `rightThreshold`: the library's default is half the *measured*
+      // panel, which is the only version that can be right on both lists. The
+      // explicit half-an-action this used to pass stayed 44 when the panel grew
+      // to two actions, so a quarter-length nudge on Today or Plans latched the
+      // whole thing open while the same nudge on History did not.
     >
       <Pressable
         onPress={() => router.push(`/plan/${slot.id}`)}
-        accessibilityActions={[{ name: "delete", label: "Delete" }]}
+        // The swipe is a gesture VoiceOver doesn't pass through, so every
+        // action behind it has to be nameable here too — in the same order the
+        // panel puts them in. The rotor opens on the first entry, so leading
+        // with Delete would put the destructive action under the first swipe
+        // up, which is the opposite of what the panel's own ordering says.
+        accessibilityActions={[
+          ...(toggleMute
+            ? [{ name: "toggle-mute", label: muted ? "Unmute" : "Mute" }]
+            : []),
+          { name: "delete", label: "Delete" },
+        ]}
         onAccessibilityAction={(e) => {
           if (e.nativeEvent.actionName === "delete") onDelete();
+          if (e.nativeEvent.actionName === "toggle-mute") toggleMute?.();
         }}
         style={({ pressed }) => [
           styles.card,
@@ -249,9 +339,10 @@ export function ItineraryCard({
                 />
               )}
               {/* Says the stop came from a routine, which is what makes the
-                  scope prompt on the edit screen expected rather than a
-                  surprise — and what distinguishes the four identical rows
-                  down the week from four you happened to type twice. */}
+                  scope prompt — raised by this card's own swipe as well as by
+                  the edit screen — expected rather than a surprise, and what
+                  distinguishes the four identical rows down the week from four
+                  you happened to type twice. */}
               {slot.routineId && (
                 <Icon
                   name={{ ios: "repeat", android: "repeat" }}
@@ -385,20 +476,23 @@ const styles = StyleSheet.create({
     maxWidth: "40%",
     backgroundColor: "transparent",
   },
-  deleteAction: {
-    width: DELETE_ACTION_WIDTH,
+  actions: {
+    flexDirection: "row",
+  },
+  action: {
+    width: ACTION_WIDTH,
     alignItems: "center",
     justifyContent: "center",
   },
-  deleteButton: {
+  actionButton: {
     borderRadius: Spacing.two,
     paddingVertical: Spacing.three,
     alignItems: "center",
     justifyContent: "center",
-    width: DELETE_ACTION_WIDTH - Spacing.two,
+    width: ACTION_WIDTH - Spacing.two,
     height: "100%",
   },
-  deleteButtonText: {
+  actionText: {
     fontWeight: "600",
   },
 });

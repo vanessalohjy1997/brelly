@@ -11,6 +11,7 @@ import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { DayPlan } from "@/types/itinerary";
 import type { Routine } from "@/types/routine";
+import { toDateKey } from "@/utils/dateKeys";
 
 jest.mock("@/services/weather", () => ({
   getForecastForSlot: jest
@@ -67,6 +68,41 @@ function withRoutine() {
   });
 }
 
+/**
+ * The same routine stop, still ahead of the clock.
+ *
+ * `PLAN` is pinned to a July 2026 date that has since gone by, and a stop that
+ * has already ended is deliberately never asked about — see the `ended` guard
+ * in `useDeleteSlotWithUndo`. The delete-scope question only exists for a stop
+ * that still has a future, so every test about that question needs one.
+ *
+ * Returns the date key it filed the stop under — an hour from now can be
+ * tomorrow, so nothing may hardcode it.
+ */
+function withUpcomingRoutine(): string {
+  const start = new Date(Date.now() + 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const date = toDateKey(start);
+  useRoutineStore.setState({ routines: [ROUTINE] });
+  useItineraryStore.setState({
+    plans: [
+      {
+        id: date,
+        date,
+        slots: [
+          {
+            ...PLAN.slots[0],
+            routineId: "r1",
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+          },
+        ],
+      },
+    ],
+  });
+  return date;
+}
+
 type AlertButton = { text: string; onPress?: () => void };
 
 /** The buttons the scope prompt was raised with. */
@@ -102,6 +138,14 @@ beforeEach(() => {
     slotsReady: true,
   });
   mockSearchParams.mockReturnValue({ id: "slot-1" });
+});
+
+// The scope-prompt spies are installed per test, and one of them is restored
+// as the last line of a test body — which never runs if an assertion above it
+// throws, leaking an auto-answering `Alert.alert` into every later test. This
+// file leans on `Alert` far more than it used to, so the restore is here.
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe("EditSlotScreen", () => {
@@ -397,7 +441,7 @@ describe("EditSlotScreen", () => {
     });
 
     it("asks which days a delete is meant for", async () => {
-      withRoutine();
+      withUpcomingRoutine();
       const view = await renderWithProviders(<EditSlotScreen />);
 
       answerScopePromptWith("Cancel");
@@ -409,10 +453,14 @@ describe("EditSlotScreen", () => {
         "Delete all future days",
       ]);
       expect(useItineraryStore.getState().plans).toHaveLength(1);
+      // The dismissed answer is the hook's `null`, which the screen has to
+      // read as "stay here" — an unconditional `router.back()` would leave the
+      // form dismissed with nothing deleted.
+      expect(router.back).not.toHaveBeenCalled();
     });
 
     it("records an exception when one day is deleted", async () => {
-      withRoutine();
+      const date = withUpcomingRoutine();
       const view = await renderWithProviders(<EditSlotScreen />);
 
       answerScopePromptWith("Delete this day");
@@ -422,12 +470,12 @@ describe("EditSlotScreen", () => {
       // Without this the next top-up reads the empty day as "not filled in
       // yet" and puts the stop straight back.
       expect(useRoutineStore.getState().routines[0].exceptions).toEqual([
-        "2026-07-31",
+        date,
       ]);
     });
 
     it("lifts the exception again on undo", async () => {
-      withRoutine();
+      withUpcomingRoutine();
       const view = await renderWithProviders(<EditSlotScreen />);
 
       answerScopePromptWith("Delete this day");
@@ -441,7 +489,7 @@ describe("EditSlotScreen", () => {
     });
 
     it("deletes the rule, not the days already lived through", async () => {
-      withRoutine();
+      withUpcomingRoutine();
       const view = await renderWithProviders(<EditSlotScreen />);
 
       answerScopePromptWith("Delete all future days");

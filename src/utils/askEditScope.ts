@@ -22,8 +22,9 @@ type Options = {
  * routine from being one, and "all of them" rewrites a fortnight because
  * somebody moved a single lunch.
  *
- * Resolves `null` when dismissed, which the callers read as "leave everything
- * alone and stay on the form" — an unanswered question must not commit.
+ * Resolves `null` when dismissed, which every caller reads as "leave everything
+ * alone" — the form stays open, and a swipe on a list changes nothing. An
+ * unanswered question must not commit.
  *
  * `seriesLabel` is optional because moving a stop to another *day* can only
  * mean that day: a routine has no single date, so there is no rule-level
