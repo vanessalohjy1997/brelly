@@ -87,14 +87,38 @@ jobs:
         env:
           CHANNEL: ${{ inputs.channel }}
         run: |
+          # `--json` does not buy a clean stdout. eas-cli only redirects
+          # stdout to stderr once the command body starts, and the
+          # `Environment variables ... loaded from the "<env>" environment on
+          # EAS: ...` banner that `--environment` triggers is printed earlier
+          # than that, while the command context is still being built. So it
+          # lands on stdout in front of the JSON and jq dies on the word
+          # `Environment` ("Invalid numeric literal at line 1, column 12").
+          #
+          # The payload is pretty-printed and printed last, so everything from
+          # the first column-0 `{` or `[` onwards is it, and anything above
+          # that line is chatter. Neither pipeline can rely on `pipefail`
+          # either — GitHub runs these with `bash -e`, not `bash -eo pipefail`
+          # — so a failing `eas` shows up here as an empty hash, not as a
+          # failed step. Both are checked explicitly.
+          json_payload() { sed -n '/^[[{]/,$p'; }
           HASH=$(eas fingerprint:generate \
             --platform ios --environment "$CHANNEL" --json --non-interactive \
-            | jq -r '.hash')
+            | json_payload | jq -r '.hash')
+          if [ -z "$HASH" ] || [ "$HASH" = "null" ]; then
+            echo "::error::eas fingerprint:generate produced no hash. Re-run" \
+              "this workflow with debug logging on to see its output." >&2
+            exit 1
+          fi
           echo "Local fingerprint: $HASH"
           MATCHES=$(eas build:list \
             --platform ios --channel "$CHANNEL" --status finished \
             --fingerprint-hash "$HASH" --limit 1 --json --non-interactive \
-            | jq 'length')
+            | json_payload | jq 'length')
+          if [ -z "$MATCHES" ]; then
+            echo "::error::eas build:list returned no JSON array to count." >&2
+            exit 1
+          fi
           if [ "$MATCHES" -eq 0 ]; then
             echo "::error::No finished iOS build on the '$CHANNEL' channel has" \
               "fingerprint $HASH. Something native changed, so this needs a new" \
