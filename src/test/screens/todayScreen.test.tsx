@@ -5,6 +5,7 @@ import * as Updates from "expo-updates";
 import TodayScreen from "@/app/(tabs)/index";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { useRoutineStore } from "@/store/routineStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
@@ -81,6 +82,9 @@ const NO_UPDATE = {
 beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
+  // Reset too: a leaked routine would send the swipe seams down their prompt
+  // branch, and an unanswered prompt times a test out rather than failing it.
+  useRoutineStore.setState({ routines: [] });
   useSettingsStore.setState({ hasSeenOnboarding: true });
   useToastStore.setState({ toast: null, modalHosts: [] });
   useCloudSyncStore.setState({
@@ -248,6 +252,44 @@ describe("TodayScreen", () => {
       message: "Deleted Morning run",
       variant: "success",
     });
+  });
+
+  it("mutes a stop from the swipe, and offers the mute back", async () => {
+    useItineraryStore.setState({
+      plans: [todaysPlan([slot("s1", "Morning run", 30)])],
+    });
+    const view = await renderWithProviders(<TodayScreen />);
+
+    await fireEvent.press(view.getByLabelText("Mute — turn rain alerts off"));
+
+    expect(
+      useItineraryStore.getState().plans[0].slots[0].notificationsMuted,
+    ).toBe(true);
+    expect(useToastStore.getState().toast).toMatchObject({
+      message: "Rain alerts off for Morning run",
+      action: { label: "Undo" },
+    });
+
+    useToastStore.getState().toast?.action?.onPress();
+
+    expect(
+      useItineraryStore.getState().plans[0].slots[0].notificationsMuted,
+    ).toBe(false);
+  });
+
+  it("says Unmute on a stop that is already quiet", async () => {
+    useItineraryStore.setState({
+      plans: [
+        todaysPlan([
+          { ...slot("s1", "Morning run", 30), notificationsMuted: true },
+        ]),
+      ],
+    });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(view.getByText("Unmute")).toBeTruthy();
+    expect(view.getByLabelText("Rain alerts off for this stop")).toBeTruthy();
   });
 
   it("says how soon the next stop is, not only when it is", async () => {

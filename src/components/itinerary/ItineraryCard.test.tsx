@@ -19,6 +19,40 @@ jest.mock("@/services/openMeteo", () => ({
   getOpenMeteoForecastForSlot: jest.fn(),
 }));
 
+/**
+ * The real `close()` is unobservable here.
+ *
+ * `swipeableMethods.close` runs through `runOnUI`/`withSpring`, and the
+ * Reanimated stand-in makes both identity functions writing into plain
+ * objects — so calling it under Jest changes nothing a test can see, and the
+ * promise that both actions put the panel away could be deleted from the
+ * component without a single assertion noticing. This double hands
+ * `renderRightActions` a spy instead, and still renders the row and its
+ * actions the way the library does, so every other test in this file is
+ * unaffected. The screens keep exercising the real component.
+ */
+const mockClose = jest.fn();
+jest.mock("react-native-gesture-handler/ReanimatedSwipeable", () => {
+  /* eslint-disable @typescript-eslint/no-require-imports --
+     a `jest.mock` factory is hoisted above this file's imports, so it cannot
+     use them; `require` inside the factory is the only way to reach React from
+     here, and it is the pattern `jest.setup.js` already uses for its own
+     component stand-ins. */
+  const React = require("react");
+  const { View } = require("react-native");
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return {
+    __esModule: true,
+    default: ({ children, renderRightActions }: any) =>
+      React.createElement(
+        View,
+        null,
+        children,
+        renderRightActions?.({ value: 1 }, { value: 0 }, { close: mockClose }),
+      ),
+  };
+});
+
 const SLOT: ItinerarySlot = {
   id: "slot-1",
   label: "Lunch with Sam",
@@ -238,11 +272,151 @@ describe("ItineraryCard", () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
+  describe("the mute action", () => {
+    it("sits beside Delete on the swipe", async () => {
+      // Muting used to need the full edit form, so the flag this card already
+      // draws as a bell-slash took a modal and a Save to change.
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={SLOT}
+          onDelete={jest.fn()}
+          onToggleMute={jest.fn()}
+        />,
+      );
+
+      expect(view.getByText("Mute")).toBeTruthy();
+      expect(view.getByText("Delete")).toBeTruthy();
+    });
+
+    it("calls onToggleMute when pressed, and does not open the stop", async () => {
+      const onToggleMute = jest.fn();
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={SLOT}
+          onDelete={jest.fn()}
+          onToggleMute={onToggleMute}
+        />,
+      );
+
+      await fireEvent.press(view.getByText("Mute"));
+
+      expect(onToggleMute).toHaveBeenCalledTimes(1);
+      expect(router.push).not.toHaveBeenCalled();
+    });
+
+    it("offers the way back on a stop that is already muted", async () => {
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={{ ...SLOT, notificationsMuted: true }}
+          onDelete={jest.fn()}
+          onToggleMute={jest.fn()}
+        />,
+      );
+
+      expect(view.getByText("Unmute")).toBeTruthy();
+      expect(view.queryByText("Mute")).toBeNull();
+      // The accessible name has to open with the word on the button, or
+      // "tap Unmute" in Voice Control matches nothing.
+      expect(
+        view.getByLabelText("Unmute — turn rain alerts on"),
+      ).toBeTruthy();
+    });
+
+    it("is withheld on an archived card — there is no alert left to mute", async () => {
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={SLOT}
+          onDelete={jest.fn()}
+          onToggleMute={jest.fn()}
+          past
+        />,
+      );
+
+      expect(view.queryByText("Mute")).toBeNull();
+      expect(view.getByText("Delete")).toBeTruthy();
+    });
+
+    it("is withheld on a list that doesn't offer it", async () => {
+      const view = await renderWithProviders(
+        <ItineraryCard slot={SLOT} onDelete={jest.fn()} />,
+      );
+
+      expect(view.queryByText("Mute")).toBeNull();
+    });
+
+    it("puts the panel away, so the row isn't left open over the stop", async () => {
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={SLOT}
+          onDelete={jest.fn()}
+          onToggleMute={jest.fn()}
+        />,
+      );
+
+      await fireEvent.press(view.getByText("Mute"));
+
+      expect(mockClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("puts the panel away on Delete too, which a cancelled prompt would leave open", async () => {
+      // Delete used to get away with leaving it open because the card always
+      // went with it. A routine's stop can now raise a day/series prompt and
+      // be cancelled, and the next tap on a card with an open panel is
+      // swallowed closing the row rather than opening the stop.
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={SLOT}
+          onDelete={jest.fn()}
+          onToggleMute={jest.fn()}
+        />,
+      );
+
+      await fireEvent.press(view.getByText("Delete"));
+
+      expect(mockClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("is reachable without the swipe, which VoiceOver can't perform", async () => {
+      const onToggleMute = jest.fn();
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={SLOT}
+          onDelete={jest.fn()}
+          onToggleMute={onToggleMute}
+        />,
+      );
+
+      await fireEvent(view.getByText("Lunch with Sam"), "accessibilityAction", {
+        nativeEvent: { actionName: "toggle-mute" },
+      });
+
+      expect(onToggleMute).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves the delete accessibility action alone", async () => {
+      const onDelete = jest.fn();
+      const view = await renderWithProviders(
+        <ItineraryCard
+          slot={SLOT}
+          onDelete={onDelete}
+          onToggleMute={jest.fn()}
+        />,
+      );
+
+      await fireEvent(view.getByText("Lunch with Sam"), "accessibilityAction", {
+        nativeEvent: { actionName: "delete" },
+      });
+
+      expect(onDelete).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("the repeat mark", () => {
     it("marks a stop a routine filled in", async () => {
-      // It is what makes the scope prompt on the edit screen expected rather
-      // than a surprise, and what tells four identical rows down the week from
-      // four you happened to type twice.
+      // It is what makes the scope prompt — which a swipe on this card now
+      // raises too, not just the edit screen — expected rather than a surprise,
+      // and what tells four identical rows down the week from four you
+      // happened to type twice.
       const view = await renderWithProviders(
         <ItineraryCard
           slot={{ ...SLOT, routineId: "r1" }}

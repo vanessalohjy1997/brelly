@@ -50,7 +50,6 @@ export default function EditSlotScreen() {
   const routines = useRoutineStore((state) => state.routines);
   const routine = routineForSlot(routines, found?.slot.routineId);
   const updateRoutine = useRoutineStore((state) => state.updateRoutine);
-  const deleteRoutine = useRoutineStore((state) => state.deleteRoutine);
   const addException = useRoutineStore((state) => state.addException);
   const materializeRoutines = useRoutineMaterializer();
   const scheduleRainNotificationForSlot = useRainNotificationScheduler();
@@ -153,38 +152,13 @@ export default function EditSlotScreen() {
   // rather than in this modal's host, the one raised here survives the
   // `router.back()` below and finishes on the tab underneath, still undoable.
   //
-  // A routine's stop is the one exception, and not for confirmation's sake:
-  // "delete this" is genuinely two different deletes, and no undo can guess
-  // which was meant. `deleteWithUndo` already handles the single day — it
-  // records the exception so the top-up can't resurrect it — so all this adds
-  // is the whole-routine reading.
+  // The routine scope prompt this used to raise itself now lives in
+  // `deleteWithUndo`, so the swipe on a list asks the same question rather
+  // than quietly taking the this-day reading. `null` is the dismissed answer:
+  // nothing was deleted, so the form stays open.
   const handleDelete = async () => {
-    if (routine) {
-      const scope = await askEditScope({
-        title: `Delete ${slot.label}?`,
-        message: `${describeRoutine(routine)}.`,
-        dayLabel: "Delete this day",
-        seriesLabel: "Delete all future days",
-        destructive: true,
-      });
-      if (!scope) return;
-
-      if (scope === "series") {
-        // Only the *rule* is deleted. The days it already produced and that
-        // have been and gone stay in the archive, because they happened.
-        const removed = saveWithFeedback(() => deleteRoutine(routine.id), {
-          success: `Deleted ${slot.label} and its repeats`,
-          failure: "Couldn't delete that routine. Try again.",
-        });
-        if (!removed.ok) return;
-        materializeRoutines();
-        router.back();
-        return;
-      }
-    }
-
-    const removed = deleteWithUndo(date, slot);
-    if (removed.ok) router.back();
+    const removed = await deleteWithUndo(date, slot);
+    if (removed?.ok) router.back();
   };
 
   return (

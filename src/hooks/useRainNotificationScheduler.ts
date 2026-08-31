@@ -1,10 +1,14 @@
 import { useCallback } from "react";
 
 import { getForecastForSlotByProvider } from "@/services/forecastProvider";
-import { scheduleRainNotification } from "@/services/notifications";
+import {
+  cancelNotification,
+  scheduleRainNotification,
+} from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { ItinerarySlot } from "@/types/itinerary";
+import { findSlotById } from "@/utils/planSelectors";
 import { resolveSlotProvider } from "@/utils/weatherProvider";
 
 /**
@@ -35,15 +39,36 @@ export function useRainNotificationScheduler() {
         quietHours,
         leadMinutes: rainLeadMinutes,
       });
-      if (notificationId) {
-        updateSlot(date, slot.id, {
-          notificationId,
-          // Stamped so a later lead-time change can tell which alerts are
-          // stale — the resync otherwise sees "has an alert, still rainy" and
-          // leaves an alert scheduled against the old lead time forever.
-          notificationLeadMinutes: rainLeadMinutes,
+      if (!notificationId) return;
+
+      // The forecast fetch above took time, and the slot may have moved on
+      // while it was in flight: muted from a swipe, deleted, or re-keyed by a
+      // "this day only" detach. `scheduleRainNotification` read the muted flag
+      // off the copy it was handed, so by now it can be out of date.
+      //
+      // The handle has to be cancelled rather than merely dropped. Everything
+      // that cleans up after an alert finds it through `slot.notificationId`
+      // (`planNotificationResync`), so an id that never lands on a slot is an
+      // alert nothing can ever cancel — it fires for a stop the user muted, or
+      // for one that no longer exists.
+      const current = findSlotById(
+        useItineraryStore.getState().plans,
+        slot.id,
+      )?.slot;
+      if (!current || current.notificationsMuted) {
+        cancelNotification(notificationId).catch(() => {
+          // Best-effort, like every other cancel in the app.
         });
+        return;
       }
+
+      updateSlot(date, slot.id, {
+        notificationId,
+        // Stamped so a later lead-time change can tell which alerts are
+        // stale — the resync otherwise sees "has an alert, still rainy" and
+        // leaves an alert scheduled against the old lead time forever.
+        notificationLeadMinutes: rainLeadMinutes,
+      });
     },
     [updateSlot, rainAlertsEnabled, quietHours, rainLeadMinutes],
   );

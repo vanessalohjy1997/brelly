@@ -1,13 +1,25 @@
 import { useCallback } from "react";
 
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
+import { useRoutineMaterializer } from "@/hooks/useRoutineMaterializer";
 import { cancelAndDeleteSlot } from "@/services/notifications";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import type { ItinerarySlot } from "@/types/itinerary";
+import { askEditScope } from "@/utils/askEditScope";
+import { describeRoutine } from "@/utils/describeRoutine";
 import { hapticDelete } from "@/utils/haptics";
+import { findSlotById } from "@/utils/planSelectors";
+import { routineForSlot } from "@/utils/routineSelectors";
 import { saveWithFeedback, type SaveResult } from "@/utils/saveWithFeedback";
 import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
+
+/**
+ * A delete that was asked about and answered, or `null` because the question
+ * was dismissed — see `askEditScope`. Only a routine's stop raises the
+ * question, so `null` is only ever possible for one.
+ */
+export type DeleteResult = SaveResult<void> | null;
 
 /**
  * Deletes a stop and offers it back for as long as the toast is up.
@@ -23,25 +35,109 @@ import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
  * faster than a dialog — nothing to dismiss on the way to the thing you meant
  * to do — and safer, because it also covers the accidental swipe, which no
  * amount of confirming on the *other* path ever could.
+ *
+ * A routine's stop is the one exception, and not for confirmation's sake:
+ * "delete this" is genuinely two different deletes, and no undo can guess
+ * which was meant. The scope prompt used to live in the edit screen, so the
+ * swipe on a list quietly took the this-day reading without asking; it is
+ * here now, so both paths ask the same question and the answer means the same
+ * thing whichever one raised it.
  */
-export function useDeleteSlotWithUndo() {
+export function useDeleteSlotWithUndo(): (
+  date: string,
+  slot: ItinerarySlot,
+) => Promise<DeleteResult> {
   const deleteSlot = useItineraryStore((state) => state.deleteSlot);
   const restoreSlot = useItineraryStore((state) => state.restoreSlot);
+  const routines = useRoutineStore((state) => state.routines);
+  const deleteRoutine = useRoutineStore((state) => state.deleteRoutine);
+  const restoreRoutine = useRoutineStore((state) => state.restoreRoutine);
   const addException = useRoutineStore((state) => state.addException);
   const removeException = useRoutineStore((state) => state.removeException);
+  const materializeRoutines = useRoutineMaterializer();
   const scheduleRainNotificationForSlot = useRainNotificationScheduler();
 
   return useCallback(
-    (date: string, slot: ItinerarySlot): SaveResult<void> => {
+    async (date: string, slot: ItinerarySlot): Promise<DeleteResult> => {
+      // A stop that has already ended has no series reading, so it is never
+      // asked about. The archive is a record of what happened; rule 1 of
+      // `planRoutineMaterialization` never touches a day before today, so
+      // there is no top-up that could put this one back and nothing about the
+      // rule that deleting it could mean. Asking would offer "delete all
+      // future days" from inside the archive — a live rule destroyed from the
+      // one screen that is only supposed to hold history. It deletes the one
+      // archived day, undoably, exactly as it did before the prompt moved here.
+      const ended = new Date(slot.endTime).getTime() <= Date.now();
+      const routine = ended
+        ? undefined
+        : routineForSlot(routines, slot.routineId);
+
+      if (routine) {
+        const scope = await askEditScope({
+          title: `Delete ${slot.label}?`,
+          message: `${describeRoutine(routine)}.`,
+          dayLabel: "Delete this day",
+          seriesLabel: "Delete all future days",
+          destructive: true,
+        });
+        // Dismissed. Nothing is deleted and nothing is said about it — the
+        // question going away is the whole answer.
+        if (!scope) return null;
+
+        if (scope === "series") {
+          hapticDelete();
+          // Only the *rule* is deleted. The days it already produced and that
+          // have been and gone stay in the archive, because they happened.
+          const removed = saveWithFeedback(() => deleteRoutine(routine.id), {
+            success: `Deleted ${slot.label} and its repeats`,
+            failure: "Couldn't delete that routine. Try again.",
+            // This branch is one swipe and one mis-tap away now that the
+            // prompt is raised here rather than from the edit form, and it
+            // destroys a standing rule. `restoreRoutine` exists for exactly
+            // this: it keeps the id, so the days already filed under it are
+            // not orphaned, and it keeps `exceptions`, the record of the days
+            // deliberately deleted.
+            successAction: {
+              label: "Undo",
+              onPress: () => {
+                const restored = saveWithFeedback(
+                  () => restoreRoutine(routine),
+                  {
+                    success: `Restored ${slot.label} and its repeats`,
+                    failure: "Couldn't restore that routine.",
+                  },
+                );
+                // Refills the days the sweep below took away, under the same
+                // deterministic ids, and schedules their alerts afresh.
+                if (restored.ok) materializeRoutines();
+              },
+            },
+          });
+          // The sweep is what takes the upcoming stops off the lists, and it
+          // cancels their alerts on the way out.
+          if (removed.ok) materializeRoutines();
+          return removed;
+        }
+      }
+
       hapticDelete();
+      // Re-read after the prompt. `slot` is the copy the swipe captured, and
+      // the alert id is the field written behind our back while the question
+      // was on screen — `runNotificationSync` stamps one on after its own
+      // awaited forecast fetch. Cancelling the stale copy's id cancels
+      // nothing, and once the slot is gone there is no route back to the
+      // alert: everything that cleans one up finds it through
+      // `slot.notificationId`.
+      const current =
+        findSlotById(useItineraryStore.getState().plans, slot.id)?.slot ?? slot;
+
       return saveWithFeedback(
         () => {
-          cancelAndDeleteSlot(deleteSlot, date, slot);
+          cancelAndDeleteSlot(deleteSlot, date, current);
           // A stop a routine filled in has to be remembered as *deleted*, not
           // merely absent: the next top-up reads an empty day as "not
           // materialised yet" and would put it straight back, undoing the
-          // delete without anyone asking. Deleting one day of a routine is
-          // exactly the "this day only" choice, so it is taken as one.
+          // delete without anyone asking.
           if (slot.routineId) addException(slot.routineId, date);
         },
         {
@@ -59,7 +155,7 @@ export function useDeleteSlotWithUndo() {
                   // slot now refers to a notification that no longer exists —
                   // carrying it back would leave the stop looking scheduled
                   // forever and no alert would ever fire again.
-                  return restoreSlot(date, stripNotificationHandles(slot));
+                  return restoreSlot(date, stripNotificationHandles(current));
                 },
                 {
                   success: `Restored ${slot.label}`,
@@ -80,8 +176,12 @@ export function useDeleteSlotWithUndo() {
     [
       deleteSlot,
       restoreSlot,
+      routines,
+      deleteRoutine,
+      restoreRoutine,
       addException,
       removeException,
+      materializeRoutines,
       scheduleRainNotificationForSlot,
     ],
   );

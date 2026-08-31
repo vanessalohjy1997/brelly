@@ -69,6 +69,9 @@ module.exports = {
   enableLayoutAnimations: () => {},
   isConfigured: () => true,
   LinearTransition: identityTransition,
+  // `ReanimatedSwipeable` builds its spring config with `ReduceMotion.System`,
+  // so closing a row from a test reads this — the enum's real string values.
+  ReduceMotion: { System: "system", Always: "always", Never: "never" },
   FadeIn: identityTransition,
   FadeOut: identityTransition,
   Easing: {

@@ -88,8 +88,9 @@ type ItineraryState = {
    * or already re-filed by an earlier edit).
    *
    * Detaching a routine's stop — clearing `routineId` on a slot that had one,
-   * "this day only" in the edit screen — re-keys the slot to a fresh id
-   * rather than editing in place; see FIREBASE_MIGRATION.md's "IDs" section
+   * the "this day only" answer on the edit screen or on a swipe-to-mute —
+   * re-keys the slot to a fresh id rather than editing in place; see
+   * FIREBASE_MIGRATION.md's "IDs" section
    * for why (an exception lifted later would otherwise let the materialiser's
    * deterministic id overwrite the detached stop). The return value is what
    * lets a caller that scheduled a notification against the old id find the
@@ -155,7 +156,8 @@ export const useItineraryStore = create<ItineraryState>()((set, get) => ({
     if (!current) return undefined;
 
     // Detaching: the slot had a routine and this update explicitly clears
-    // it — currently only the edit screen's "this day only" branch.
+    // it — the "this day only" branch of the edit screen's save and of
+    // `useMuteSlotWithUndo`.
     const detaching =
       current.routineId !== undefined &&
       "routineId" in updates &&

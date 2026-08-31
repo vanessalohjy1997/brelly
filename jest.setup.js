@@ -9,6 +9,14 @@
 // factory that requires it makes the resolver recurse into itself).
 require("react-native-gesture-handler/jestSetup");
 
+// Reanimated's runtime declares `_WORKLET` as a global, and the stand-in above
+// can't: a module mock only replaces an import. Gesture Handler's own code
+// reads it bare — `ReanimatedSwipeable`'s `close()` branches on it to decide
+// whether it is already on the UI thread — so calling any `swipeableMethods`
+// from a test throws `ReferenceError: _WORKLET is not defined` without this.
+// `false` is the truth here: Jest runs everything on the JS thread.
+global._WORKLET = false;
+
 // Native modules that have no JS implementation in the Jest environment.
 // Without these, importing *any* component that transitively reaches the
 // stores or the notification service fails at module load — which is why

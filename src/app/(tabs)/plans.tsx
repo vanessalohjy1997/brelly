@@ -29,6 +29,7 @@ import {
 } from "@/constants/theme";
 import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
+import { useMuteSlotWithUndo } from "@/hooks/useMuteSlotWithUndo";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
 import { useTheme } from "@/hooks/useTheme";
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
@@ -61,6 +62,7 @@ export default function PlansScreen() {
   const bootstrapError = useCloudBootstrapError();
   const plans = useItineraryStore((state) => state.plans);
   const deleteWithUndo = useDeleteSlotWithUndo();
+  const toggleMuteWithUndo = useMuteSlotWithUndo();
   const { isRefreshing, refresh } = useWeatherRefresh();
   const [query, setQuery] = useState("");
 
@@ -267,6 +269,7 @@ export default function PlansScreen() {
               <ItineraryCard
                 slot={item}
                 onDelete={() => deleteWithUndo(section.date, item)}
+                onToggleMute={() => toggleMuteWithUndo(section.date, item)}
               />
             )}
             renderSectionHeader={({ section }) => (

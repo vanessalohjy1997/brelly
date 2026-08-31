@@ -1,10 +1,12 @@
 import { fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
+import { Alert } from "react-native";
 
 import HistoryScreen from "@/app/(tabs)/history";
 import { getForecastForSlot } from "@/services/weather";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
+import { useRoutineStore } from "@/store/routineStore";
 import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
@@ -66,6 +68,7 @@ function dayPlan(offsetDays: number, slots: ItinerarySlot[]): DayPlan {
 beforeEach(() => {
   jest.clearAllMocks();
   useItineraryStore.setState({ plans: [] });
+  useRoutineStore.setState({ routines: [] });
   useToastStore.setState({ toast: null, modalHosts: [] });
   useCloudSyncStore.setState({
     settingsReady: true,
@@ -167,6 +170,57 @@ describe("HistoryScreen", () => {
     await fireEvent.press(view.getByText("Last week's lunch"));
 
     expect(router.push).toHaveBeenCalledWith("/plan/old");
+  });
+
+  it("offers no mute — a stop that has ended has no alert left to silence", async () => {
+    useItineraryStore.setState({
+      plans: [dayPlan(-2, [slot("old", "Last week's lunch", -2)])],
+    });
+
+    const view = await renderWithProviders(<HistoryScreen />);
+
+    expect(view.queryByText("Mute")).toBeNull();
+    expect(view.getByText("Delete")).toBeTruthy();
+  });
+
+  it("deletes an archived routine day without asking about the rule", async () => {
+    // The prompt would offer "delete all future days" from inside the archive
+    // — a live rule destroyed from the one screen that only holds history. A
+    // day before today has no series reading: nothing can put it back, and
+    // deleting it says nothing about the rule.
+    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    useRoutineStore.setState({
+      routines: [
+        {
+          id: "r1",
+          label: "Office",
+          location: "Raffles Place, Singapore",
+          latitude: 1.2843,
+          longitude: 103.8514,
+          weekdays: [0, 1, 2, 3, 4, 5, 6],
+          startTime: "09:00",
+          endTime: "18:00",
+          startDate: "2020-01-01",
+          exceptions: [],
+        },
+      ],
+    });
+    useItineraryStore.setState({
+      plans: [
+        dayPlan(-2, [
+          { ...slot("old", "Last week's lunch", -2), routineId: "r1" },
+        ]),
+      ],
+    });
+
+    const view = await renderWithProviders(<HistoryScreen />);
+    await fireEvent.press(view.getByLabelText("Delete plan"));
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(useItineraryStore.getState().plans).toHaveLength(0);
+    // The rule is untouched — it is still filling in the days ahead.
+    expect(useRoutineStore.getState().routines).toHaveLength(1);
+    alertSpy.mockRestore();
   });
 
   it("deletes a past stop, so the archive can be cleared", async () => {
