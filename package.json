@@ -62,6 +62,9 @@
     "test-renderer": "^1.0.0",
     "typescript": "~6.0.3"
   },
+  "resolutions": {
+    "**/@expo/plist/@xmldom/xmldom": "0.8.15"
+  },
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
