@@ -17,6 +17,14 @@ on:
       TELEGRAM_CHAT_ID:
         required: false
 
+# Least privilege for GITHUB_TOKEN. No job here writes to the repo — they check
+# out, run checks, or hand work to EAS/Telegram over their own secrets — so the
+# repo-wide default scope is more than any of them needs. Set at the top level
+# so it covers every job in the file, including the reusable-workflow call
+# (a called workflow gets the intersection of its own permissions and these).
+permissions:
+  contents: read
+
 jobs:
   send:
     runs-on: ubuntu-latest
