@@ -1,15 +1,21 @@
-import { GoogleAuthProvider } from "@react-native-firebase/auth";
+import {
+  EmailAuthProvider,
+  GoogleAuthProvider,
+} from "@react-native-firebase/auth";
+import * as Notifications from "expo-notifications";
 
 import {
   linkAnonymousAccount,
   mergeIntoExistingAccount,
   resumePendingMergeIfNeeded,
+  signOutOfAccount,
   snapshotLocalData,
 } from "@/services/accountLinkService";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { mmkvStorage } from "@/store/mmkvStorage";
 import { useRoutineStore } from "@/store/routineStore";
+import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
 import { fakeAuth } from "@/test/fakeAuth";
 import { fakeFirestoreDb } from "@/test/fakeFirestore";
 import type { ItinerarySlot } from "@/types/itinerary";
@@ -107,6 +113,42 @@ describe("snapshotLocalData", () => {
     expect(snapshot.isEmpty).toBe(false);
     expect(snapshot.slots).toEqual([{ date: "2025-06-01", slot: slot() }]);
     expect(snapshot.routines).toEqual([routine()]);
+  });
+});
+
+describe("linkAnonymousAccount with an email credential", () => {
+  it("returns merge-required for an email that already has an account", async () => {
+    // Firebase rejects this link with `auth/email-already-in-use`, not the
+    // `auth/credential-already-in-use` an OAuth credential gets. Treating
+    // only the latter as the merge signal is what made every repeat attempt
+    // with the same address fail outright.
+    const credential = EmailAuthProvider.credential(
+      "person@example.com",
+      "hunter2hunter2",
+    );
+    fakeAuth.registerExistingAccount(credential, {
+      uid: EXISTING_UID,
+      isAnonymous: false,
+      email: "person@example.com",
+    });
+
+    const result = await linkAnonymousAccount(credential);
+
+    expect(result).toBe("merge-required");
+    expect(fakeAuth.currentUser?.uid).toBe(ANON_UID);
+  });
+
+  it("still surfaces a genuine failure rather than starting a merge", async () => {
+    const credential = EmailAuthProvider.credential("x@example.com", "pw");
+    jest
+      .spyOn(fakeAuth, "linkWithCredential")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("nope"), { code: "auth/operation-not-allowed" }),
+      );
+
+    await expect(linkAnonymousAccount(credential)).rejects.toMatchObject({
+      code: "auth/operation-not-allowed",
+    });
   });
 });
 
@@ -281,6 +323,125 @@ describe("mergeIntoExistingAccount", () => {
     };
 
     await mergeIntoExistingAccount(credential, snapshot, true);
+
+    expect(mmkvStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+  it("puts the anonymous user's data back when the wrong password fails the identity switch", async () => {
+    // Only the email flow can get this far with a bad secret — Google and
+    // Apple prove theirs in their own sheet. Without the restore, a typo'd
+    // password deletes the anonymous account's cloud documents and leaves
+    // the session anonymous with nothing to switch to.
+    const credential = EmailAuthProvider.credential(
+      "person@example.com",
+      "correct-password",
+    );
+    fakeAuth.registerExistingAccount(credential, {
+      uid: EXISTING_UID,
+      isAnonymous: false,
+      email: "person@example.com",
+    });
+    fakeFirestoreDb.docs.set(`users/${ANON_UID}/slots/s1`, { id: "s1" });
+    const wrong = EmailAuthProvider.credential(
+      "person@example.com",
+      "wrong-password",
+    );
+    const snapshot = {
+      slots: [{ date: "2025-06-01", slot: slot({ id: "s1" }) }],
+      routines: [routine({ id: "r1" })],
+    };
+
+    await expect(
+      mergeIntoExistingAccount(wrong, snapshot, true),
+    ).rejects.toMatchObject({ code: "auth/wrong-password" });
+
+    expect(fakeAuth.currentUser?.uid).toBe(ANON_UID);
+    expect(fakeAuth.currentUser?.isAnonymous).toBe(true);
+    expect(
+      fakeFirestoreDb.docs.get(`users/${ANON_UID}/slots/s1`),
+    ).toMatchObject({ id: "s1", date: "2025-06-01" });
+    expect(
+      fakeFirestoreDb.docs.get(`users/${ANON_UID}/routines/r1`),
+    ).toMatchObject({ id: "r1" });
+    expect(mmkvStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+});
+
+describe("signOutOfAccount", () => {
+  beforeEach(() => {
+    fakeAuth.setCurrentUser({
+      uid: "linked-uid",
+      isAnonymous: false,
+      email: "person@example.com",
+    });
+  });
+
+  it("lands on a fresh anonymous session rather than no session at all", async () => {
+    await signOutOfAccount();
+
+    expect(fakeAuth.currentUser).not.toBeNull();
+    expect(fakeAuth.currentUser?.isAnonymous).toBe(true);
+    expect(fakeAuth.currentUser?.uid).not.toBe("linked-uid");
+  });
+
+  it("empties the local stores, so the account's data does not sit on the device", async () => {
+    useItineraryStore.setState({
+      plans: [{ id: "p1", date: "2025-06-01", slots: [slot()] }],
+    });
+    useRoutineStore.setState({ routines: [routine()] });
+
+    await signOutOfAccount();
+
+    expect(useItineraryStore.getState().plans).toEqual([]);
+    expect(useRoutineStore.getState().routines).toEqual([]);
+    expect(useSettingsStore.getState().themePreference).toBe(
+      DEFAULT_SETTINGS.themePreference,
+    );
+  });
+
+  it("leaves the account's own documents untouched — signing back in must bring them back", async () => {
+    fakeFirestoreDb.docs.set(`users/linked-uid/slots/s1`, { id: "s1" });
+    fakeFirestoreDb.docs.set(`users/linked-uid/routines/r1`, { id: "r1" });
+
+    await signOutOfAccount();
+
+    expect(fakeFirestoreDb.docs.get(`users/linked-uid/slots/s1`)).toMatchObject(
+      { id: "s1" },
+    );
+    expect(
+      fakeFirestoreDb.docs.get(`users/linked-uid/routines/r1`),
+    ).toMatchObject({ id: "r1" });
+  });
+
+  it("marks the new anonymous uid migrated, or the next boot uploads the frozen MMKV blobs into it", async () => {
+    await signOutOfAccount();
+
+    const newUid = fakeAuth.currentUser?.uid as string;
+    expect(mmkvStorage.getItem(`brelly-migration-complete:${newUid}`)).toBe(
+      "true",
+    );
+  });
+
+  it("cancels every scheduled alert, whose handles the emptied stores no longer hold", async () => {
+    await signOutOfAccount();
+
+    expect(
+      Notifications.cancelAllScheduledNotificationsAsync,
+    ).toHaveBeenCalled();
+  });
+
+  it("completes even when clearing the notification queue fails", async () => {
+    (
+      Notifications.cancelAllScheduledNotificationsAsync as jest.Mock
+    ).mockRejectedValueOnce(new Error("no permission"));
+
+    await expect(signOutOfAccount()).resolves.toBeUndefined();
+    expect(fakeAuth.currentUser?.isAnonymous).toBe(true);
+  });
+
+  it("drops a pending merge snapshot, which belonged to the account being left", async () => {
+    mmkvStorage.setItem(PENDING_KEY, JSON.stringify({ slots: [], routines: [] }));
+
+    await signOutOfAccount();
 
     expect(mmkvStorage.getItem(PENDING_KEY)).toBeNull();
   });

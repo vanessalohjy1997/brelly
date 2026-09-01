@@ -4,6 +4,7 @@ import {
   onAuthStateChanged,
   signInAnonymously as firebaseSignInAnonymously,
   signInWithCredential,
+  signOut,
   type AuthCredential,
   type User,
 } from "@react-native-firebase/auth";
@@ -66,6 +67,15 @@ export function linkCurrentUser(credential: AuthCredential) {
  */
 export function signInWithLinkedCredential(credential: AuthCredential) {
   return signInWithCredential(getFirebaseAuth(), credential);
+}
+
+/**
+ * Ends the current session. Leaves `currentUser` null, which no other part
+ * of the app is built to sit in — `signOutOfAccount` immediately signs a new
+ * anonymous user back in, and nothing else should call this directly.
+ */
+export function signOutCurrentUser() {
+  return signOut(getFirebaseAuth());
 }
 
 /** Reactive current-user stream, for `useAuthUser`. */

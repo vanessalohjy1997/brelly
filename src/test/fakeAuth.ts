@@ -42,7 +42,10 @@ class FakeAuth {
   currentUser: FakeAuthUser | null = null;
 
   private listeners = new Set<(user: FakeAuthUser | null) => void>();
-  private existingAccounts = new Map<string, FakeAuthUser>();
+  private existingAccounts = new Map<
+    string,
+    { user: FakeAuthUser; credential: FakeCredential }
+  >();
   private uidCounter = 0;
 
   private setUser(user: FakeAuthUser | null): void {
@@ -65,7 +68,7 @@ class FakeAuth {
     credential: FakeCredential,
     user: FakeAuthUser,
   ): void {
-    this.existingAccounts.set(credentialKey(credential), user);
+    this.existingAccounts.set(credentialKey(credential), { user, credential });
   }
 
   onAuthStateChanged(callback: (user: FakeAuthUser | null) => void): () => void {
@@ -83,7 +86,18 @@ class FakeAuth {
 
   linkWithCredential(credential: FakeCredential): Promise<{ user: FakeAuthUser }> {
     if (this.existingAccounts.has(credentialKey(credential))) {
-      return Promise.reject(new FakeAuthError("auth/credential-already-in-use"));
+      // Firebase spells the same situation differently per provider: an
+      // OAuth credential rejects with `auth/credential-already-in-use`, an
+      // email/password one with `auth/email-already-in-use`. The fake used
+      // to return the OAuth code for both, which hid the bug where only that
+      // code was treated as the merge signal.
+      return Promise.reject(
+        new FakeAuthError(
+          credential.providerId === "password"
+            ? "auth/email-already-in-use"
+            : "auth/credential-already-in-use",
+        ),
+      );
     }
     const linked: FakeAuthUser = {
       ...(this.currentUser as FakeAuthUser),
@@ -96,14 +110,31 @@ class FakeAuth {
 
   signInWithCredential(credential: FakeCredential): Promise<{ user: FakeAuthUser }> {
     const existing = this.existingAccounts.get(credentialKey(credential));
+
+    // A password credential is unverified until it is used, so this is the
+    // one sign-in that can fail on a bad secret — Google and Apple prove
+    // theirs in their own sheet before the credential ever reaches here.
+    if (
+      existing &&
+      credential.providerId === "password" &&
+      existing.credential.password !== credential.password
+    ) {
+      return Promise.reject(new FakeAuthError("auth/wrong-password"));
+    }
+
     this.uidCounter += 1;
-    const user: FakeAuthUser = existing ?? {
+    const user: FakeAuthUser = existing?.user ?? {
       uid: `linked-${this.uidCounter}`,
       isAnonymous: false,
       email: credential.email ?? null,
     };
     this.setUser(user);
     return Promise.resolve({ user });
+  }
+
+  signOut(): Promise<void> {
+    this.setUser(null);
+    return Promise.resolve();
   }
 
   reset(): void {
@@ -136,6 +167,7 @@ export function createAuthMock() {
       (_auth: FakeAuth, credential: FakeCredential) =>
         fakeAuth.signInWithCredential(credential),
     ),
+    signOut: jest.fn((auth: FakeAuth) => auth.signOut()),
     onAuthStateChanged: jest.fn(
       (_auth: FakeAuth, callback: (user: FakeAuthUser | null) => void) =>
         fakeAuth.onAuthStateChanged(callback),

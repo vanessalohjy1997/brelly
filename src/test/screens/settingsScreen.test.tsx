@@ -366,7 +366,12 @@ describe("SettingsScreen — back up your data", () => {
     });
     const view = await render(<SettingsScreen />);
 
-    expect(view.getByText("Backed up as person@example.com")).toBeTruthy();
+    // The address reads as status in the hint, not as the button's label —
+    // a long one wrapped the centred button text across two lines.
+    expect(view.getByText("Your account")).toBeTruthy();
+    expect(
+      view.getByText(/^Backed up as person@example\.com\./),
+    ).toBeTruthy();
     expect(view.queryByText("Back up your data")).toBeNull();
   });
 

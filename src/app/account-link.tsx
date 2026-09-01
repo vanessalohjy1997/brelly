@@ -25,17 +25,25 @@ import {
 import {
   linkAnonymousAccount,
   mergeIntoExistingAccount,
+  signOutOfAccount,
   snapshotLocalData,
 } from "@/services/accountLinkService";
 import { showToast } from "@/store/toastStore";
+import { confirmSignOut } from "@/utils/confirmSignOut";
+import { describeAuthError } from "@/utils/describeAuthError";
 import { promptMergeChoice } from "@/utils/promptMergeChoice";
 
 export default function AccountLinkScreen() {
   const theme = useTheme();
   const authUser = useAuthUser();
   const [isLinking, setIsLinking] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Trimmed because a keyboard suggestion or a paste routinely carries a
+  // trailing space, and Firebase rejects that as `auth/invalid-email`.
+  const canSubmitEmail = email.trim().length > 0 && password.length > 0;
 
   const linkedAs = authUser && !authUser.isAnonymous
     ? (authUser.email ?? authUser.displayName ?? "your account")
@@ -76,10 +84,30 @@ export default function AccountLinkScreen() {
         "success",
       );
       router.back();
-    } catch {
-      showToast("Couldn't back up your data", "error");
+    } catch (error) {
+      showToast(describeAuthError(error), "error");
     } finally {
       setIsLinking(false);
+    }
+  };
+
+  const handleSignOut = async (): Promise<void> => {
+    if (isSigningOut) return;
+    if (!(await confirmSignOut())) return;
+
+    setIsSigningOut(true);
+    try {
+      await signOutOfAccount();
+      showToast("Signed out", "success");
+      router.back();
+    } catch {
+      // The session is whatever `signOutOfAccount` left it as, and it puts
+      // the anonymous user back before it can throw for any reason the user
+      // could act on — so this says the sign-out didn't happen rather than
+      // guessing which half did.
+      showToast("Couldn't sign out", "error");
+    } finally {
+      setIsSigningOut(false);
     }
   };
 
@@ -97,6 +125,31 @@ export default function AccountLinkScreen() {
                 <ThemedText themeColor="textSecondary" style={styles.hint}>
                   Your plans, routines, and settings are saved to this
                   account.
+                </ThemedText>
+              </ThemedView>
+
+              <ThemedView style={styles.subSetting}>
+                <Pressable
+                  onPress={handleSignOut}
+                  disabled={isSigningOut}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isSigningOut }}
+                  style={[
+                    styles.testButton,
+                    { backgroundColor: theme.background },
+                    isSigningOut && styles.disabled,
+                  ]}
+                >
+                  <ThemedText
+                    themeColor="danger"
+                    style={styles.testButtonText}
+                  >
+                    Sign out
+                  </ThemedText>
+                </Pressable>
+                <ThemedText themeColor="textSecondary" style={styles.hint}>
+                  This device goes back to keeping your plans on its own.
+                  Nothing is removed from the account.
                 </ThemedText>
               </ThemedView>
             </ThemedView>
@@ -177,18 +230,20 @@ export default function AccountLinkScreen() {
                   <Pressable
                     onPress={() =>
                       handleLink(() =>
-                        Promise.resolve(getEmailCredential(email, password)),
+                        Promise.resolve(
+                          getEmailCredential(email.trim(), password),
+                        ),
                       )
                     }
-                    disabled={isLinking || !email || !password}
+                    disabled={isLinking || !canSubmitEmail}
                     accessibilityRole="button"
                     accessibilityState={{
-                      disabled: isLinking || !email || !password,
+                      disabled: isLinking || !canSubmitEmail,
                     }}
                     style={[
                       styles.testButton,
                       { backgroundColor: theme.background },
-                      (isLinking || !email || !password) && styles.disabled,
+                      (isLinking || !canSubmitEmail) && styles.disabled,
                     ]}
                   >
                     <ThemedText style={styles.testButtonText}>
