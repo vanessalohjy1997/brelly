@@ -5,6 +5,7 @@ import AccountLinkScreen from "@/app/account-link";
 import {
   linkAnonymousAccount,
   mergeIntoExistingAccount,
+  signOutOfAccount,
   snapshotLocalData,
 } from "@/services/accountLinkService";
 import {
@@ -14,11 +15,13 @@ import {
 } from "@/services/auth";
 import { useToastStore } from "@/store/toastStore";
 import { fakeAuth } from "@/test/fakeAuth";
+import { confirmSignOut } from "@/utils/confirmSignOut";
 import { promptMergeChoice } from "@/utils/promptMergeChoice";
 
 jest.mock("@/services/accountLinkService", () => ({
   linkAnonymousAccount: jest.fn(),
   mergeIntoExistingAccount: jest.fn(),
+  signOutOfAccount: jest.fn(),
   snapshotLocalData: jest.fn(),
 }));
 jest.mock("@/services/auth", () => ({
@@ -30,6 +33,9 @@ jest.mock("@/services/auth", () => ({
 jest.mock("@/utils/promptMergeChoice", () => ({
   promptMergeChoice: jest.fn(),
 }));
+jest.mock("@/utils/confirmSignOut", () => ({
+  confirmSignOut: jest.fn(),
+}));
 
 const mockLink = linkAnonymousAccount as jest.Mock;
 const mockMerge = mergeIntoExistingAccount as jest.Mock;
@@ -38,6 +44,8 @@ const mockGoogleCredential = getGoogleCredential as jest.Mock;
 const mockAppleCredential = getAppleCredential as jest.Mock;
 const mockEmailCredential = getEmailCredential as jest.Mock;
 const mockPrompt = promptMergeChoice as jest.Mock;
+const mockSignOut = signOutOfAccount as jest.Mock;
+const mockConfirmSignOut = confirmSignOut as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -192,6 +200,111 @@ describe("AccountLinkScreen", () => {
         "hunter2",
       ),
     );
+  });
+
+  it("says why the email flow failed instead of one generic message", async () => {
+    // The generic toast made a disabled provider, a mistyped address and a
+    // wrong password indistinguishable from the device.
+    mockLink.mockRejectedValue(
+      Object.assign(new Error("nope"), { code: "auth/operation-not-allowed" }),
+    );
+    const view = await render(<AccountLinkScreen />);
+
+    await fireEvent.changeText(
+      view.getByLabelText("Email"),
+      "person@example.com",
+    );
+    await fireEvent.changeText(view.getByLabelText("Password"), "hunter2");
+    await fireEvent.press(view.getByText("Continue with email"));
+
+    await waitFor(() =>
+      expect(
+        view.getByText("Email sign-in isn't turned on for this app"),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("trims the email before building the credential", async () => {
+    mockLink.mockResolvedValue("linked");
+    const view = await render(<AccountLinkScreen />);
+
+    await fireEvent.changeText(
+      view.getByLabelText("Email"),
+      "  person@example.com ",
+    );
+    await fireEvent.changeText(view.getByLabelText("Password"), "hunter2");
+    await fireEvent.press(view.getByText("Continue with email"));
+
+    await waitFor(() =>
+      expect(mockEmailCredential).toHaveBeenCalledWith(
+        "person@example.com",
+        "hunter2",
+      ),
+    );
+  });
+
+  it("keeps the email button disabled for whitespace-only input", async () => {
+    const view = await render(<AccountLinkScreen />);
+
+    await fireEvent.changeText(view.getByLabelText("Email"), "   ");
+    await fireEvent.changeText(view.getByLabelText("Password"), "hunter2");
+    await fireEvent.press(view.getByText("Continue with email"));
+
+    expect(mockEmailCredential).not.toHaveBeenCalled();
+  });
+
+  describe("signing out", () => {
+    function renderLinked() {
+      fakeAuth.setCurrentUser({
+        uid: "u1",
+        isAnonymous: false,
+        email: "person@example.com",
+      });
+      return render(<AccountLinkScreen />);
+    }
+
+    it("offers sign out only once there is an account to leave", async () => {
+      const anonymous = await render(<AccountLinkScreen />);
+      expect(anonymous.queryByText("Sign out")).toBeNull();
+
+      const linked = await renderLinked();
+      expect(linked.getByText("Sign out")).toBeTruthy();
+    });
+
+    it("asks before signing out, and does nothing when the answer is no", async () => {
+      mockConfirmSignOut.mockResolvedValue(false);
+      const view = await renderLinked();
+
+      await fireEvent.press(view.getByText("Sign out"));
+
+      await waitFor(() => expect(mockConfirmSignOut).toHaveBeenCalled());
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(router.back).not.toHaveBeenCalled();
+    });
+
+    it("signs out and dismisses once confirmed", async () => {
+      mockConfirmSignOut.mockResolvedValue(true);
+      mockSignOut.mockResolvedValue(undefined);
+      const view = await renderLinked();
+
+      await fireEvent.press(view.getByText("Sign out"));
+
+      await waitFor(() => expect(mockSignOut).toHaveBeenCalled());
+      expect(router.back).toHaveBeenCalled();
+    });
+
+    it("says so when signing out fails, rather than dismissing as if it worked", async () => {
+      mockConfirmSignOut.mockResolvedValue(true);
+      mockSignOut.mockRejectedValue(new Error("network"));
+      const view = await renderLinked();
+
+      await fireEvent.press(view.getByText("Sign out"));
+
+      await waitFor(() =>
+        expect(view.getByText("Couldn't sign out")).toBeTruthy(),
+      );
+      expect(router.back).not.toHaveBeenCalled();
+    });
   });
 
   it("links with an Apple credential", async () => {

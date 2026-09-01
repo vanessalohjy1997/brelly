@@ -9,23 +9,28 @@ import {
 
 import { attachCloudListeners, detachCloudListeners } from "@/services/cloudListeners";
 import {
+  ensureAnonymousUser,
   generateDocId,
   getFirebaseAuth,
   getFirebaseFirestore,
   linkCurrentUser,
   signInWithLinkedCredential,
+  signOutCurrentUser,
 } from "@/services/firebase";
 import { migrationFlagKey } from "@/services/localDataMigration";
+import { cancelAllNotifications } from "@/services/notifications";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { mmkvStorage } from "@/store/mmkvStorage";
 import { useRoutineStore } from "@/store/routineStore";
+import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
 import { allSlotsWithDates } from "@/utils/planSelectors";
 import {
   resolveMergeWrites,
   type ExistingAccountIds,
   type LocalSnapshot,
 } from "@/utils/mergeLocalIntoAccount";
+import { authErrorCode } from "@/utils/describeAuthError";
 import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
 import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 
@@ -69,12 +74,20 @@ export function snapshotLocalData(): LocalSnapshot & { isEmpty: boolean } {
   return { ...snapshot, isEmpty: isSnapshotEmpty(snapshot) };
 }
 
-function isCredentialAlreadyInUse(error: unknown): boolean {
+/**
+ * The "this identity already has its own account" signal, which Firebase
+ * spells differently per provider: an OAuth credential rejects a link with
+ * `auth/credential-already-in-use`, while an email/password one rejects it
+ * with `auth/email-already-in-use`. Only matching the first is why the email
+ * flow could never reach the merge — a second attempt with an address that
+ * had already been linked surfaced as a flat "Couldn't back up your data".
+ */
+function isIdentityAlreadyInUse(error: unknown): boolean {
+  const code = authErrorCode(error);
   return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "auth/credential-already-in-use"
+    code === "auth/credential-already-in-use" ||
+    code === "auth/email-already-in-use" ||
+    code === "auth/account-exists-with-different-credential"
   );
 }
 
@@ -92,7 +105,7 @@ export async function linkAnonymousAccount(
     await linkCurrentUser(credential);
     return "linked";
   } catch (error) {
-    if (isCredentialAlreadyInUse(error)) return "merge-required";
+    if (isIdentityAlreadyInUse(error)) return "merge-required";
     throw error;
   }
 }
@@ -228,7 +241,22 @@ export async function mergeIntoExistingAccount(
   }
 
   await deleteAnonymousUserData(anonUid, snapshot);
-  await signInWithLinkedCredential(credential);
+
+  // An OAuth credential is already proven by the provider's own sheet before
+  // it reaches here, so the switch cannot fail on a bad secret. An email
+  // credential is unverified until it is used: a wrong password fails *after*
+  // the anonymous uid's documents are gone, with the session still anonymous
+  // and no identity to switch to. Put them back before rethrowing — the ids
+  // are reused verbatim, so this restores the account rather than duplicating
+  // it. (The settings doc is not restored: it holds only scalar preferences,
+  // which the local store still has and rewrites on the next change.)
+  try {
+    await signInWithLinkedCredential(credential);
+  } catch (error) {
+    await writeMergeSnapshot(anonUid, snapshot);
+    clearPendingMerge();
+    throw error;
+  }
 
   const newUid = getFirebaseAuth().currentUser?.uid;
   if (!newUid) throw new Error("Sign-in did not resolve a uid");
@@ -246,6 +274,56 @@ export async function mergeIntoExistingAccount(
 
   attachCloudListeners(newUid);
   clearPendingMerge();
+}
+
+/**
+ * Leaves the linked account and lands back on a fresh anonymous one — the
+ * state a brand-new install is in.
+ *
+ * Nothing is deleted from the account being left; it keeps every document,
+ * and signing back in with the same credential brings all of it back through
+ * the ordinary listeners. What has to happen here is the other direction:
+ * this device must stop holding the account's data.
+ *
+ * The order is load-bearing.
+ *
+ * - Listeners come down first, or the next `setState` would race a snapshot
+ *   from the account being left and put its plans back.
+ * - The OS notification queue is cleared while the handles still mean
+ *   something. It is best-effort: a stray alert is worth less than a
+ *   sign-out that refuses to complete.
+ * - The stores are emptied via `setState`, not through their actions, for
+ *   the same reason `cloudListeners` does — an action would write to
+ *   Firestore, and deleting the account's data is exactly what sign-out must
+ *   not do.
+ * - The migration flag is set for the *new* anonymous uid before anything
+ *   can boot against it. Without it the next cold start's ordinary migration
+ *   re-uploads this device's frozen pre-migration MMKV blobs into the empty
+ *   account — the same hazard `mergeIntoExistingAccount` guards, and worse
+ *   here, because the whole point of signing out is to leave nothing behind.
+ */
+export async function signOutOfAccount(): Promise<void> {
+  detachCloudListeners();
+  useCloudSyncStore.getState().resetReady();
+
+  await cancelAllNotifications().catch(() => {
+    // best-effort — see the doc comment above
+  });
+
+  await signOutCurrentUser();
+
+  useItineraryStore.setState({ plans: [] });
+  useRoutineStore.setState({ routines: [] });
+  useSettingsStore.setState({ ...DEFAULT_SETTINGS });
+
+  await ensureAnonymousUser();
+  const anonUid = getFirebaseAuth().currentUser?.uid;
+  if (!anonUid) throw new Error("Sign-out did not resolve a new anonymous uid");
+
+  mmkvStorage.setItem(migrationFlagKey(anonUid), "true");
+  clearPendingMerge();
+
+  attachCloudListeners(anonUid);
 }
 
 /**

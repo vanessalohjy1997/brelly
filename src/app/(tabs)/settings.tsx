@@ -545,13 +545,19 @@ export default function SettingsScreen() {
                   { backgroundColor: theme.background },
                 ]}
               >
+                {/* The button's label stays a short, fixed action. Putting
+                    the address in it wrapped a centred single line of bold
+                    text across two, which read as a broken button rather
+                    than as status — and an email is status, not an action.
+                    It belongs in the hint below, left-aligned, where a long
+                    address wraps the way running text is meant to. */}
                 <ThemedText style={styles.testButtonText}>
-                  {linkedAs ? `Backed up as ${linkedAs}` : "Back up your data"}
+                  {linkedAs ? "Your account" : "Back up your data"}
                 </ThemedText>
               </Pressable>
               <ThemedText themeColor="textSecondary" style={styles.hint}>
                 {linkedAs
-                  ? "Your plans, routines, and settings follow you to another device."
+                  ? `Backed up as ${linkedAs}. Your plans, routines, and settings follow you to another device.`
                   : "Add an account so your plans survive a lost phone."}
               </ThemedText>
             </ThemedView>

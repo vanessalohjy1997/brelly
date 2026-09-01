@@ -1270,8 +1270,11 @@ plan. What follows is the condensed version, folded in per this file's usual
   current anonymous user. Linking to a brand-new identity is free: the uid
   doesn't change, so every doc already under `users/{uid}/…` already belongs
   to the account. Linking to an identity that already has an account throws
-  `auth/credential-already-in-use`, which is the signal — not an error — to
-  run the merge: because the security rules block reading one uid's documents
+  `auth/credential-already-in-use` — or, for an email/password credential,
+  `auth/email-already-in-use`; Firebase spells the same situation differently
+  per provider, and matching only the first is what broke the email flow (see
+  [round 33](#round-33--the-emailpassword-flow-that-only-ever-worked-once-and-the-way-back-out)) —
+  which is the signal, not an error, to run the merge: because the security rules block reading one uid's documents
   while authenticated as another, the merge is driven from the **local**
   Zustand state (never the frozen MMKV blobs), not a cloud-to-cloud copy. The
   user is prompted before anything merges (skipped only when the local
@@ -1281,7 +1284,12 @@ plan. What follows is the condensed version, folded in per this file's usual
   mints a fresh id rather than overwriting — overwriting would silently
   destroy a plan that already lived there, the worst outcome a merge could
   produce. Settings never merge (a union of scalar preferences is meaningless;
-  the joined account's settings win). The merge isn't atomic — it spans two
+  the joined account's settings win). `signOutOfAccount` is the way back out:
+  it deletes nothing from the account, but it must tear the listeners down,
+  clear the OS notification queue, empty the stores through `setState` rather
+  than their actions, and set the migration flag for the new anonymous uid —
+  see [round 33](#round-33--the-emailpassword-flow-that-only-ever-worked-once-and-the-way-back-out).
+  The merge isn't atomic — it spans two
   auth identities — so the snapshot is persisted to MMKV before anything
   destructive happens and cleared only once the merge commits, letting
   `resumePendingMergeIfNeeded` finish an interrupted merge on next launch. One
@@ -2106,3 +2114,72 @@ handler instead of `persist`'s `migrate` hook, doing the same
 `hasSeenOnboarding: true` migration. The itinerary and routine stores have no
 migration hook any more — the first breaking change to either needs one added
 to their sync services, not to a `persist` config that no longer exists.
+
+### Round 33 — the email/password flow that only ever worked once, and the way back out
+
+Email/password linking looked like it worked on a fresh address and then failed
+forever afterwards, always as the same flat "Couldn't back up your data".
+
+- **Firebase spells "that identity already has an account" two ways.** An OAuth
+  credential rejects `linkWithCredential` with `auth/credential-already-in-use`;
+  an email/password one rejects it with `auth/email-already-in-use`.
+  `isCredentialAlreadyInUse` matched only the first, so for email the merge path
+  was unreachable: the first attempt created the account, and every attempt with
+  that address afterwards — including a legitimate sign-in on a second device —
+  fell through to the catch-all error. It is `isIdentityAlreadyInUse` now, and
+  covers `auth/account-exists-with-different-credential` too. `fakeAuth` was
+  returning the OAuth code for both, which is precisely why no test caught it;
+  it now returns the code the real SDK returns per provider.
+
+- **An email credential is unverified until it is used, and the merge deletes
+  first.** `mergeIntoExistingAccount` deletes the anonymous uid's documents
+  *before* switching identity — it has to, since the rules make them unreachable
+  the instant the switch lands. For Google and Apple that is safe: the provider's
+  own sheet proved the credential before it ever reached here, so the switch
+  cannot fail on a bad secret. A password can. A typo therefore deleted the
+  anonymous account's cloud data and then failed the sign-in, leaving the session
+  anonymous with nothing to switch to. The switch is wrapped now: on failure the
+  snapshot is written back under the anonymous uid (ids reused verbatim, so it
+  restores rather than duplicates) before the error is rethrown. The settings doc
+  is not restored — it holds only scalar preferences the local store still has.
+
+- **One generic toast for every failure made this undebuggable from the
+  device.** A disabled provider, a mistyped address, a weak password and a wrong
+  password were indistinguishable. `describeAuthError` maps the codes worth
+  distinguishing and the catch-all keeps the old wording as its fallback. The
+  address is also trimmed before the credential is built, and the button's
+  enabled check trims too — a keyboard suggestion routinely carries a trailing
+  space, which Firebase rejects as `auth/invalid-email`.
+
+- **Still worth checking in the console if it fails on a brand-new address.**
+  `auth/operation-not-allowed` means Email/Password is not enabled as a sign-in
+  provider in the Firebase project. That is a console setting; no code change
+  reaches it. The toast now says so.
+
+- **There was no way back out of an account, so `signOutOfAccount` is the other
+  half of linking.** It deletes nothing from the account — signing back in
+  brings every document back through the ordinary listeners — but this device
+  has to stop holding the data, and the order that takes is load-bearing.
+  Listeners come down first, or the next `setState` races a snapshot from the
+  account being left and puts its plans straight back. The OS notification
+  queue is cleared while the handles still mean something, since the emptied
+  stores are the only place they live (best-effort: a stray alert is worth less
+  than a sign-out that refuses to finish). The stores are emptied through
+  `setState`, never their actions, for the same reason `cloudListeners` uses it
+   — an action writes to Firestore, and deleting the account's data is exactly
+  what sign-out must not do. Then the migration flag is set for the *new*
+  anonymous uid, the same guard `mergeIntoExistingAccount` needs and for the
+  same reason: without it the next cold start re-uploads this device's frozen
+  pre-migration MMKV blobs into the empty account it just made.
+
+- **Sign-out asks first, which almost nothing else in this app does.** The
+  house style is an undo toast rather than a confirm dialog (round 32), but
+  undo cannot cover this one: reversing it means re-entering a credential the
+  app never held. `confirmSignOut`'s message leads with what survives, because
+  the thing people get wrong is reading "Sign out" as "delete my plans".
+
+- **The Settings row stopped putting the address in the button.** A long email
+  wrapped a centred line of bold button text across two and read as a broken
+  control. The button's label is a short fixed action now ("Your account") and
+  the address moved into the hint below it, left-aligned, where a long one
+  wraps the way running text is meant to.
