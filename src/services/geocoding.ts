@@ -24,6 +24,28 @@ export type PlaceDetails = {
   countryCode?: string;
 };
 
+// ─── Request headers ──────────────────────────────────────────────────────────
+// Every Places API (New) call is authenticated by this one key header, so it
+// lives here rather than being retyped per call. Per-call headers (the field
+// mask, a JSON content type) are passed in — they are not shared, and baking
+// them in would make the mask a silent default nobody reviews.
+//
+// The Geocoding API below is deliberately not routed through this: it is a
+// different API that authenticates with a `key` query parameter, not a header.
+
+function placesHeaders(perCall?: Record<string, string>): Record<string, string> {
+  return { "X-Goog-Api-Key": API_KEY, ...perCall };
+}
+
+/**
+ * Controls exactly what Place Details returns — and what we're billed for.
+ * Only Essentials fields keeps us on the cheapest SKU, and `addressComponents`
+ * is one of them (checked against Google's SKU table, not assumed), so asking
+ * for the country costs nothing extra.
+ */
+const PLACE_DETAILS_FIELD_MASK =
+  "id,displayName,formattedAddress,location,addressComponents";
+
 // ─── Session token ────────────────────────────────────────────────────────────
 // A session token groups autocomplete keystrokes + the final Place Details call
 // into one billable session. Without it, every keystroke is billed separately.
@@ -50,10 +72,7 @@ export async function searchPlaces(input: string): Promise<PlaceSuggestion[]> {
 
   const res = await fetch(`${PLACES_BASE_URL}/places:autocomplete`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": API_KEY,
-    },
+    headers: placesHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       input,
       sessionToken: getSessionToken(),
@@ -93,15 +112,7 @@ export async function searchPlaces(input: string): Promise<PlaceSuggestion[]> {
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   const res = await fetch(`${PLACES_BASE_URL}/places/${placeId}`, {
     method: "GET",
-    headers: {
-      "X-Goog-Api-Key": API_KEY,
-      // Field mask controls exactly what data we get back — and what we're billed for.
-      // Only requesting Essentials fields keeps us on the cheapest SKU, and
-      // `addressComponents` is one of them (checked against Google's SKU
-      // table, not assumed), so asking for the country costs nothing extra.
-      "X-Goog-FieldMask":
-        "id,displayName,formattedAddress,location,addressComponents",
-    },
+    headers: placesHeaders({ "X-Goog-FieldMask": PLACE_DETAILS_FIELD_MASK }),
   });
 
   if (!res.ok) throw new Error(`Place details error: ${res.status}`);
