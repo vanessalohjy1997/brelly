@@ -2183,3 +2183,108 @@ forever afterwards, always as the same flat "Couldn't back up your data".
   control. The button's label is a short fixed action now ("Your account") and
   the address moved into the hint below it, left-aligned, where a long one
   wraps the way running text is meant to.
+
+### Round 34 — the permission primer App Review rejected, and the dead ends behind it
+
+**Read this first if you are about to "fix" the primer by deleting it.** The
+rejection was not about asking for location. It was about *how* the ask was
+worded and whether a "no" could be taken back. Removing the primer would make
+both worse: the primer is what turns the OS dialog into an informed decision
+rather than one that appears out of nowhere — the reason it exists is written at
+the top of `NearbyWeatherPrompt.tsx`, and round 3 of `UX.md` is the bug it was
+built to fix.
+
+What actually got flagged: a full-screen custom sheet with an **Allow** button,
+in the app's filled `primary` colour, sitting directly in front of the system
+dialog, over a bare text "Not now". A pre-prompt that puts the app's whole
+visual weight behind one of the two answers reads as pressuring the grant. Three
+separate fixes came out of it.
+
+- **Neither button argues for an answer any more.** `Allow` → `Continue` on the
+  primer, `Allow notifications` → `Continue` on the Settings screen's
+  `unprompted` banner. "Continue" is honest about what the button does: it moves
+  you to the dialog where the decision is actually made. Both actions on the
+  primer now share one outlined style — same size, same border, same text colour
+  — so the screen presents two choices and pushes neither. `Show weather near
+  me` on `NearbyWeatherPrompt` was left alone: it names a feature, not a grant,
+  which is the line to hold when adding another one of these.
+
+- **The copy leads with what the app does *without* the permission.** "Brelly
+  forecasts the places on your plans, so it works fine without this… Skipping
+  costs you nothing." That is not a softener, it is the truth of the
+  architecture: every forecast comes from the place attached to the stop (Google
+  Places), and device location only prefills the add-plan field and fills an
+  empty Today. The iOS purpose string in `app.json` — the one App Review reads
+  beside the dialog — now says the same thing in the same scope ("while the app
+  is open"), and `app.config.test.js` asserts it, since `app.json` cannot carry
+  a comment explaining why the wording matters.
+
+- **Three purpose strings for permissions the app never asks for are gone.**
+  Found by reading the *built* `Info.plist` on the simulator rather than
+  `app.json`, which is the only place the difference shows. The `expo-location`
+  plugin defaults `NSLocationAlwaysAndWhenInUseUsageDescription`,
+  `NSLocationAlwaysUsageDescription` and `NSMotionUsageDescription` to
+  "Allow $(PRODUCT_NAME) to access your location" and writes them in whether or
+  not you set them — so every build shipped two background-location purpose
+  strings and a motion one, in placeholder wording, for APIs no code path
+  calls (`requestForegroundPermissionsAsync` is the only request in the app).
+  In a rejection that is *about* asking for more than you need, that is the
+  next thing to be asked about. Setting each to `false` deletes the key
+  (`applyPermissions` in `@expo/config-plugins/build/ios/Permissions.js`);
+  `app.config.test.js` asserts it. Reaches a binary only through
+  `expo prebuild` + a native build.
+
+- **Every dead end now has a route to system Settings.** This is the half that
+  was not just wording. `Linking.openSettings()` had reached exactly two places;
+  it is `openAppSettings()` in `src/services/appSettings.ts` now, used by all
+  four, with the cross-platform behaviour asserted once. The rejection is worth
+  reading as: *a permission decision the user cannot revisit is the problem*.
+  - **The primer** branches on the permission state instead of assuming there is
+    a prompt left. Already `denied` → "Open Settings", and it must not fire a
+    request the OS resolves instantly to nothing; that is a button that visibly
+    does nothing, which is how the original bug felt from the outside.
+  - **The add-plan form** said "Location permission denied" — the failure named,
+    with no hint the form still worked. It now says the stop can still be typed,
+    and offers Open Settings. `useCurrentLocation` returns `permissionDenied`
+    separately from `error` because it gates an *action*: a refusal is the one
+    failure here that Settings can fix, and "no fix came back" deliberately gets
+    no Settings link.
+  - **The Settings screen** had no location entry at all, so a "Not now" in the
+    first five seconds of a new install was unreachable forever after. There is
+    a Location row beside Notifications now: the current state, one line on what
+    it is for, and the right action per state — prompt while `unprompted`, open
+    Settings once `denied`, nothing when `granted`.
+
+**The one refactor.** Settings needed the same two effects `useNearbyForecast`
+already had — read the status without prompting on mount, re-read on return to
+the foreground — and nothing else that hook does. Both are
+`useDeviceLocationPermission` now, and `useNearbyForecast` reads it.
+
+**And the gate on that second effect had to go, which was a real bug.** The
+foreground re-read fired only while the permission was `denied` or
+`unavailable` — the states with something to recover. Written that way it only
+ever noticed the change it was looking for. Switch a *granted* permission off in
+system Settings and nothing re-read it: every screen carried on saying "Location
+is on", and the store carried on holding the point, so "Right now" kept
+reporting the weather at a location the user had just revoked access to. The
+listener now runs from any state, and `sync()` clears `region` and `coords`
+alongside a permission that is no longer granted. Two things the old reasoning
+got wrong, both worth keeping in mind before gating a permission read again:
+
+- The argument for the gate ("an app that has never asked isn't listed in
+  system Settings, so `unprompted` has nothing to come back and find") is an
+  iOS argument. On Android an app is listed with its permissions before it has
+  ever asked, and can be granted from there without a dialog ever appearing.
+- A permission read is not only how a refusal is recovered. It is also the only
+  way a *revocation* is ever noticed, and that direction has no affordance
+  anywhere in the app to hang a listener off.
+
+The cost of not gating is one `getForegroundPermissionsAsync` per foreground and,
+while granted, the position read that follows it — paid for by the fact that
+"the weather where you are now" is a different place after a trip out of the
+app anyway.
+
+Testing: 1366 tests across 120 suites. The assertions worth keeping are the
+negative ones — `denied` calls `openSettings()` and does *not* call
+`requestForegroundPermissionsAsync` / `requestPermissionsAsync`, and skipping
+the location step still advances onboarding to the end.

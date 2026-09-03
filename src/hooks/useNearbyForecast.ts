@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { AppState } from "react-native";
 
+import { useDeviceLocationPermission } from "@/hooks/useDeviceLocationPermission";
 import { getUpcomingForecast } from "@/services/weather";
 import { useDeviceLocationStore } from "@/store/deviceLocationStore";
 import type { NeaRegion } from "@/types/weather";
@@ -33,36 +32,12 @@ export function useNearbyForecast(
     fetchForecast = enabled,
   }: { hours?: number; fetchForecast?: boolean } = {},
 ) {
-  const permission = useDeviceLocationStore((state) => state.permission);
+  // The permission is not requested here — `useDeviceLocationPermission` only
+  // reads it, and re-reads it on the way back from system Settings.
+  const { permission, request: requestPermission } =
+    useDeviceLocationPermission(enabled);
   const region = useDeviceLocationStore((state) => state.region);
   const coords = useDeviceLocationStore((state) => state.coords);
-  const sync = useDeviceLocationStore((state) => state.sync);
-  const requestPermission = useDeviceLocationStore((state) => state.request);
-
-  // Read the existing status without prompting. Someone who already granted
-  // it on a previous run — or on the onboarding primer, or on the other tab —
-  // shouldn't have to press a button again.
-  useEffect(() => {
-    if (!enabled) return;
-    void sync();
-  }, [enabled, sync]);
-
-  // The only way back from a refusal is the system Settings app, and the only
-  // way back from a missing fix is walking somewhere with a view of the sky.
-  // Both change the answer while we are backgrounded and neither tells us, so
-  // re-read on the way in — the same reason `useNotificationPermission` does.
-  // A recheck is pointless in the other three states: `unprompted` can't be
-  // granted from Settings (an app that has never asked isn't listed there),
-  // and the rest are already settled.
-  const isRecoverable = permission === "denied" || permission === "unavailable";
-  useEffect(() => {
-    if (!enabled || !isRecoverable) return;
-
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void sync();
-    });
-    return () => subscription.remove();
-  }, [enabled, isRecoverable, sync]);
 
   const query = useQuery({
     queryKey: ["nearbyForecast", region, hours],

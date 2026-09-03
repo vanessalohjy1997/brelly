@@ -238,14 +238,22 @@ describe("useNearbyForecast", () => {
     await waitFor(() => expect(result.current.permission).toBe("granted"));
   });
 
-  it("doesn't listen for the foreground while there is nothing to recover", async () => {
+  it("drops the forecast when the grant is switched off in Settings", async () => {
+    // The re-read runs from every state, not only the ones with something to
+    // recover — otherwise a revoked permission leaves the nearby card up, fed
+    // by the point the store was still holding.
+    mockGetPermission.mockResolvedValue({ status: "granted" });
     const { result } = await renderHook(() => useNearbyForecast(true), {
       wrapper,
     });
-    await waitFor(() => expect(result.current.permission).toBe("unprompted"));
+    await waitFor(() => expect(result.current.isAvailable).toBe(true));
 
-    // An app that has never asked isn't listed in system Settings, so there is
-    // no answer out there to come back and find.
-    expect(AppState.addEventListener).not.toHaveBeenCalled();
+    mockGetPermission.mockResolvedValue({ status: "denied" });
+    await foreground();
+
+    await waitFor(() => expect(result.current.permission).toBe("denied"));
+    expect(result.current.isAvailable).toBe(false);
+    expect(result.current.coords).toBeNull();
+    expect(result.current.region).toBeNull();
   });
 });

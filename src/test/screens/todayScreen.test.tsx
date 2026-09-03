@@ -1,9 +1,12 @@
 import { act, fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
+import * as Location from "expo-location";
 import * as Updates from "expo-updates";
+import { Linking } from "react-native";
 
 import TodayScreen from "@/app/(tabs)/index";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
+import { resetDeviceLocationStore } from "@/store/deviceLocationStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -68,6 +71,10 @@ function todaysPlan(slots: ItinerarySlot[]): DayPlan {
 }
 
 const useUpdatesMock = Updates.useUpdates as jest.Mock;
+const getLocationPermissions =
+  Location.getForegroundPermissionsAsync as jest.Mock;
+const requestLocationPermissions =
+  Location.requestForegroundPermissionsAsync as jest.Mock;
 
 const NO_UPDATE = {
   isChecking: false,
@@ -94,6 +101,10 @@ beforeEach(() => {
   });
   (Updates as { isEnabled: boolean }).isEnabled = true;
   useUpdatesMock.mockReturnValue(NO_UPDATE);
+  resetDeviceLocationStore();
+  getLocationPermissions.mockResolvedValue({ status: "granted" });
+  requestLocationPermissions.mockResolvedValue({ status: "granted" });
+  jest.spyOn(Linking, "openSettings").mockImplementation(async () => {});
 });
 
 describe("TodayScreen", () => {
@@ -335,7 +346,7 @@ describe("TodayScreen", () => {
       });
     });
 
-    expect(view.queryByText("Know where you are")).toBeNull();
+    expect(view.queryByText("Location is optional")).toBeNull();
     expect(view.getByText("No plans yet")).toBeTruthy();
   });
 
@@ -379,5 +390,64 @@ describe("TodayScreen", () => {
     const view = await renderWithProviders(<TodayScreen />);
 
     expect(view.queryByText("Update ready")).toBeNull();
+  });
+});
+
+describe("TodayScreen — onboarding", () => {
+  beforeEach(() => {
+    useSettingsStore.setState({ hasSeenOnboarding: false });
+    getLocationPermissions.mockResolvedValue({ status: "undetermined" });
+  });
+
+  it("walks the two permissions in turn and remembers it did", async () => {
+    const view = await renderWithProviders(<TodayScreen />);
+
+    expect(await view.findByText("Location is optional")).toBeTruthy();
+    await act(async () => {
+      await fireEvent.press(view.getByText("Continue"));
+    });
+    expect(requestLocationPermissions).toHaveBeenCalledTimes(1);
+
+    expect(view.getByText("Get rain alerts")).toBeTruthy();
+    await act(async () => {
+      await fireEvent.press(view.getByText("Continue"));
+    });
+
+    expect(view.queryByText("Get rain alerts")).toBeNull();
+    expect(useSettingsStore.getState().hasSeenOnboarding).toBe(true);
+  });
+
+  it("lets both steps be skipped, and still finishes onboarding", async () => {
+    // Skipping has to be a real way out — "Not now" on the location step is
+    // what the primer's copy promises costs nothing.
+    const view = await renderWithProviders(<TodayScreen />);
+
+    await act(async () => {
+      await fireEvent.press(await view.findByText("Not now"));
+    });
+    expect(requestLocationPermissions).not.toHaveBeenCalled();
+    expect(view.getByText("Get rain alerts")).toBeTruthy();
+
+    await act(async () => {
+      await fireEvent.press(view.getByText("Not now"));
+    });
+
+    expect(useSettingsStore.getState().hasSeenOnboarding).toBe(true);
+    expect(view.getByText("No plans yet")).toBeTruthy();
+  });
+
+  it("sends an already-refused location to Settings rather than a dead prompt", async () => {
+    // A refusal from an earlier run: iOS keeps the answer and shows no dialog,
+    // so a request here would resolve to nothing and look like a broken button.
+    getLocationPermissions.mockResolvedValue({ status: "denied" });
+
+    const view = await renderWithProviders(<TodayScreen />);
+
+    await act(async () => {
+      await fireEvent.press(await view.findByText("Open Settings"));
+    });
+
+    expect(Linking.openSettings).toHaveBeenCalledTimes(1);
+    expect(requestLocationPermissions).not.toHaveBeenCalled();
   });
 });

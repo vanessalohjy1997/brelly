@@ -59,6 +59,34 @@ describe("deviceLocationStore", () => {
     expect(mockRequestPermission).not.toHaveBeenCalled();
   });
 
+  it("lets go of the point when the grant is taken away in system Settings", async () => {
+    mockGetPermission.mockResolvedValue({ status: "granted" });
+    await store().sync();
+    expect(store().coords).not.toBeNull();
+
+    // Switched off in Settings while the app was backgrounded. Keeping the
+    // last known point meant "Right now" carried on reporting the weather at a
+    // location the user had just revoked access to.
+    mockGetPermission.mockResolvedValue({ status: "denied" });
+    await store().sync();
+
+    expect(store().permission).toBe("denied");
+    expect(store().coords).toBeNull();
+    expect(store().region).toBeNull();
+  });
+
+  it("lets go of the point when a prompt is refused too", async () => {
+    mockGetPermission.mockResolvedValue({ status: "granted" });
+    await store().sync();
+    mockRequestPermission.mockResolvedValue({ status: "denied" });
+
+    await store().request();
+
+    expect(store().permission).toBe("denied");
+    expect(store().coords).toBeNull();
+    expect(store().region).toBeNull();
+  });
+
   it("tells a granted permission with no fix apart from a refusal", async () => {
     mockGetPermission.mockResolvedValue({ status: "granted" });
     mockPosition.mockRejectedValue(new Error("no fix"));

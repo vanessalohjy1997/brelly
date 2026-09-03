@@ -1,12 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themedText";
@@ -14,15 +8,18 @@ import { ThemedView } from "@/components/themedView";
 import { BottomTabInset, HeaderHeight, MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { useCalendarSync } from "@/hooks/useCalendarSync";
+import { useDeviceLocationPermission } from "@/hooks/useDeviceLocationPermission";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 import { useOtaUpdate } from "@/hooks/useOtaUpdate";
 import { useTheme } from "@/hooks/useTheme";
+import { openAppSettings } from "@/services/appSettings";
 import { exportBackup } from "@/services/backup";
 import { IMPORT_HORIZON_DAYS } from "@/services/calendar";
 import {
   countScheduledNotifications,
   sendTestNotification,
 } from "@/services/notifications";
+import type { PermissionState } from "@/store/deviceLocationStore";
 import { showToast } from "@/store/toastStore";
 import {
   RAIN_LEAD_MINUTES,
@@ -45,6 +42,34 @@ const OPTIONS: { value: ThemePreference; label: string }[] = [
 const DIGEST_TIMES = ["06:30", "07:30", "08:30"];
 const QUIET_START_TIMES = ["21:00", "22:00", "23:00"];
 const QUIET_END_TIMES = ["06:00", "07:00", "08:00"];
+
+// One line of state and one of consequence per permission state. The
+// consequence line says the same thing in every state, because it is true in
+// every state: forecasts come from the place attached to each stop, so
+// location is a convenience and nothing here breaks without it.
+const LOCATION_COPY: Record<PermissionState, { state: string; detail: string }> = {
+  checking: { state: "Location", detail: "Checking…" },
+  granted: {
+    state: "Location is on",
+    detail:
+      "Used only while Brelly is open, to prefill a stop's location and show nearby weather on an empty day.",
+  },
+  unprompted: {
+    state: "Location is off",
+    detail:
+      "Your plans are forecast from the place on each stop, so this is optional. Turning it on saves typing when you add a stop.",
+  },
+  denied: {
+    state: "Location is off",
+    detail:
+      "iOS won't ask again, so it can only be turned back on in system settings. Your plans are forecast from the place on each stop either way.",
+  },
+  unavailable: {
+    state: "Location is on, but no position came back",
+    detail:
+      "Brelly may read it again on its own. Check that Location Services is on for the device, not just for Brelly.",
+  },
+};
 
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -72,6 +97,8 @@ export default function SettingsScreen() {
 
   const { status: permission, request: requestPermission } =
     useNotificationPermission();
+  const { permission: locationPermission, request: requestLocation } =
+    useDeviceLocationPermission();
   const {
     status: updateStatus,
     message: updateMessage,
@@ -194,7 +221,7 @@ export default function SettingsScreen() {
                   until it is switched back on in system settings.
                 </ThemedText>
                 <Pressable
-                  onPress={() => Linking.openSettings()}
+                  onPress={() => void openAppSettings()}
                   accessibilityRole="button"
                   style={styles.bannerAction}
                 >
@@ -217,7 +244,11 @@ export default function SettingsScreen() {
                   accessibilityRole="button"
                   style={styles.bannerAction}
                 >
-                  <ThemedText type="linkPrimary">Allow notifications</ThemedText>
+                  {/* Not "Allow notifications". This button sits in front of
+                      the OS dialog, and a pre-prompt that argues for one of the
+                      two answers is what App Review rejected — it moves you to
+                      the dialog, it doesn't answer it. */}
+                  <ThemedText type="linkPrimary">Continue</ThemedText>
                 </Pressable>
               </ThemedView>
             )}
@@ -347,6 +378,61 @@ export default function SettingsScreen() {
                   />
                 </ThemedView>
               </>
+            )}
+          </ThemedView>
+
+          {/* Onboarding is the only place that ever mentioned location, and a
+              "Not now" there left no trace anywhere in the app — the grant was
+              unreachable afterwards without deleting and reinstalling. A row
+              that states the current answer and offers the way back is what
+              makes the decision reversible, which is half of what App Review
+              asked for. */}
+          <ThemedText style={styles.fieldLabel} themeColor="textSecondary">
+            Location
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.optionGroup}>
+            <ThemedView style={styles.switchRow}>
+              <ThemedView style={styles.switchLabel}>
+                <ThemedText>{LOCATION_COPY[locationPermission].state}</ThemedText>
+                <ThemedText themeColor="textSecondary" style={styles.hint}>
+                  {LOCATION_COPY[locationPermission].detail}
+                </ThemedText>
+              </ThemedView>
+            </ThemedView>
+            {/* `unprompted` still has a dialog left, so it asks; the two off
+                states have none, and offering "ask again" there is the button
+                that silently does nothing. `granted` and `checking` need no
+                action at all. */}
+            {locationPermission === "unprompted" && (
+              <ThemedView style={styles.subSetting}>
+                <Pressable
+                  onPress={() => void requestLocation()}
+                  accessibilityRole="button"
+                  style={[
+                    styles.testButton,
+                    { backgroundColor: theme.background },
+                  ]}
+                >
+                  <ThemedText style={styles.testButtonText}>Continue</ThemedText>
+                </Pressable>
+              </ThemedView>
+            )}
+            {(locationPermission === "denied" ||
+              locationPermission === "unavailable") && (
+              <ThemedView style={styles.subSetting}>
+                <Pressable
+                  onPress={() => void openAppSettings()}
+                  accessibilityRole="button"
+                  style={[
+                    styles.testButton,
+                    { backgroundColor: theme.background },
+                  ]}
+                >
+                  <ThemedText style={styles.testButtonText}>
+                    Open Settings
+                  </ThemedText>
+                </Pressable>
+              </ThemedView>
             )}
           </ThemedView>
 

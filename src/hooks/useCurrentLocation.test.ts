@@ -124,7 +124,11 @@ describe("useCurrentLocation", () => {
     await act(async () => {
       value = await result.current.getCurrentLocation();
     });
-    return { value: value!, error: result.current.error };
+    return {
+      value: value!,
+      error: result.current.error,
+      permissionDenied: result.current.permissionDenied,
+    };
   }
 
   it("names the location from Google, with the coordinates it was found at", async () => {
@@ -169,15 +173,31 @@ describe("useCurrentLocation", () => {
     expect(value.location).toBe("Current location");
   });
 
-  it("reports an error and no location when permission is refused", async () => {
+  it("says the stop can still be typed when permission is refused", async () => {
     requestPermissions.mockResolvedValue({
       status: "denied",
     } as Awaited<ReturnType<typeof Location.requestForegroundPermissionsAsync>>);
 
-    const { value, error } = await locate();
+    const { value, error, permissionDenied } = await locate();
 
     expect(value).toBeNull();
-    expect(error).toBe("Location permission denied");
+    // The old message was the bare "Location permission denied", which named
+    // the failure without saying the form still works.
+    expect(error).toBe(
+      "Location is off for Brelly, so this couldn't be filled in. You can still type the place.",
+    );
+    expect(permissionDenied).toBe(true);
     expect(googleReverseGeocode).not.toHaveBeenCalled();
+  });
+
+  it("keeps a refusal apart from a failure nothing in Settings would fix", async () => {
+    getPosition.mockRejectedValue(new Error("no fix"));
+
+    const { error, permissionDenied } = await locate();
+
+    expect(error).toBe("Could not get your location");
+    // No Settings action is offered for this one — there is nothing to change
+    // there.
+    expect(permissionDenied).toBe(false);
   });
 });
