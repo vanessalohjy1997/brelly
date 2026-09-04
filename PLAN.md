@@ -33,7 +33,7 @@ lint warnings/errors, and a test for every new component and function.
 ## Tasks
 
 _Nothing open._ The last round is written up in
-[NOTES.md](NOTES.md#round-34--the-permission-primer-app-review-rejected-and-the-dead-ends-behind-it).
+[NOTES.md](NOTES.md#round-35--itms-90683-the-motion-purpose-string-could-not-be-deleted).
 
 Finished work moves into `NOTES.md` — the round history there says why each
 thing is the way it is. New work is added back here as a task, not as a

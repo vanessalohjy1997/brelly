@@ -103,13 +103,15 @@ describe('app.config', () => {
     expect(options.locationWhenInUsePermission).toMatch(/nearby weather/i);
   });
 
-  // The plugin defaults every one of these to the placeholder "Allow
-  // $(PRODUCT_NAME) to access your location" and writes it into Info.plist,
-  // so a build declared two Always-location purpose strings and a motion one
-  // for APIs the app never calls — it only ever requests foreground location.
-  // `false` deletes the key outright (@expo/config-plugins ios/Permissions.js
-  // `applyPermissions`). Asserted here because the cost of losing it is a
-  // reviewer asking why a weather app wants your location in the background.
+  // The plugin defaults both of these to the placeholder "Allow
+  // $(PRODUCT_NAME) to access your location" and writes them into Info.plist,
+  // so a build declared two Always-location purpose strings for an API the app
+  // never calls — it only ever requests foreground location, and nothing in
+  // `expo-location`'s pod calls `requestAlwaysAuthorization` either, so
+  // deleting them cannot trip Apple's binary scan. `false` deletes the key
+  // outright (@expo/config-plugins ios/Permissions.js `applyPermissions`).
+  // Asserted here because the cost of losing it is a reviewer asking why a
+  // weather app wants your location in the background.
   it('declares no purpose string for a permission the app never requests', () => {
     const [, options] = appJson.expo.plugins.find(
       (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location'
@@ -117,7 +119,23 @@ describe('app.config', () => {
 
     expect(options.locationAlwaysAndWhenInUsePermission).toBe(false);
     expect(options.locationAlwaysPermission).toBe(false);
-    expect(options.motionUsagePermission).toBe(false);
+  });
+
+  // Motion is the one that cannot be deleted, and it was — the upload came
+  // back as ITMS-90683 "Missing purpose string in Info.plist". Apple scans the
+  // *binary*, not the code paths: `expo-location` imports CoreMotion and calls
+  // `CMMotionActivityManager` in `MotionActivityStreamer.swift`, which is
+  // compiled in whether or not any JS reaches it. A referenced sensitive API
+  // with no `NSMotionUsageDescription` fails processing, so the key has to be
+  // there. The wording is the honest one: it says the app does not use motion,
+  // because it does not, and a reviewer who sees the key deserves that answer.
+  it('keeps a motion purpose string, because the binary links CoreMotion', () => {
+    const [, options] = appJson.expo.plugins.find(
+      (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location'
+    );
+
+    expect(typeof options.motionUsagePermission).toBe('string');
+    expect(options.motionUsagePermission).toMatch(/does not use motion/i);
   });
 
   it('carries the Liquid Glass opt-out through the config merge', () => {
