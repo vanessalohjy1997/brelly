@@ -73,7 +73,7 @@
           "locationWhenInUsePermission": "Brelly forecasts the places on your plans, so location is optional. While the app is open, it is used only to prefill the location field when you add a stop and to show nearby weather when a day is empty.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false
+          "motionUsagePermission": "Brelly does not use motion activity. This string exists only because the location library Brelly is built on links Apple's motion framework; no screen in the app asks for it."
         }
       ],
       [

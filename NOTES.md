@@ -178,6 +178,14 @@ not defined`, then `Cannot read properties of undefined (reading 'System')`.
   needs re-anchoring. Each plugin's header comment names the upstream bug and
   the condition under which it can be deleted. The three traps below are what
   they exist for.
+- **An iOS purpose string can only be deleted when the *binary* holds no
+  reference to the API — not when your code holds no call to it.** Apple's
+  upload scan is static: `expo-location` compiles in a `CMMotionActivityManager`
+  call, so deleting `NSMotionUsageDescription` failed processing with ITMS-90683
+  even though no JS path reaches motion (round 35). Before setting a permission
+  prop to `false` in `app.json`, grep the pod's own `ios/` sources for the API,
+  and remember `ios/` on disk is stale until you re-run `expo prebuild` — a
+  local build will keep passing with the old keys still in Info.plist.
 - **`yarn add`ing a native package without running `expo install --check`
   crashes the app at launch, not at build time.** `expo`/`expo-modules-core`
   and every `expo-*` package have to be on versions that agree with each
@@ -2288,3 +2296,38 @@ Testing: 1366 tests across 120 suites. The assertions worth keeping are the
 negative ones — `denied` calls `openSettings()` and does *not* call
 `requestForegroundPermissionsAsync` / `requestPermissionsAsync`, and skipping
 the location step still advances onboarding to the end.
+
+### Round 35 — ITMS-90683: the motion purpose string could not be deleted
+
+Round 34 removed three purpose strings for permissions the app never asks for.
+Two of them were free. The third came back from App Store Connect as
+**ITMS-90683, "Missing purpose string in Info.plist"**, and the upload never
+finished processing.
+
+**Apple scans the binary, not the code paths.** `expo-location` imports
+CoreMotion and calls `CMMotionActivityManager` in
+`node_modules/expo-location/ios/Providers/MotionActivityStreamer.swift`. That
+compiles into every build whether or not a line of JS ever reaches
+`watchMotionActivityAsync` — the app only ever calls
+`requestForegroundPermissionsAsync`, and it made no difference. A referenced
+sensitive API with no matching `NS*UsageDescription` fails the check. So
+`motionUsagePermission` is a string again in `app.json`, and it says the honest
+thing: Brelly does not use motion activity, and the key is there because the
+library links the framework. See the v57 config-plugin props at
+https://docs.expo.dev/versions/v57.0.0/sdk/location/.
+
+**The two Always-location keys stay deleted, and that is not luck.** Nothing in
+`expo-location`'s pod calls `requestAlwaysAuthorization` — grep it before
+assuming the same fix applies to them. The rule the round leaves behind:
+
+> A purpose string can be deleted only when the *binary* holds no reference to
+> the API, not when the app holds no call to it. Check the pod's native
+> sources, not your own.
+
+`app.config.test.js` now asserts both halves separately, so a future cleanup
+that deletes the motion string again fails a test instead of an upload.
+
+**Why the local build did not catch it.** `ios/` is gitignored and had not been
+re-prebuilt since the round-34 edit, so the Info.plist on disk still carried the
+old keys and everything ran. The only place the difference shows is a fresh
+`expo prebuild` followed by an actual upload.
