@@ -107,8 +107,14 @@ export const useDeviceLocationStore = create<DeviceLocationState>()((set) => {
           await locate(forGeneration);
           return;
         }
+        // Region and coords go with it. This read is the only thing that
+        // notices a grant switched off in system Settings, and leaving the
+        // last known point behind meant "Right now" kept reporting the weather
+        // at a location the user had just revoked access to.
         commit(forGeneration, {
           permission: status === "denied" ? "denied" : "unprompted",
+          region: null,
+          coords: null,
         });
       })().finally(() => {
         if (pendingSyncGeneration === forGeneration) pendingSync = null;
@@ -122,7 +128,11 @@ export const useDeviceLocationStore = create<DeviceLocationState>()((set) => {
       set({ permission: "checking" });
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        commit(forGeneration, { permission: "denied" });
+        commit(forGeneration, {
+          permission: "denied",
+          region: null,
+          coords: null,
+        });
         return;
       }
       await locate(forGeneration);

@@ -93,18 +93,33 @@ async function describeCoordinates(
   return address ? formatReverseGeocodedAddress(address) : "Current location";
 }
 
+/**
+ * What a refusal costs here, said plainly: nothing but the typing. The field
+ * is a free-text search over Google Places, so the stop can always be entered
+ * by hand — the old message ("Location permission denied") named the failure
+ * and left the reader to guess whether the form still worked.
+ */
+const DENIED_MESSAGE =
+  "Location is off for Brelly, so this couldn't be filled in. You can still type the place.";
+
 export function useCurrentLocation() {
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` because it decides whether an *action* is offered,
+  // not just a message: a refusal is the one failure here the user can do
+  // something about, and only in the system Settings app.
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
   const getCurrentLocation =
     useCallback(async (): Promise<CurrentLocationResult | null> => {
       setIsLocating(true);
       setError(null);
+      setPermissionDenied(false);
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          setError("Location permission denied");
+          setError(DENIED_MESSAGE);
+          setPermissionDenied(true);
           return null;
         }
 
@@ -130,5 +145,5 @@ export function useCurrentLocation() {
       }
     }, []);
 
-  return { getCurrentLocation, isLocating, error };
+  return { getCurrentLocation, isLocating, error, permissionDenied };
 }

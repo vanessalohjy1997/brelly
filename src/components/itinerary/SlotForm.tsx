@@ -24,6 +24,7 @@ import { IconSize, Spacing } from "@/constants/theme";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceSearch } from "@/hooks/usePlaceSearch";
 import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
+import { openAppSettings } from "@/services/appSettings";
 import { useSettingsStore } from "@/store/settingsStore";
 import type { RepeatRule } from "@/types/routine";
 import { computeNotificationTriggerTime } from "@/utils/computeNotificationTriggerTime";
@@ -148,6 +149,7 @@ export function SlotForm({
     getCurrentLocation,
     isLocating,
     error: locationError,
+    permissionDenied: locationDenied,
   } = useCurrentLocation();
   const rainAlertsEnabled = useSettingsStore(
     (state) => state.rainAlertsEnabled,
@@ -537,6 +539,21 @@ export function SlotForm({
                   {message}
                 </ThemedText>
               ))}
+              {/* A refusal is the one message here that has somewhere to go.
+                  The OS will not ask a second time, so without this the only
+                  route back to "Use my location" is finding Brelly in the
+                  system Settings app unaided. */}
+              {locationDenied && (
+                <Pressable
+                  onPress={() => void openAppSettings()}
+                  accessibilityRole="button"
+                  style={styles.settingsAction}
+                >
+                  <ThemedText type="linkPrimary" style={styles.hint}>
+                    Open Settings
+                  </ThemedText>
+                </Pressable>
+              )}
             </ThemedView>
           )}
         </ThemedView>
@@ -908,6 +925,12 @@ const styles = StyleSheet.create({
   // one of two real problems.
   status: {
     gap: 2,
+  },
+  // 44pt is the tap target; the label inside it stays at hint scale so the
+  // action reads as part of the message it follows, not as a second field.
+  settingsAction: {
+    minHeight: 44,
+    justifyContent: "center",
   },
   assistRow: {
     flexDirection: "row",

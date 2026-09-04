@@ -1,10 +1,12 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
+import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
-import { Linking } from "react-native";
+import { AppState, Linking } from "react-native";
 
 import SettingsScreen from "@/app/(tabs)/settings";
+import { resetDeviceLocationStore } from "@/store/deviceLocationStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useToastStore } from "@/store/toastStore";
 import { fakeAuth } from "@/test/fakeAuth";
@@ -16,6 +18,10 @@ const getAllScheduled =
 const scheduleNotification =
   Notifications.scheduleNotificationAsync as jest.Mock;
 const useUpdatesMock = Updates.useUpdates as jest.Mock;
+const getLocationPermissions =
+  Location.getForegroundPermissionsAsync as jest.Mock;
+const requestLocationPermissions =
+  Location.requestForegroundPermissionsAsync as jest.Mock;
 const checkForUpdateAsync = Updates.checkForUpdateAsync as jest.Mock;
 const reloadAsync = Updates.reloadAsync as jest.Mock;
 
@@ -51,6 +57,9 @@ beforeEach(() => {
   checkForUpdateAsync.mockResolvedValue({ isAvailable: false });
   reloadAsync.mockResolvedValue(undefined);
   jest.spyOn(Linking, "openSettings").mockImplementation(async () => {});
+  resetDeviceLocationStore();
+  getLocationPermissions.mockResolvedValue({ status: "granted" });
+  requestLocationPermissions.mockResolvedValue({ status: "granted" });
 });
 
 describe("SettingsScreen", () => {
@@ -298,9 +307,89 @@ describe("SettingsScreen — notification permission", () => {
     getPermissions.mockResolvedValue({ granted: false, canAskAgain: true });
     const view = await render(<SettingsScreen />);
 
-    await fireEvent.press(await view.findByText("Allow notifications"));
+    await fireEvent.press(await view.findByText("Continue"));
 
     expect(requestPermissions).toHaveBeenCalled();
+  });
+
+  it("does not argue for a grant on the button in front of the OS dialog", async () => {
+    // App Review read "Allow notifications" here as pressing for one of the
+    // two answers the system dialog is about to ask for.
+    getPermissions.mockResolvedValue({ granted: false, canAskAgain: true });
+    const view = await render(<SettingsScreen />);
+
+    expect(await view.findByText("Continue")).toBeTruthy();
+    expect(view.queryByText("Allow notifications")).toBeNull();
+  });
+});
+
+describe("SettingsScreen — location", () => {
+  it("says location is on, and the little it is used for", async () => {
+    const view = await render(<SettingsScreen />);
+
+    expect(await view.findByText("Location is on")).toBeTruthy();
+    expect(
+      view.getByText(/only while Brelly is open, to prefill a stop's location/),
+    ).toBeTruthy();
+  });
+
+  it("offers the prompt while there is still one to show", async () => {
+    getLocationPermissions.mockResolvedValue({ status: "undetermined" });
+    const view = await render(<SettingsScreen />);
+
+    expect(await view.findByText("Location is off")).toBeTruthy();
+    // Two "Continue" buttons would be ambiguous, so the notification banner is
+    // kept out of the way — this one is the location row's.
+    await fireEvent.press(view.getByText("Continue"));
+
+    expect(requestLocationPermissions).toHaveBeenCalled();
+  });
+
+  it("is the way back from a denial made during onboarding", async () => {
+    // Until this row existed the screen had no location entry at all, so a
+    // "Not now" in the first five seconds was unreachable afterwards.
+    getLocationPermissions.mockResolvedValue({ status: "denied" });
+    const view = await render(<SettingsScreen />);
+
+    expect(await view.findByText(/won't ask again/)).toBeTruthy();
+    await fireEvent.press(view.getByText("Open Settings"));
+
+    expect(Linking.openSettings).toHaveBeenCalled();
+    // Re-prompting is pointless once refused, so it must not try.
+    expect(requestLocationPermissions).not.toHaveBeenCalled();
+  });
+
+  it("catches up with a permission changed in system Settings", async () => {
+    // The whole point of the Open Settings button. The app is not told when the
+    // answer changes out there, so returning to the foreground is the only
+    // chance to notice — and it has to work in both directions, not only for
+    // the denial it sent you there to fix.
+    const listeners: ((state: string) => void)[] = [];
+    jest
+      .spyOn(AppState, "addEventListener")
+      .mockImplementation((_event, handler) => {
+        listeners.push(handler as (state: string) => void);
+        return { remove: jest.fn() } as never;
+      });
+    const view = await render(<SettingsScreen />);
+    expect(await view.findByText("Location is on")).toBeTruthy();
+
+    getLocationPermissions.mockResolvedValue({ status: "denied" });
+    await act(async () => {
+      listeners.forEach((listener) => listener("active"));
+    });
+
+    expect(view.getByText("Location is off")).toBeTruthy();
+    expect(view.getByText("Open Settings")).toBeTruthy();
+  });
+
+  it("says location is optional whatever state it is in", async () => {
+    getLocationPermissions.mockResolvedValue({ status: "denied" });
+    const view = await render(<SettingsScreen />);
+
+    expect(
+      await view.findByText(/forecast from the place on each stop/),
+    ).toBeTruthy();
   });
 });
 

@@ -185,6 +185,12 @@ system settings) when the status is denied.
   that has never asked isn't listed in system Settings, so there is no answer
   out there to come back and find.
 
+  That last sentence turned out to be wrong twice over, and round 34 removed
+  the gate: it is an iOS-only argument (Android lists an app before it has
+  asked), and gating on the recoverable states meant a *granted* permission
+  switched off in Settings was never noticed at all. The re-read now runs from
+  every state.
+
   Two things the move to shared state forced that the per-screen version never
   had to think about. Both tabs call `sync()` in the same commit, so an
   in-flight read is shared rather than repeated — three consumers cost one
@@ -194,6 +200,14 @@ system settings) when the status is denied.
   superseded one is dropped. The regression test the item asked for is
   "grants once for the whole app, not once per screen"; the primer and
   return-from-Settings paths have one each.
+
+  Reopened once by App Review and closed again in
+  [round 34](NOTES.md#round-34--the-permission-primer-app-review-rejected-and-the-dead-ends-behind-it). The
+  mechanism above was right; the wording and the reach were not. "Allow" on a
+  screen sitting in front of the OS dialog reads as pressuring the grant, the
+  primer's copy never said the app works without location, and two dead ends
+  the store fixed on Today were still dead ends elsewhere — the add-plan form
+  and the Settings screen, which had no location entry at all.
 
 - [ ] **The header eats 108px and never collapses.** `HeaderHeight = 108` is
   fixed and the 48pt `title` sits above the `ScrollView` — on a small phone

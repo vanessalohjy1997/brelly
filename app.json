@@ -70,7 +70,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Brelly uses your location to prefill the location field when adding a plan and to show the weather nearby when you have no plans."
+          "locationWhenInUsePermission": "Brelly forecasts the places on your plans, so location is optional. While the app is open, it is used only to prefill the location field when you add a stop and to show nearby weather when a day is empty.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false
         }
       ],
       [

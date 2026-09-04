@@ -1,10 +1,11 @@
-import { Linking, Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 
 import { Icon } from "@/components/icon";
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { openAppSettings } from "@/services/appSettings";
 import type { PermissionState } from "@/store/deviceLocationStore";
 
 type Props = {
@@ -52,7 +53,7 @@ export function NearbyWeatherPrompt({ permission, onRequest }: Props) {
         </ThemedText>
       </ThemedView>
       <Pressable
-        onPress={denied ? () => Linking.openSettings() : onRequest}
+        onPress={denied ? () => void openAppSettings() : onRequest}
         style={[styles.button, { backgroundColor: theme.primary }]}
         accessibilityRole="button"
       >

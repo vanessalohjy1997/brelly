@@ -1,5 +1,6 @@
 import { act, fireEvent } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
+import * as Location from "expo-location";
+import { Linking, StyleSheet } from "react-native";
 
 import {
   defaultStartTime,
@@ -498,6 +499,50 @@ describe("SlotForm", () => {
 
       expect(view.queryByText("Searching…")).toBeNull();
       expect(view.getByText("Use my location")).toBeTruthy();
+    });
+
+    it("says the stop can still be typed when location is refused, and offers the way back", async () => {
+      // The old message was the bare "Location permission denied" with no
+      // action — the form still worked, and nothing said so or offered a route
+      // back to the grant.
+      (
+        Location.requestForegroundPermissionsAsync as jest.Mock
+      ).mockResolvedValueOnce({ status: "denied" });
+      const openSettings = jest
+        .spyOn(Linking, "openSettings")
+        .mockResolvedValue(undefined);
+      const view = await renderWithProviders(
+        <SlotForm submitLabel="Add" onSubmit={jest.fn()} />,
+      );
+
+      await act(async () => {
+        await fireEvent.press(view.getByText("Use my location"));
+      });
+
+      expect(view.getByText(/You can still type the place/)).toBeTruthy();
+      await act(async () => {
+        await fireEvent.press(view.getByText("Open Settings"));
+      });
+
+      expect(openSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it("offers no Settings action for a failure Settings would not fix", async () => {
+      // Permission held, no fix came back. Sending someone to Settings here
+      // would be sending them somewhere with nothing to change.
+      (
+        Location.getCurrentPositionAsync as jest.Mock
+      ).mockRejectedValueOnce(new Error("no fix"));
+      const view = await renderWithProviders(
+        <SlotForm submitLabel="Add" onSubmit={jest.fn()} />,
+      );
+
+      await act(async () => {
+        await fireEvent.press(view.getByText("Use my location"));
+      });
+
+      expect(view.getByText("Could not get your location")).toBeTruthy();
+      expect(view.queryByText("Open Settings")).toBeNull();
     });
 
     it("closes when the field is left, so it can't sit over the Label field", async () => {

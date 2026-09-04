@@ -21,6 +21,7 @@ import {
   Spacing,
 } from "@/constants/theme";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
+import { useDeviceLocationPermission } from "@/hooks/useDeviceLocationPermission";
 import { useMuteSlotWithUndo } from "@/hooks/useMuteSlotWithUndo";
 import { useLiveConditions } from "@/hooks/useLiveConditions";
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
@@ -61,12 +62,18 @@ export default function TodayScreen() {
   const [onboardingStep, setOnboardingStep] = useState<
     "location" | "notification" | null
   >(null);
-  const { request: requestNotification } = useNotificationPermission();
+  const { status: notificationPermission, request: requestNotification } =
+    useNotificationPermission();
   // The primer goes through the same action the empty state's button does.
   // It used to call `expo-location` directly and throw the answer away, so
   // allowing it here — what a new install actually does — still left Today
   // asking for a permission the OS had already granted.
   const requestLocation = useDeviceLocationStore((state) => state.request);
+  // Read without prompting, purely so the primer knows whether there is still
+  // a prompt to show. A permission already refused has none — on that step the
+  // primer offers system Settings instead of a button that resolves to nothing.
+  const { permission: onboardingLocationPermission } =
+    useDeviceLocationPermission();
 
   // Only once `ready` (settings are rehydrated) do we trust
   // `hasSeenOnboarding` enough to decide the flow should start.
@@ -189,6 +196,11 @@ export default function TodayScreen() {
           <ThemedView style={styles.emptyState}>
             <OnboardingPermissionPrimer
               kind={activeOnboardingStep}
+              permission={
+                activeOnboardingStep === "location"
+                  ? onboardingLocationPermission
+                  : notificationPermission
+              }
               onAllow={handleOnboardingAllow}
               onSkip={handleOnboardingSkip}
             />

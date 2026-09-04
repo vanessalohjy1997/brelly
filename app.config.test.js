@@ -87,6 +87,39 @@ describe('app.config', () => {
     expect(appJson.expo.ios.infoPlist.UIDesignRequiresCompatibility).toBe(true);
   });
 
+  // The iOS purpose string is what App Review reads beside the location
+  // dialog, and a review rejection turned on its wording: it has to say the
+  // app works without location and that the read is scoped to while the app is
+  // open. `app.json` can't carry a comment, so the requirement lives here.
+  it('tells App Review location is optional, and scopes it to while the app is open', () => {
+    const [, options] = appJson.expo.plugins.find(
+      (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location'
+    );
+
+    expect(options.locationWhenInUsePermission).toMatch(/optional/i);
+    expect(options.locationWhenInUsePermission).toMatch(/while the app is open/i);
+    // The two things it is actually used for, and nothing else.
+    expect(options.locationWhenInUsePermission).toMatch(/prefill/i);
+    expect(options.locationWhenInUsePermission).toMatch(/nearby weather/i);
+  });
+
+  // The plugin defaults every one of these to the placeholder "Allow
+  // $(PRODUCT_NAME) to access your location" and writes it into Info.plist,
+  // so a build declared two Always-location purpose strings and a motion one
+  // for APIs the app never calls — it only ever requests foreground location.
+  // `false` deletes the key outright (@expo/config-plugins ios/Permissions.js
+  // `applyPermissions`). Asserted here because the cost of losing it is a
+  // reviewer asking why a weather app wants your location in the background.
+  it('declares no purpose string for a permission the app never requests', () => {
+    const [, options] = appJson.expo.plugins.find(
+      (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-location'
+    );
+
+    expect(options.locationAlwaysAndWhenInUsePermission).toBe(false);
+    expect(options.locationAlwaysPermission).toBe(false);
+    expect(options.motionUsagePermission).toBe(false);
+  });
+
   it('carries the Liquid Glass opt-out through the config merge', () => {
     const config = appConfig({ config: appJson.expo });
 
