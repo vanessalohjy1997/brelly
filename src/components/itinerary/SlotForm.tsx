@@ -702,12 +702,13 @@ export function SlotForm({
                     styles.repeatChip,
                     {
                       backgroundColor: isSelected
-                        ? theme.backgroundSelected
+                        ? theme.primary
                         : theme.backgroundElement,
                     },
                   ]}
                 >
                   <ThemedText
+                    themeColor={isSelected ? "onPrimary" : "text"}
                     style={[
                       styles.hint,
                       isSelected && styles.repeatChipSelected,
@@ -1021,6 +1022,10 @@ const styles = StyleSheet.create({
     minHeight: 36,
     justifyContent: "center",
   },
+  // Weight on top of the `primary` fill, not instead of it. Weight alone was
+  // the whole cue while the fill was `backgroundSelected`, which is 1.26:1 on
+  // `backgroundElement` in dark and 1.19:1 in light — a difference you cannot
+  // see, so the selected chip and its neighbour looked identical.
   repeatChipSelected: {
     fontWeight: "700",
   },

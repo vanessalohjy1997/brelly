@@ -4,7 +4,7 @@ import { Pressable, StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
-import { Spacing } from "@/constants/theme";
+import { Spacing, type ThemeColor } from "@/constants/theme";
 import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
 import type { RepeatRule } from "@/types/routine";
 import { parseDateKey, shiftDays, toDateKey } from "@/utils/dateKeys";
@@ -79,14 +79,18 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
     onChange({ ...value, dayOfMonth: anchorDayOfMonth });
   }, [anchorDayOfMonth, value, onChange]);
 
+  // `primary` rather than `backgroundSelected`: the latter is 1.26:1 on
+  // `backgroundElement` in dark and 1.19:1 in light, so a selected chip and an
+  // unselected one looked the same and the bold label was the only cue.
   const chipStyle = (selected: boolean) => [
     styles.chip,
-    {
-      backgroundColor: selected
-        ? theme.backgroundSelected
-        : theme.backgroundElement,
-    },
+    { backgroundColor: selected ? theme.primary : theme.backgroundElement },
   ];
+
+  // Pairs are pairs — a `primary` fill takes `onPrimary`, which is white in
+  // light and near-black in dark.
+  const chipTextColor = (selected: boolean): ThemeColor =>
+    selected ? "onPrimary" : "text";
 
   const selectOnce = () => {
     if (!repeating) return;
@@ -158,7 +162,10 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
             accessibilityState={{ selected: option.on }}
             style={chipStyle(option.on)}
           >
-            <ThemedText style={[styles.hint, option.on && styles.chipSelected]}>
+            <ThemedText
+              themeColor={chipTextColor(option.on)}
+              style={[styles.hint, option.on && styles.chipSelected]}
+            >
               {option.label}
             </ThemedText>
           </Pressable>
@@ -191,6 +198,7 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
                       style={[chipStyle(selected), styles.dayChip]}
                     >
                       <ThemedText
+                        themeColor={chipTextColor(selected)}
                         style={[styles.hint, selected && styles.chipSelected]}
                       >
                         {WEEKDAY_INITIALS[day]}
@@ -243,6 +251,7 @@ export function RepeatField({ value, onChange, anchor, error }: Props) {
                 style={chipStyle(option.on)}
               >
                 <ThemedText
+                  themeColor={chipTextColor(option.on)}
                   style={[styles.hint, option.on && styles.chipSelected]}
                 >
                   {option.label}
@@ -305,6 +314,8 @@ const styles = StyleSheet.create({
     minHeight: 36,
     justifyContent: "center",
   },
+  // Weight on top of the `primary` fill, not instead of it — see the fill note
+  // on `chipStyle` for why weight alone was not enough.
   chipSelected: {
     fontWeight: "700",
   },

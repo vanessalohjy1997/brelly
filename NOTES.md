@@ -2031,6 +2031,79 @@ Delete.
   hands `renderRightActions` a spy. Without it, deleting both `close()` calls
   passes the whole suite; the screens keep exercising the real component.
 
+### Round 36 — a selected chip and an unselected one were the same colour
+
+Reported against the Edit plan form in dark mode: the Indoor/Outdoor pair looked
+identical, so the form did not say which one it had. It was measurable, not a
+matter of taste — the selected chip was `backgroundSelected` on a
+`backgroundElement` neighbour, **1.26:1**, and `fontWeight: "700"` on the label
+was carrying the entire selection state on its own.
+
+**Light had the same bug, at 1.19:1.** It was only ever reported in dark, but
+this is the opposite of the round-11 dark-surfaces call, where light surfaces
+held an edge that dark ones did not: here nothing separates the two chips in
+either theme except the weight. Both were fixed.
+
+**The fix is `primary`, not a wider neutral step.** Nudging
+`backgroundSelected` further from `backgroundElement` is the change that looks
+smaller and is not: that token is also every pressed state in the app
+(`ItineraryCard`, the location suggestion rows, the Android tab ripple), and a
+press flash sized to be unmistakable is a press flash that reads as a
+selection. Selection and pressed-ness are different states and now use
+different colours — `primary` fills the chosen chip, `onPrimary` takes its
+label. 6.30:1 against the unselected chip in dark and 5.64:1 in light for the
+fill; 9.00:1 and 6.84:1 for the label on it. Bold stays, on top of the fill
+rather than instead of it.
+
+**Four places, because it was one idiom copied four times.** The reported
+Indoor/Outdoor chips in `SlotForm`, the Repeat / weekday / Ends chips in
+`RepeatField` right above them, and both of Settings' radiogroups — the
+Appearance rows and the shared `choiceRow` behind lead time and quiet hours.
+Fixing only the reported one would have left the app with two contradictory
+answers to "which one is picked".
+
+**The test asserts the ratio, not the token.** `src/test/contrast.ts` is new —
+WCAG luminance and contrast, excluded from coverage like everything under
+`src/test/`. `expect(contrastRatio(selectedFill, unselectedFill)) > 3` fails on
+the old code and passes on the new; `expect(...).toBe(theme.primary)` would have
+passed just as happily on `backgroundSelected`, which is exactly the assertion
+that let this ship. Both themes are parameterised, since only one of them was
+reported.
+
+### Round 37 — the duplicate section had no grouping, only gaps
+
+Same screen as round 36 and reported straight after it. `CopyToDateAction` put
+a flat `Spacing.two` between its caption, its picker and its Duplicate button:
+three rows at one interval, so nothing in the layout said the first two are a
+field and the third acts on it. The caption-to-picker gap was also 8 where
+`SlotForm`'s `field` is 4 everywhere else, and this component renders *inside*
+that form.
+
+**A ladder, not a single value.** `Spacing.one` within the field,
+`Spacing.three` to the button, `Spacing.four` (the form's own container gap) on
+to Delete plan. The rule it leaves behind: gaps carry grouping, so a section
+whose gaps are all equal has told the reader nothing, no matter which value it
+picked.
+
+**Delete plan was deliberately not touched**, and the reason is worth writing
+down because it looks like the worst gap on the screen. It measures ~32 against
+the 24 it is given, because the button's `paddingVertical` sits inside a row
+with no background — an unfilled button's padding reads as gap. Shrinking it to
+make the number match costs a tap target already at 40pt, under the 44 iOS
+wants, and the extra distance in front of a destructive action is wanted anyway.
+
+**Every gap in this section measures ~7 larger than its token**, which will
+mislead the next person who takes a ruler to a screenshot. `DateTimePickerHeight`
+pins the picker box at 40 because the SwiftUI host reports no intrinsic height
+(round 5), the date capsule inside it is ~25, and SwiftUI centres it — so there
+is ~7.5 of dead space above and below the visible chip that belongs to no gap.
+Don't subtract it from the tokens to compensate.
+
+`CopyToDateAction.test.tsx` is new — the component had no test of its own and
+was only ever covered through `plan/[id].tsx`. It asserts the *ladder*
+(`fieldGap < sectionGap`) rather than only the two literals, so a future flat
+gap fails whichever value it flattens to.
+
 ## Shipped from the feature-idea list
 
 The feature ideas were derived from what was already built — each named the seam

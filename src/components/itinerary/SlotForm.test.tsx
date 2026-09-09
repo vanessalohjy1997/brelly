@@ -10,6 +10,7 @@ import {
 } from "@/components/itinerary/SlotForm";
 import { getPlaceDetails, searchPlaces } from "@/services/geocoding";
 import { useSettingsStore } from "@/store/settingsStore";
+import { contrastRatio } from "@/test/contrast";
 import { renderWithProviders } from "@/test/renderWithProviders";
 import { toDateKey } from "@/utils/dateKeys";
 
@@ -170,6 +171,46 @@ describe("SlotForm", () => {
         view.getByText("Indoor").parent?.props.accessibilityState,
       ).toMatchObject({ selected: true });
     });
+
+    // The bug this guards: the selected chip was `backgroundSelected` on a
+    // `backgroundElement` neighbour, which is 1.26:1 in dark and 1.19:1 in
+    // light. Both themes are checked because the light one had it too — it was
+    // only ever reported in dark.
+    it.each(["dark", "light"] as const)(
+      "fills the selected chip with a colour you can separate from the unselected one (%s)",
+      async (themePreference) => {
+        useSettingsStore.setState({ themePreference });
+        const view = await renderWithProviders(
+          <SlotForm submitLabel="Save" initialValues={INITIAL} onSubmit={jest.fn()} />,
+        );
+
+        const fillOf = (label: string) =>
+          StyleSheet.flatten(view.getByText(label).parent?.props.style)
+            .backgroundColor as string;
+
+        // Outdoor is the default, so it is the selected one here.
+        expect(contrastRatio(fillOf("Outdoor"), fillOf("Indoor"))).toBeGreaterThan(
+          3,
+        );
+      },
+    );
+
+    it.each(["dark", "light"] as const)(
+      "keeps the selected chip's own label readable on that fill (%s)",
+      async (themePreference) => {
+        useSettingsStore.setState({ themePreference });
+        const view = await renderWithProviders(
+          <SlotForm submitLabel="Save" initialValues={INITIAL} onSubmit={jest.fn()} />,
+        );
+
+        const label = view.getByText("Outdoor");
+        const fill = StyleSheet.flatten(label.parent?.props.style)
+          .backgroundColor as string;
+        const ink = StyleSheet.flatten(label.props.style).color as string;
+
+        expect(contrastRatio(ink, fill)).toBeGreaterThan(4.5);
+      },
+    );
 
     it("switches this stop's rain alerts off when it is marked indoors", async () => {
       // The whole point of the tag: a mall doesn't need warning about rain, and

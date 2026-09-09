@@ -190,10 +190,13 @@ export default function SettingsScreen() {
                   accessibilityState={{ selected }}
                   style={[
                     styles.option,
-                    selected && { backgroundColor: theme.backgroundSelected },
+                    selected && { backgroundColor: theme.primary },
                   ]}
                 >
-                  <ThemedText style={selected && styles.optionSelectedText}>
+                  <ThemedText
+                    themeColor={selected ? "onPrimary" : "text"}
+                    style={selected && styles.optionSelectedText}
+                  >
                     {option.label}
                   </ThemedText>
                 </Pressable>
@@ -690,13 +693,14 @@ function ChoiceRow({
             style={[
               styles.choice,
               {
-                backgroundColor: isSelected
-                  ? theme.backgroundSelected
-                  : theme.background,
+                backgroundColor: isSelected ? theme.primary : theme.background,
               },
             ]}
           >
-            <ThemedText style={isSelected && styles.optionSelectedText}>
+            <ThemedText
+              themeColor={isSelected ? "onPrimary" : "text"}
+              style={isSelected && styles.optionSelectedText}
+            >
               {label}
             </ThemedText>
           </Pressable>
@@ -741,6 +745,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
   },
+  // Weight on top of the `primary` fill, not instead of it. While the fill was
+  // `backgroundSelected` — 1.26:1 on `backgroundElement` in dark, 1.19:1 in
+  // light — weight was the only thing separating the picked option from the
+  // rest, which is not a difference you can see.
   optionSelectedText: {
     fontWeight: "700",
   },
