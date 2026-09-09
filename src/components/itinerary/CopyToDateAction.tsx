@@ -27,20 +27,27 @@ export function CopyToDateAction({ onDuplicate }: Props) {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Moving a plan is just editing its start date — the slot re-files
-          itself under the new day on save. Copying it has no such equivalent,
-          so duplicating is the only action that needs to live here. */}
-      <ThemedText type="fieldLabel" themeColor="textSecondary">
-        Duplicate to another day
-      </ThemedText>
-      <DateTimePicker
-        value={targetDate}
-        mode="date"
-        style={styles.picker}
-        themeVariant={colorScheme}
-        accentColor={theme.primary}
-        onValueChange={(_, date) => setTargetDate(date)}
-      />
+      {/* The caption and the picker are one field, spaced like every other
+          field in the form around it — `SlotForm`'s own `field` gap. They were
+          8 apart here and 4 apart there, which read as this section sitting
+          slightly looser than the form it is inside. */}
+      <ThemedView style={styles.field}>
+        {/* Moving a plan is just editing its start date — the slot re-files
+            itself under the new day on save. Copying it has no such
+            equivalent, so duplicating is the only action that needs to live
+            here. */}
+        <ThemedText type="fieldLabel" themeColor="textSecondary">
+          Duplicate to another day
+        </ThemedText>
+        <DateTimePicker
+          value={targetDate}
+          mode="date"
+          style={styles.picker}
+          themeVariant={colorScheme}
+          accentColor={theme.primary}
+          onValueChange={(_, date) => setTargetDate(date)}
+        />
+      </ThemedView>
       <View style={styles.row}>
         <Pressable
           style={[styles.button, { backgroundColor: theme.backgroundElement }]}
@@ -54,8 +61,17 @@ export function CopyToDateAction({ onDuplicate }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // `Spacing.three` between the field and the button it acts on, against
+  // `Spacing.four` between sections in the form: the button reads as belonging
+  // to the date above it rather than as the next thing down. At the flat
+  // `Spacing.two` this used to be, the caption, the picker and the button were
+  // three equally spaced rows with nothing saying which two went together.
   container: {
-    gap: Spacing.two,
+    gap: Spacing.three,
+  },
+  field: {
+    gap: Spacing.one,
+    backgroundColor: "transparent",
   },
   // See `DatePickerWidth` — a content-sized box is what puts the picker flush
   // left rather than centred.

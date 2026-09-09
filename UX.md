@@ -17,10 +17,11 @@ feedback, the dark-theme surfaces, the native pickers' theming — and, in the
 latest round, undo on delete, the whole add/edit form, both remaining Plans
 items, search, the notification-permission and test-alert gaps, relative times,
 now/next emphasis, reduce-motion, the `border` token, the form's location
-dropdown and the gap it left behind, the per-screen location grant — and, in
-the latest round, the verdict word back on the card, "Right now" reading the
-device instead of the next stop, the small widget's mid-letter wrap, and
-monthly routines.
+dropdown and the gap it left behind, the per-screen location grant, the verdict
+word back on the card, "Right now" reading the device instead of the next stop,
+the small widget's mid-letter wrap, monthly routines — and, in the latest round,
+the selected chip that looked the same as an unselected one and the flat spacing
+in the duplicate section under it.
 
 Item descriptions below are left as originally written — they describe the
 problem, not the current code, so a `[x]` item's file references point at what
@@ -1342,6 +1343,54 @@ A clear stop takes the neutral `border` for its outline — the first thing in
 the app to render that token — so it is *quieter* than the two verdicts that
 want something from you rather than differently loud. Every pill keeps the same
 shape; only the strength of the hue changes.
+
+### [x] A selected chip was indistinguishable from an unselected one
+
+Reported against Edit plan in dark mode. `backgroundSelected` on a
+`backgroundElement` neighbour is **1.26:1** in dark and **1.19:1** in light, so
+the Indoor/Outdoor pair read as two identical chips and the bold label was the
+only cue that either was chosen.
+
+Fixed by giving selection its own colour instead of a neighbouring neutral: the
+chosen chip fills with `primary` and its label takes `onPrimary` — 6.30:1
+against the unselected chip in dark, 5.64:1 in light, with the label at 9.00:1
+and 6.84:1 on the fill. The bold weight stays on top of it.
+
+Widening the neutral step was the tempting alternative and is the wrong one:
+`backgroundSelected` is also every pressed state in the app, so a value tuned
+until selection was obvious would have made every press flash read as a
+selection. The two states now use different tokens.
+
+Applied to all four copies of the idiom, not just the reported one —
+`SlotForm`'s kind chips, `RepeatField`'s cadence/weekday/Ends chips, and
+Settings' Appearance rows and shared `choiceRow`. The regression test asserts
+the contrast *ratio* between the two fills (`src/test/contrast.ts`, new) rather
+than asserting the fill equals a token; the token-equality version of this test
+would have passed on the broken code.
+
+### [x] The duplicate section was spaced flat, so nothing grouped
+
+Reported against Edit plan: the caption, the date picker and the Duplicate
+button in [CopyToDateAction.tsx](src/components/itinerary/CopyToDateAction.tsx)
+sat a flat `Spacing.two` apart — three equally spaced rows, with nothing saying
+that the first two are one field and the third is the action on it. The caption
+was also 8 from its picker where every other label-and-control pair in the form
+around it is 4, so the section read looser than the form it renders inside.
+
+Now a ladder: `Spacing.one` inside the field (matching `SlotForm`'s own `field`
+gap), `Spacing.three` from that field to its button, and the form's existing
+`Spacing.four` on to Delete plan. Tightest within a thing, wider to its action,
+widest to an unrelated destructive one.
+
+Delete plan's gap was left alone. It measures larger than the 24 the container
+gives it because the button's own `paddingVertical` is inside an unfilled text
+row, so its padding reads as gap — that is a button with no background, not a
+spacing bug, and the extra distance in front of a destructive action is wanted.
+
+Two things this section carries that are *not* spacing choices and should not be
+tuned away: `DateTimePickerHeight` pins the picker box because the SwiftUI host
+reports no intrinsic height, and the box being taller than the capsule inside it
+means every gap here measures ~7 larger than its token. See the round-5 note.
 
 ### Related open items
 
