@@ -21,7 +21,7 @@ traps=$(awk '
 # UX.md: unticked items only, each under the heading it sits below. An item
 # runs until the next checkbox or heading.
 ux=$(awk '
-  /^#/ { heading = $0; next }
+  /^#/ { heading = $0; printing = 0; next }
   /^[[:space:]]*-[[:space:]]*\[ \]/ {
     if (heading != last_printed) { print ""; print heading; last_printed = heading }
     printing = 1; print; next
