@@ -1,5 +1,5 @@
 import { getRegionFromCoordinates } from "@/constants/neaRegions";
-import { generateDocId } from "@/services/firebase";
+import { generateDocId } from "@brelly/platform/firebase";
 import { deleteSlotDoc, writeSlot, writeSlotFields } from "@/services/itinerarySync";
 import { DayPlan, ItinerarySlot } from "@/types/itinerary";
 import { toDateKey } from "@/utils/dateKeys";

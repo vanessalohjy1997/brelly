@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { generateDocId } from "@/services/firebase";
+import { generateDocId } from "@brelly/platform/firebase";
 import {
   addExceptionField,
   deleteRoutineDoc,
