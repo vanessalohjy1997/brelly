@@ -2404,3 +2404,64 @@ that deletes the motion string again fails a test instead of an upload.
 re-prebuilt since the round-34 edit, so the Info.plist on disk still carried the
 old keys and everything ran. The only place the difference shows is a fresh
 `expo prebuild` followed by an actual upload.
+
+### Round 36 — Phase 0 of the web migration: de-risking the harness
+
+The first three commits of the Next.js monorepo migration ([`WEB.md`](WEB.md)).
+No structure changed; the point was to fix the things that would have failed
+*during* the move and looked like the move's fault.
+
+**`expo lint` was linting a third of the repo.** It only ever walks `src/`,
+`app/` and `components/`
+(`@expo/cli/build/src/lint/lintAsync.js:88`), so `yarn lint` exited 0 while
+`npx eslint . --max-warnings 0` exited 1 with **172 errors across 7 files** —
+`jest.setup.js`, `__mocks__/`, `plugins/*.test.js`, `app.config.test.js`. They
+were 170 `no-undef` (those files are Node + Jest, and the flat config never
+said so) plus 2 `react/display-name`, with a third failure from a stale
+`eslint-disable` in the generated `.expo/types/router.d.ts` that
+`--max-warnings 0` counts.
+
+`yarn lint` is now `eslint . --max-warnings 0`. The flat config declares
+`globals.node` + `globals.jest` for that file set, ignores `.expo/`, and the two
+mock components got real `displayName`s rather than a rule-off. No
+`eslint-disable` was added to any source file. The three
+`/* eslint-env jest */` comments went too — flat config ignores them and ESLint
+10 will error on them.
+
+> If a lint rule "already passes", check what the linter was actually pointed
+> at before believing it.
+
+**The verify gate named its checks in three places.** `.claude/hooks/verify-gate.sh`,
+`ci.yml` and `yarn verify` each spelled out `npx tsc --noEmit` by hand. After
+Phase 2 there is no root `tsconfig.json`, so a bare `tsc --noEmit` exits
+`TS18003` and the Stop hook would have blocked with an error that reads as
+unrelated to the migration. The checks are named once now — `typecheck`, and
+`verify:fast` (jest) beside `verify` (coverage) — and the hook and CI call
+those. Phase 2 changes `typecheck` to the per-workspace form in one place.
+
+**The sync layer pulled `expo-haptics`.** `saveWithFeedback.ts` imported
+`utils/haptics.ts`, and its `notifyCloudSyncFailure` is imported by all three
+sync services plus `backup.ts` — so every file that has to end up in
+`packages/core` reached a native module through one import. `toastStore` was
+already the seam: `utils/toastHaptics.ts` subscribes to it, matches the haptic
+to the toast variant, and the mobile entry subscribes once at module scope.
+`hapticDelete`/`hapticToggle` are called from UI components and stayed put.
+
+The deliberate side effect is that **every** toast buzzes now. Toasts raised
+outside `saveWithFeedback` — a failed calendar write, a weather refresh that
+couldn't reach the service — were silent before.
+
+While in that file: its docblock still described zustand `persist` calling
+`mmkvStorage.setItem` synchronously inside `set(...)`, which is why the `try`
+existed. The stores dropped `persist` (`itineraryStore.ts:119-125`,
+`settingsStore.ts:67-73`), so that `catch` is a backstop and nothing more. The
+comment and the test comment repeating it now say so.
+
+**The OTA hazard this phase opens.** All three commits touch `package.json`
+`scripts`, and the Expo fingerprint hashes `scripts`, so the runtime version has
+moved and `main` can no longer produce the shipped fingerprint. `main` at
+`6c135de` is tagged **`ota-baseline-pre-monorepo`** so an emergency hotfix is a
+checkout. Cut `production` and `preview` native builds from that tag before
+Phase 1.
+
+Testing: 1381 tests across 122 suites.
