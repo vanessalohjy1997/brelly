@@ -5,8 +5,7 @@
     "types": ["jest"],
     "paths": {
       "@/*": [
-        "./src/*",
-        "./packages/core/src/*"
+        "./src/*"
       ],
       "@/assets/*": [
         "./assets/*"
