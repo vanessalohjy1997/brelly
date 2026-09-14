@@ -8,9 +8,9 @@ import {
   onSnapshot,
   setDoc,
   type Unsubscribe,
-} from "@react-native-firebase/firestore";
+} from "@brelly/platform/firestore";
 
-import { getFirebaseAuth, getFirebaseFirestore } from "@/services/firebase";
+import { getFirebaseAuth, getFirebaseFirestore } from "@brelly/platform/firebase";
 import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
 import { notifyCloudSyncFailure } from "@/utils/saveWithFeedback";
 import type { Routine } from "@/types/routine";
