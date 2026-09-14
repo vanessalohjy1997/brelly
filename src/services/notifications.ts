@@ -159,17 +159,6 @@ export async function cancelNotification(notificationId: string): Promise<void> 
 }
 
 /**
- * Clears the whole OS queue. Only signing out wants this: every scheduled
- * alert belongs to a slot in the account being left, and the handles that
- * would let them be cancelled one at a time go with the local stores that
- * sign-out empties. An alert left behind would fire days later naming a stop
- * the app no longer has.
- */
-export async function cancelAllNotifications(): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
-}
-
-/**
  * How long a test alert waits before firing.
  *
  * Long enough to close Settings and put the phone down, short enough that
