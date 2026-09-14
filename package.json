@@ -97,8 +97,7 @@
       "<rootDir>/src/test/emulator/"
     ],
     "moduleNameMapper": {
-      "\\.(css)$": "<rootDir>/__mocks__/styleMock.js",
-      "^@/(.*)$": "<rootDir>/src/$1"
+      "\\.(css)$": "<rootDir>/__mocks__/styleMock.js"
     },
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
