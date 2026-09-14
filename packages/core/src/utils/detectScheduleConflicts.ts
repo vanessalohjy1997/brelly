@@ -1,4 +1,4 @@
-import type { ItinerarySlot } from "@/types/itinerary";
+import type { ItinerarySlot } from "../types/itinerary";
 
 export type ConflictKind = "overlap" | "implausible-gap";
 

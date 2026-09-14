@@ -18,21 +18,21 @@ import {
 import { cancelAllNotifications } from "@brelly/platform/notifications";
 import { platformStorage } from "@brelly/platform/storage";
 
-import { attachCloudListeners, detachCloudListeners } from "@/services/cloudListeners";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
-import type { ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { migrationFlagKey } from "@/utils/migrationFlagKey";
+import { attachCloudListeners, detachCloudListeners } from "./cloudListeners";
+import { useCloudSyncStore } from "../store/cloudSyncStore";
+import { useItineraryStore } from "../store/itineraryStore";
+import { useRoutineStore } from "../store/routineStore";
+import { DEFAULT_SETTINGS, useSettingsStore } from "../store/settingsStore";
+import type { ItinerarySlot } from "../types/itinerary";
+import type { Routine } from "../types/routine";
+import { migrationFlagKey } from "../utils/migrationFlagKey";
 import {
   resolveMergeWrites,
   type ExistingAccountIds,
   type LocalSnapshot,
-} from "@/utils/mergeLocalIntoAccount";
-import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
-import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
+} from "../utils/mergeLocalIntoAccount";
+import { omitUndefinedFields } from "../utils/omitUndefinedFields";
+import { stripNotificationHandles } from "../utils/stripNotificationHandles";
 
 /** Firestore's own per-batch cap is 500; chunking below it leaves headroom —
  * same rationale as `localDataMigration.ts`'s constant of the same name. */

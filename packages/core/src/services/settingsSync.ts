@@ -6,11 +6,11 @@ import {
 } from "@brelly/platform/firestore";
 
 import { getFirebaseAuth, getFirebaseFirestore } from "@brelly/platform/firebase";
-import { notifyCloudSyncFailure } from "@/utils/saveWithFeedback";
+import { notifyCloudSyncFailure } from "../utils/saveWithFeedback";
 import {
   migrateSettingsDoc,
   SETTINGS_SCHEMA_VERSION,
-} from "@/utils/migrateSettingsDoc";
+} from "../utils/migrateSettingsDoc";
 
 function settingsDocRef(uid: string) {
   return doc(getFirebaseFirestore(), "users", uid, "settings", "app");

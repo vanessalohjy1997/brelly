@@ -1,11 +1,11 @@
-import type { Routine } from "@/types/routine";
+import type { Routine } from "../types/routine";
 import {
   materializedSlotId,
   routineOccurrenceDates,
   routineSlotForDate,
   routineUpdatesFromSlot,
   toTimeOfDay,
-} from "@/utils/routineOccurrences";
+} from "./routineOccurrences";
 
 /**
  * 3 Aug 2026 is a Monday, so 8 Aug is the Saturday of that week and 10 Aug the

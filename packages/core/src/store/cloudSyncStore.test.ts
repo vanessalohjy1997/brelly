@@ -5,7 +5,7 @@ import {
   useCloudBootstrapError,
   useCloudReady,
   useCloudSyncStore,
-} from "@/store/cloudSyncStore";
+} from "./cloudSyncStore";
 
 beforeEach(() => {
   useCloudSyncStore.setState({

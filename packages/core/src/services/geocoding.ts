@@ -1,4 +1,4 @@
-import { getCoreConfig } from "@brelly/core";
+import { getCoreConfig } from "../config";
 
 const PLACES_BASE_URL = "https://places.googleapis.com/v1";
 const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";

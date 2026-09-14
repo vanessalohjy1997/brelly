@@ -1,4 +1,4 @@
-import { showToast, type ToastAction } from "@/store/toastStore";
+import { showToast, type ToastAction } from "../store/toastStore";
 
 export type SaveResult<T> =
   | { ok: true; value: T }

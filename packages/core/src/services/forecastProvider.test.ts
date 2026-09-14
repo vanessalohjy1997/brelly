@@ -1,11 +1,11 @@
-import { getForecastForSlotByProvider } from "@/services/forecastProvider";
-import { getOpenMeteoForecastForSlot } from "@/services/openMeteo";
-import { getForecastForSlot } from "@/services/weather";
+import { getForecastForSlotByProvider } from "./forecastProvider";
+import { getOpenMeteoForecastForSlot } from "./openMeteo";
+import { getForecastForSlot } from "./weather";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("./weather", () => ({
   getForecastForSlot: jest.fn(),
 }));
-jest.mock("@/services/openMeteo", () => ({
+jest.mock("./openMeteo", () => ({
   getOpenMeteoForecastForSlot: jest.fn(),
 }));
 

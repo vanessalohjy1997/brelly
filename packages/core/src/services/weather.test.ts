@@ -1,4 +1,4 @@
-import { getForecastForSlot, getUpcomingForecast } from "@/services/weather";
+import { getForecastForSlot, getUpcomingForecast } from "./weather";
 
 // Fixtures mirror the *actual* data.gov.sg response shapes (verified via live
 // curl — see PLAN.md), not the shapes originally assumed by the types. In

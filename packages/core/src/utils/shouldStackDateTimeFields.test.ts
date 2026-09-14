@@ -1,7 +1,7 @@
 import {
   MinTimePickerWidth,
   shouldStackDateTimeFields,
-} from "@/utils/shouldStackDateTimeFields";
+} from "./shouldStackDateTimeFields";
 
 describe("shouldStackDateTimeFields", () => {
   it("stays side by side on a phone-width form", () => {

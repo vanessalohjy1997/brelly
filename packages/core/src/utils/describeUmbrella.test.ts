@@ -1,4 +1,4 @@
-import { describeUmbrella } from "@/utils/describeUmbrella";
+import { describeUmbrella } from "./describeUmbrella";
 
 // Real NEA forecast strings — the 2hr nowcast and 24hr/4day tiers word these
 // differently, and the verdict has to read all of them.

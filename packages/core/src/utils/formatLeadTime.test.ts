@@ -1,5 +1,5 @@
-import { formatLeadTime, formatLeadTimeShort } from "@/utils/formatLeadTime";
-import { RAIN_LEAD_MINUTES } from "@/store/settingsStore";
+import { formatLeadTime, formatLeadTimeShort } from "./formatLeadTime";
+import { RAIN_LEAD_MINUTES } from "../store/settingsStore";
 
 describe("formatLeadTime", () => {
   it.each([

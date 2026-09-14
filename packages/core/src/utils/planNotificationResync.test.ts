@@ -1,5 +1,5 @@
-import type { ItinerarySlot } from "@/types/itinerary";
-import { planNotificationResync } from "@/utils/planNotificationResync";
+import type { ItinerarySlot } from "../types/itinerary";
+import { planNotificationResync } from "./planNotificationResync";
 
 function slot(overrides: Partial<ItinerarySlot> = {}): ItinerarySlot {
   return {

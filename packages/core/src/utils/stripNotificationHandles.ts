@@ -1,4 +1,4 @@
-import type { ItinerarySlot } from "@/types/itinerary";
+import type { ItinerarySlot } from "../types/itinerary";
 
 /**
  * Drops the bookkeeping that only means anything on the device that wrote it.

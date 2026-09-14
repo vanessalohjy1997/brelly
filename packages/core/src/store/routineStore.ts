@@ -7,8 +7,8 @@ import {
   removeExceptionField,
   writeRoutine,
   writeRoutineFields,
-} from "@/services/routinesSync";
-import type { Routine } from "@/types/routine";
+} from "../services/routinesSync";
+import type { Routine } from "../types/routine";
 
 // ─── Store types ──────────────────────────────────────────────────────────────
 

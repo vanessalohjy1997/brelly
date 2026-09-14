@@ -2,7 +2,7 @@ import {
   migrateSettingsDoc,
   SETTINGS_SCHEMA_VERSION,
   toCloudSettingsFields,
-} from "@/utils/migrateSettingsDoc";
+} from "./migrateSettingsDoc";
 
 describe("migrateSettingsDoc", () => {
   it("sets hasSeenOnboarding for anything predating version 2", () => {

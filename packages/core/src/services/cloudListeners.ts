@@ -1,10 +1,10 @@
-import { subscribeToSlotsCollection } from "@/services/itinerarySync";
-import { subscribeToRoutinesCollection } from "@/services/routinesSync";
-import { subscribeToSettingsDoc } from "@/services/settingsSync";
-import { describeCloudSyncError, useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
+import { subscribeToSlotsCollection } from "./itinerarySync";
+import { subscribeToRoutinesCollection } from "./routinesSync";
+import { subscribeToSettingsDoc } from "./settingsSync";
+import { describeCloudSyncError, useCloudSyncStore } from "../store/cloudSyncStore";
+import { useItineraryStore } from "../store/itineraryStore";
+import { useRoutineStore } from "../store/routineStore";
+import { DEFAULT_SETTINGS, useSettingsStore } from "../store/settingsStore";
 
 type Unsubs = {
   settings?: () => void;

@@ -1,7 +1,7 @@
 import {
   degreesToCompass,
   wmoCodeToForecastText,
-} from "@/utils/wmoWeatherCode";
+} from "./wmoWeatherCode";
 
 describe("wmoCodeToForecastText", () => {
   it("maps clear sky to Fair, day and night", () => {

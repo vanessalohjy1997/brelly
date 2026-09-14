@@ -1,4 +1,4 @@
-import { formatTempRange } from "@/utils/formatTempRange";
+import { formatTempRange } from "./formatTempRange";
 
 describe("formatTempRange", () => {
   it("rounds and formats a low/high range as a Celsius string", () => {

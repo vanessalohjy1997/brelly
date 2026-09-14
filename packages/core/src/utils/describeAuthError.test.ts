@@ -1,4 +1,4 @@
-import { authErrorCode, describeAuthError } from "@/utils/describeAuthError";
+import { authErrorCode, describeAuthError } from "./describeAuthError";
 
 describe("authErrorCode", () => {
   it("reads the code off a Firebase error", () => {

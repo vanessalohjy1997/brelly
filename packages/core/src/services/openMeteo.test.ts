@@ -2,7 +2,7 @@ import {
   fetchOpenMeteoForecast,
   getOpenMeteoForecastForSlot,
   normalizeOpenMeteoForecast,
-} from "@/services/openMeteo";
+} from "./openMeteo";
 
 // Trimmed to a few hours/one day, but the key names and shape mirror a real
 // curl of api.open-meteo.com/v1/forecast (?hourly=temperature_2m,weathercode,

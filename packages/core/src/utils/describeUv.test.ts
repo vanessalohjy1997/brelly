@@ -1,4 +1,4 @@
-import { describeUv, needsUmbrellaForSun } from "@/utils/describeUv";
+import { describeUv, needsUmbrellaForSun } from "./describeUv";
 
 describe("describeUv", () => {
   it.each([

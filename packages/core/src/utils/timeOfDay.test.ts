@@ -3,7 +3,7 @@ import {
   minutesSinceMidnight,
   nextOccurrenceOfTime,
   parseTimeOfDay,
-} from "@/utils/timeOfDay";
+} from "./timeOfDay";
 
 describe("parseTimeOfDay", () => {
   it("parses a padded 24-hour time", () => {

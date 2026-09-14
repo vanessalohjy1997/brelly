@@ -1,9 +1,9 @@
-import { findNearest } from "@/constants/neaRegions";
+import { findNearest } from "../constants/neaRegions";
 import type {
   LiveConditions,
   StationDataset,
   StationReadings,
-} from "@/types/weather";
+} from "../types/weather";
 
 const BASE_URL = "https://api-open.data.gov.sg/v2/real-time/api";
 

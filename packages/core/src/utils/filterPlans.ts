@@ -1,5 +1,5 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { resolveSlotKind } from "@/utils/slotKind";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
+import { resolveSlotKind } from "./slotKind";
 
 /**
  * The text a search runs against: what the stop is called, where it is, which

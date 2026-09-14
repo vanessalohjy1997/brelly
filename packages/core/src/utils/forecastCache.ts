@@ -1,4 +1,4 @@
-import type { SlotForecast } from "@/services/weather";
+import type { SlotForecast } from "../services/weather";
 
 /**
  * The slice of a key/value store this needs. Declared structurally rather

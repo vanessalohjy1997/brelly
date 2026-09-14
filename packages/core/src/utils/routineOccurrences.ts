@@ -1,7 +1,7 @@
-import type { ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { parseDateKey, shiftDays } from "@/utils/dateKeys";
-import { resolveFrequency } from "@/utils/routineFrequency";
+import type { ItinerarySlot } from "../types/itinerary";
+import type { Routine } from "../types/routine";
+import { parseDateKey, shiftDays } from "./dateKeys";
+import { resolveFrequency } from "./routineFrequency";
 
 /**
  * How far ahead a routine is filled in.

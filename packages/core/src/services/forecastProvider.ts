@@ -1,7 +1,7 @@
-import { getOpenMeteoForecastForSlot } from "@/services/openMeteo";
-import { getForecastForSlot, type SlotForecast } from "@/services/weather";
-import type { NeaRegion } from "@/types/weather";
-import type { WeatherProvider } from "@/utils/weatherProvider";
+import { getOpenMeteoForecastForSlot } from "./openMeteo";
+import { getForecastForSlot, type SlotForecast } from "./weather";
+import type { NeaRegion } from "../types/weather";
+import type { WeatherProvider } from "../utils/weatherProvider";
 
 /**
  * The one place that branches by weather provider. Every forecast-fetching

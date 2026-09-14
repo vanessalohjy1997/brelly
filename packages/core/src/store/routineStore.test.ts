@@ -4,10 +4,10 @@ import {
   removeExceptionField,
   writeRoutine,
   writeRoutineFields,
-} from "@/services/routinesSync";
-import { useRoutineStore } from "@/store/routineStore";
+} from "../services/routinesSync";
+import { useRoutineStore } from "./routineStore";
 
-jest.mock("@/services/routinesSync", () => ({
+jest.mock("../services/routinesSync", () => ({
   writeRoutine: jest.fn(),
   writeRoutineFields: jest.fn(),
   deleteRoutineDoc: jest.fn(),

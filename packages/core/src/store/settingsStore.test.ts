@@ -1,7 +1,7 @@
-import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
-import { writeSettingsFields } from "@/services/settingsSync";
+import { DEFAULT_SETTINGS, useSettingsStore } from "./settingsStore";
+import { writeSettingsFields } from "../services/settingsSync";
 
-jest.mock("@/services/settingsSync", () => ({
+jest.mock("../services/settingsSync", () => ({
   writeSettingsFields: jest.fn(),
 }));
 

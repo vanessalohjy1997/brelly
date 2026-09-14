@@ -1,4 +1,4 @@
-import { derivePackingList } from "@/utils/derivePackingList";
+import { derivePackingList } from "./derivePackingList";
 
 describe("derivePackingList", () => {
   it("suggests umbrella for rainy forecasts", () => {

@@ -1,4 +1,4 @@
-import { formatPeriodLabel } from "@/utils/formatPeriodLabel";
+import { formatPeriodLabel } from "./formatPeriodLabel";
 
 describe("formatPeriodLabel", () => {
   it("labels 6am–11:59am as Morning", () => {

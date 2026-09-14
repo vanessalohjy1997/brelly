@@ -1,6 +1,6 @@
-import type { ItinerarySlot } from "@/types/itinerary";
-import { planNotificationResync } from "@/utils/planNotificationResync";
-import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
+import type { ItinerarySlot } from "../types/itinerary";
+import { planNotificationResync } from "./planNotificationResync";
+import { stripNotificationHandles } from "./stripNotificationHandles";
 
 const scheduled: ItinerarySlot = {
   id: "slot-1",

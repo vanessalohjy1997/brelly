@@ -1,4 +1,4 @@
-import { formatRelativeTimestamp } from "@/utils/formatRelativeTimestamp";
+import { formatRelativeTimestamp } from "./formatRelativeTimestamp";
 
 // NEA stamps its responses with a +08:00 offset rather than Z — using the
 // real format here so the parsing is exercised the way production sees it.

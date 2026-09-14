@@ -1,10 +1,10 @@
-import { configureCore } from "@brelly/core";
+import { configureCore } from "../index";
 
 import {
   getPlaceDetails,
   reverseGeocode,
   searchPlaces,
-} from "@/services/geocoding";
+} from "./geocoding";
 
 /**
  * Trimmed from real Geocoding API responses for Ang Mo Kio (1.3785, 103.8560)

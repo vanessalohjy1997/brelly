@@ -1,5 +1,5 @@
-import { findNearestArea } from "@/constants/neaRegions";
-import type { NeaAreaMetadata } from "@/types/weather";
+import { findNearestArea } from "./neaRegions";
+import type { NeaAreaMetadata } from "../types/weather";
 
 // Real label_location coordinates from data.gov.sg's two-hr-forecast area_metadata.
 const AREA_METADATA: NeaAreaMetadata[] = [

@@ -1,6 +1,6 @@
-import type { SlotForecast } from "@/services/weather";
-import type { ItinerarySlot } from "@/types/itinerary";
-import { describeUmbrella, type UmbrellaReason } from "@/utils/describeUmbrella";
+import type { SlotForecast } from "./weather";
+import type { ItinerarySlot } from "../types/itinerary";
+import { describeUmbrella, type UmbrellaReason } from "../utils/describeUmbrella";
 
 /**
  * The single-glance payload the WidgetKit extension reads across the App-Group

@@ -1,10 +1,10 @@
-import { getRegionFromCoordinates } from "@/constants/neaRegions";
+import { getRegionFromCoordinates } from "../constants/neaRegions";
 import { generateDocId } from "@brelly/platform/firebase";
-import { deleteSlotDoc, writeSlot, writeSlotFields } from "@/services/itinerarySync";
-import { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { toDateKey } from "@/utils/dateKeys";
-import { sortSlotsByStart } from "@/utils/planSelectors";
-import { deriveWeatherProvider } from "@/utils/weatherProvider";
+import { deleteSlotDoc, writeSlot, writeSlotFields } from "../services/itinerarySync";
+import { DayPlan, ItinerarySlot } from "../types/itinerary";
+import { toDateKey } from "../utils/dateKeys";
+import { sortSlotsByStart } from "../utils/planSelectors";
+import { deriveWeatherProvider } from "../utils/weatherProvider";
 import { create } from "zustand";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
-import type { SlotForecast } from "@/services/weather";
+import type { SlotForecast } from "./weather";
 import {
   buildWidgetSnapshot,
   type WidgetForecastEntry,
-} from "@/services/widgetSnapshot";
-import type { ItinerarySlot } from "@/types/itinerary";
+} from "./widgetSnapshot";
+import type { ItinerarySlot } from "../types/itinerary";
 
 const NOW = new Date(2026, 6, 31, 8, 0);
 

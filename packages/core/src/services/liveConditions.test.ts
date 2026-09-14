@@ -3,8 +3,8 @@ import {
   getLiveConditions,
   normalizeStationReadings,
   readingNearest,
-} from "@/services/liveConditions";
-import type { StationDataset, StationReadings } from "@/types/weather";
+} from "./liveConditions";
+import type { StationDataset, StationReadings } from "../types/weather";
 
 // Mirrors a live `/v2/real-time/api/rainfall` response: stations carry their
 // coordinates under `location`, readings are a list of batches (newest first)

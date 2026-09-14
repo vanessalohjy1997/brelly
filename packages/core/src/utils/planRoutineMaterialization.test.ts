@@ -1,7 +1,7 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { planRoutineMaterialization } from "@/utils/planRoutineMaterialization";
-import { routineSlotForDate } from "@/utils/routineOccurrences";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
+import type { Routine } from "../types/routine";
+import { planRoutineMaterialization } from "./planRoutineMaterialization";
+import { routineSlotForDate } from "./routineOccurrences";
 
 /** 3 Aug 2026 is a Monday; 8 and 9 Aug are that week's Saturday and Sunday. */
 const MONDAY = "2026-08-03";

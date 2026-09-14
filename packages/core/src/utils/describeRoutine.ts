@@ -1,6 +1,6 @@
-import type { RepeatRule } from "@/types/routine";
-import { parseDateKey } from "@/utils/dateKeys";
-import { resolveFrequency } from "@/utils/routineFrequency";
+import type { RepeatRule } from "../types/routine";
+import { parseDateKey } from "./dateKeys";
+import { resolveFrequency } from "./routineFrequency";
 
 /** Monday first, because that is how a week reads on a schedule. */
 export const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];

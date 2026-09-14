@@ -1,5 +1,5 @@
-import type { WeatherProvider } from "@/utils/weatherProvider";
-import type { SlotKind } from "@/utils/slotKind";
+import type { WeatherProvider } from "../utils/weatherProvider";
+import type { SlotKind } from "../utils/slotKind";
 
 import { NeaRegion } from "./weather";
 

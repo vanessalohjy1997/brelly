@@ -1,7 +1,7 @@
 import {
   describeOtaUpdateState,
   type OtaUpdateSignals,
-} from "@/utils/otaUpdateState";
+} from "./otaUpdateState";
 
 const idle: OtaUpdateSignals = {
   isEnabled: true,

@@ -15,6 +15,38 @@ module.exports = defineConfig([
     ignores: ["dist/*", ".expo/*"],
   },
   {
+    // The boundary, enforced rather than described. Core is compiled inside
+    // each app's project, so an app-only import here would typecheck in the
+    // Expo app and fail in the Next one — which is the worst possible place to
+    // find out. `@/` still resolves into `packages/core` for now, so without
+    // this rule a core file could reach back into `src/` and nothing would say
+    // so until the fallback is dropped.
+    //
+    // What core is allowed to name: relative paths inside itself, real npm
+    // packages, and `@brelly/platform/*` — the seams each app resolves to its
+    // own implementations.
+    files: ["packages/core/**/*.ts", "packages/core/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*"],
+              message:
+                "packages/core must not import app code. Use a relative path if the file is in core, or a @brelly/platform/* seam if it is not.",
+            },
+            {
+              group: ["@brelly/core", "@brelly/core/*"],
+              message:
+                "packages/core must not import itself by package name — use a relative path.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: [
       "jest.setup.js",
       "__mocks__/**/*.js",

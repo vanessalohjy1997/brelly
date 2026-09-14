@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
-import { writeSettingsFields } from "@/services/settingsSync";
-import type { ThemePreference } from "@/utils/resolveColorScheme";
+import { writeSettingsFields } from "../services/settingsSync";
+import type { ThemePreference } from "../utils/resolveColorScheme";
 
 export type QuietHours = {
   enabled: boolean;

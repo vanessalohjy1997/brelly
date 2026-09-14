@@ -1,4 +1,4 @@
-import { degreesToCompass, wmoCodeToForecastText } from "@/utils/wmoWeatherCode";
+import { degreesToCompass, wmoCodeToForecastText } from "../utils/wmoWeatherCode";
 
 import type { SlotForecast } from "./weather";
 

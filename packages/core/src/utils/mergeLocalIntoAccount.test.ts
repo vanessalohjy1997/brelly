@@ -1,6 +1,6 @@
-import { resolveMergeWrites } from "@/utils/mergeLocalIntoAccount";
-import type { ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
+import { resolveMergeWrites } from "./mergeLocalIntoAccount";
+import type { ItinerarySlot } from "../types/itinerary";
+import type { Routine } from "../types/routine";
 
 function slot(overrides: Partial<ItinerarySlot> = {}): ItinerarySlot {
   return {

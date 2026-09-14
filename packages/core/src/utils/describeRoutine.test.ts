@@ -1,4 +1,4 @@
-import { describeRoutine, describeWeekdays, ordinal } from "@/utils/describeRoutine";
+import { describeRoutine, describeWeekdays, ordinal } from "./describeRoutine";
 
 describe("describeWeekdays", () => {
   it("names whole blocks by their shape rather than listing them", () => {

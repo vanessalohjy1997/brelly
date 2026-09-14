@@ -1,5 +1,5 @@
-import type { DayPlan } from "@/types/itinerary";
-import { sortSlotsByStart } from "@/utils/planSelectors";
+import type { DayPlan } from "../types/itinerary";
+import { sortSlotsByStart } from "./planSelectors";
 
 /**
  * Splits every plan into the stops still ahead and the stops already finished,

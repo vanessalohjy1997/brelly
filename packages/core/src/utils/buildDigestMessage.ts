@@ -1,4 +1,4 @@
-import { shouldNotifyForRain } from "@/utils/shouldNotifyForRain";
+import { shouldNotifyForRain } from "./shouldNotifyForRain";
 
 export type DigestEntry = {
   label: string;

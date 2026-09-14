@@ -1,5 +1,5 @@
-import type { ItinerarySlot } from "@/types/itinerary";
-import { detectScheduleConflicts } from "@/utils/detectScheduleConflicts";
+import type { ItinerarySlot } from "../types/itinerary";
+import { detectScheduleConflicts } from "./detectScheduleConflicts";
 
 function slot(
   overrides: Partial<ItinerarySlot> & Pick<ItinerarySlot, "label" | "startTime" | "endTime">,

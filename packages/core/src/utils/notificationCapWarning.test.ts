@@ -1,4 +1,4 @@
-import { assessNotificationCap } from "@/utils/notificationCapWarning";
+import { assessNotificationCap } from "./notificationCapWarning";
 
 describe("assessNotificationCap", () => {
   it("reports safe when well below cap", () => {

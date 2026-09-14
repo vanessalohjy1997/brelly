@@ -1,4 +1,4 @@
-import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
+import { omitUndefinedFields } from "./omitUndefinedFields";
 
 describe("omitUndefinedFields", () => {
   it("drops keys whose value is undefined", () => {

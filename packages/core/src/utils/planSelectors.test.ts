@@ -1,4 +1,4 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
 import {
   allSlotsWithDates,
   findCurrentOrNextSlot,
@@ -7,7 +7,7 @@ import {
   groupSlotsIntoPlans,
   sortSlotsByStart,
   upcomingSlots,
-} from "@/utils/planSelectors";
+} from "./planSelectors";
 
 function slot(id: string, startTime: string, endTime = startTime): ItinerarySlot {
   return {

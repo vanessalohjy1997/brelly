@@ -1,4 +1,4 @@
-import type { UpcomingPeriodForecast } from "@/services/weather";
+import type { UpcomingPeriodForecast } from "../services/weather";
 
 const RAIN_KEYWORDS = ["rain", "shower", "thunder", "drizzle"];
 

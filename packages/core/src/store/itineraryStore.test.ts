@@ -2,10 +2,10 @@ import {
   deleteSlotDoc,
   writeSlot,
   writeSlotFields,
-} from "@/services/itinerarySync";
-import { useItineraryStore } from "@/store/itineraryStore";
+} from "../services/itinerarySync";
+import { useItineraryStore } from "./itineraryStore";
 
-jest.mock("@/services/itinerarySync", () => ({
+jest.mock("../services/itinerarySync", () => ({
   writeSlot: jest.fn(),
   writeSlotFields: jest.fn(),
   deleteSlotDoc: jest.fn(),

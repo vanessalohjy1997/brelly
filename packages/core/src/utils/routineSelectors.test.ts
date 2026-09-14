@@ -1,5 +1,5 @@
-import type { Routine } from "@/types/routine";
-import { findRoutineById, routineForSlot } from "@/utils/routineSelectors";
+import type { Routine } from "../types/routine";
+import { findRoutineById, routineForSlot } from "./routineSelectors";
 
 const routines: Routine[] = [
   {

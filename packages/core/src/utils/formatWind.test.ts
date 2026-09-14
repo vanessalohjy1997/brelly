@@ -1,4 +1,4 @@
-import { formatWindSpeedKnots } from "@/utils/formatWind";
+import { formatWindSpeedKnots } from "./formatWind";
 
 describe("formatWindSpeedKnots", () => {
   it("converts knots to km/h", () => {

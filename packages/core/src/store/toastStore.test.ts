@@ -2,7 +2,7 @@ import {
   dismissToast,
   showToast,
   useToastStore,
-} from "@/store/toastStore";
+} from "./toastStore";
 
 beforeEach(() => {
   useToastStore.setState({ toast: null, modalHosts: [] });

@@ -1,5 +1,5 @@
-import type { RoutineFrequency } from "@/utils/routineFrequency";
-import type { SlotKind } from "@/utils/slotKind";
+import type { RoutineFrequency } from "../utils/routineFrequency";
+import type { SlotKind } from "../utils/slotKind";
 
 /**
  * A standing commitment — "office, Monday to Friday, 9 to 6".

@@ -1,5 +1,5 @@
-import { needsUmbrellaForSun } from "@/utils/describeUv";
-import { shouldNotifyForRain } from "@/utils/shouldNotifyForRain";
+import { needsUmbrellaForSun } from "./describeUv";
+import { shouldNotifyForRain } from "./shouldNotifyForRain";
 
 export type UmbrellaReason = "rain" | "sun" | "both" | "none";
 

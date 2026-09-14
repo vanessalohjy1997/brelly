@@ -1,4 +1,4 @@
-import type { UvIndexReading } from "@/types/weather";
+import type { UvIndexReading } from "../types/weather";
 
 const BASE_URL = "https://api-open.data.gov.sg/v2/real-time/api";
 

@@ -1,5 +1,5 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { toDateKey } from "@/utils/dateKeys";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
+import { toDateKey } from "./dateKeys";
 
 /**
  * A stop, expressed the way a calendar wants it.

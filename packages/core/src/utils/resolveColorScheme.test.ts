@@ -1,4 +1,4 @@
-import { resolveColorScheme } from "@/utils/resolveColorScheme";
+import { resolveColorScheme } from "./resolveColorScheme";
 
 describe("resolveColorScheme", () => {
   it("follows the system scheme when preference is 'system'", () => {

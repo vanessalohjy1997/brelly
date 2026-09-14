@@ -1,4 +1,4 @@
-import { parseDateKey, shiftDays, toDateKey, todayKey } from "@/utils/dateKeys";
+import { parseDateKey, shiftDays, toDateKey, todayKey } from "./dateKeys";
 
 describe("toDateKey", () => {
   it("formats a date as YYYY-MM-DD", () => {

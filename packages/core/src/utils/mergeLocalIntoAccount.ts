@@ -1,6 +1,6 @@
-import type { ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
+import type { ItinerarySlot } from "../types/itinerary";
+import type { Routine } from "../types/routine";
+import { stripNotificationHandles } from "./stripNotificationHandles";
 
 export type LocalSnapshot = {
   slots: { date: string; slot: ItinerarySlot }[];

@@ -3,7 +3,7 @@ import {
   SLOT_KIND_HINTS,
   SLOT_KIND_LABELS,
   SLOT_KINDS,
-} from "@/utils/slotKind";
+} from "./slotKind";
 
 describe("resolveSlotKind", () => {
   it("reads an untagged stop as outdoor", () => {

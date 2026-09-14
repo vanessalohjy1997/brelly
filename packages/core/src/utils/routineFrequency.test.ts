@@ -2,7 +2,7 @@ import {
   FREQUENCY_LABELS,
   resolveFrequency,
   ROUTINE_FREQUENCIES,
-} from "@/utils/routineFrequency";
+} from "./routineFrequency";
 
 describe("resolveFrequency", () => {
   it("reads an absent frequency as weekly, so old routines don't change", () => {

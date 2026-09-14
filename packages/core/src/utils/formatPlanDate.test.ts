@@ -1,4 +1,4 @@
-import { formatPlanDate } from "@/utils/formatPlanDate";
+import { formatPlanDate } from "./formatPlanDate";
 
 const TODAY = "2026-08-01";
 

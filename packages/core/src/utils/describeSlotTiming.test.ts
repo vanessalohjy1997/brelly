@@ -1,4 +1,4 @@
-import { describeSlotTiming } from "@/utils/describeSlotTiming";
+import { describeSlotTiming } from "./describeSlotTiming";
 
 const NOW = new Date(2026, 7, 1, 14, 0); // 1 Aug 2026, 2pm local
 

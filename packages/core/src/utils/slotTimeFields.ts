@@ -1,4 +1,4 @@
-import { toDateKey } from "@/utils/dateKeys";
+import { toDateKey } from "./dateKeys";
 
 const DAY = 24 * 60 * 60 * 1000;
 

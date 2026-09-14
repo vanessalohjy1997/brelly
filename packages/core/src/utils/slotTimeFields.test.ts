@@ -1,11 +1,11 @@
-import { toDateKey } from "@/utils/dateKeys";
+import { toDateKey } from "./dateKeys";
 import {
   applyDayToRange,
   applyEndTime,
   applyStartTime,
   combineDateAndTime,
   endsOnAnotherDay,
-} from "@/utils/slotTimeFields";
+} from "./slotTimeFields";
 
 function at(day: number, hour: number, minute = 0): Date {
   return new Date(2026, 7, day, hour, minute, 0, 0);

@@ -1,11 +1,11 @@
-import type { SlotForecast } from "@/services/weather";
+import type { SlotForecast } from "../services/weather";
 import {
   DEFAULT_MAX_AGE_MS,
   forecastCacheKey,
   readCachedForecast,
   writeCachedForecast,
   type CacheStorage,
-} from "@/utils/forecastCache";
+} from "./forecastCache";
 
 function fakeStorage(initial: Record<string, string> = {}): CacheStorage & {
   contents: Record<string, string>;

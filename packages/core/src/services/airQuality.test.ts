@@ -1,4 +1,4 @@
-import { fetchUvIndex, normalizeUvIndex } from "@/services/airQuality";
+import { fetchUvIndex, normalizeUvIndex } from "./airQuality";
 
 // Mirrors `/v2/real-time/api/uv` — `index` holds every hour recorded so far
 // today, and the API happens to return it newest-first.

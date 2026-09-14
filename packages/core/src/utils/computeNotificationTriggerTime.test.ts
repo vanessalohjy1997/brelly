@@ -1,4 +1,4 @@
-import { computeNotificationTriggerTime } from "@/utils/computeNotificationTriggerTime";
+import { computeNotificationTriggerTime } from "./computeNotificationTriggerTime";
 
 describe("computeNotificationTriggerTime", () => {
   it("returns a time the default lead (45min) before the slot start, when that's still in the future", () => {

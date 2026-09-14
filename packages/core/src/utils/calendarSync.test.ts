@@ -1,4 +1,4 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
 import {
   isAlreadyPlanned,
   slotToCalendarEvent,
@@ -6,7 +6,7 @@ import {
   summarizeImport,
   toImportableEvents,
   type ImportableEvent,
-} from "@/utils/calendarSync";
+} from "./calendarSync";
 
 const NOW = new Date(2026, 7, 1, 14, 0);
 

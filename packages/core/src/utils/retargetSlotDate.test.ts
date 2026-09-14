@@ -1,4 +1,4 @@
-import { retargetSlotDate } from "@/utils/retargetSlotDate";
+import { retargetSlotDate } from "./retargetSlotDate";
 
 describe("retargetSlotDate", () => {
   it("moves the date forward while keeping the same local time-of-day", () => {

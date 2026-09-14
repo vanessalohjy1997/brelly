@@ -1,4 +1,4 @@
-import { buildDigestMessage, type DigestEntry } from "@/utils/buildDigestMessage";
+import { buildDigestMessage, type DigestEntry } from "./buildDigestMessage";
 
 const NOW = new Date(2026, 6, 31, 7, 30);
 

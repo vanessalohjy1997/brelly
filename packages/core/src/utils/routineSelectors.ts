@@ -1,4 +1,4 @@
-import type { Routine } from "@/types/routine";
+import type { Routine } from "../types/routine";
 
 /**
  * Pure lookups over the routines array.

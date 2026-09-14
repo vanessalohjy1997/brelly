@@ -1,4 +1,4 @@
-import { NeaAreaMetadata, NeaRegion } from "@/types/weather";
+import { NeaAreaMetadata, NeaRegion } from "../types/weather";
 
 // ─── Region boundaries ────────────────────────────────────────────────────────
 // Derived from NEA's regionMetadata coordinates in the API response.

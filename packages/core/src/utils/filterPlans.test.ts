@@ -1,11 +1,11 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import type { NeaRegion } from "@/types/weather";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
+import type { NeaRegion } from "../types/weather";
 import {
   countSlots,
   filterPlans,
   searchTerms,
   slotMatches,
-} from "@/utils/filterPlans";
+} from "./filterPlans";
 
 function slot(
   id: string,

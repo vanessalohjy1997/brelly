@@ -1,5 +1,5 @@
-import type { ItinerarySlot } from "@/types/itinerary";
-import { shouldNotifyForRain } from "@/utils/shouldNotifyForRain";
+import type { ItinerarySlot } from "../types/itinerary";
+import { shouldNotifyForRain } from "./shouldNotifyForRain";
 
 export type ResyncEntry = {
   date: string;

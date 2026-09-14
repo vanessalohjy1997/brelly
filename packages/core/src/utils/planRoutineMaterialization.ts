@@ -1,12 +1,12 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { shiftDays, todayKey } from "@/utils/dateKeys";
-import { allSlotsWithDates } from "@/utils/planSelectors";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
+import type { Routine } from "../types/routine";
+import { shiftDays, todayKey } from "./dateKeys";
+import { allSlotsWithDates } from "./planSelectors";
 import {
   routineOccurrenceDates,
   routineSlotForDate,
   type RoutineSlotInput,
-} from "@/utils/routineOccurrences";
+} from "./routineOccurrences";
 
 export type MaterializeAction =
   | { type: "add"; date: string; slot: RoutineSlotInput }

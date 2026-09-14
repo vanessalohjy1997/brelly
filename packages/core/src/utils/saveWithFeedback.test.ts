@@ -1,5 +1,5 @@
-import { useToastStore } from "@/store/toastStore";
-import { notifyCloudSyncFailure, saveWithFeedback } from "@/utils/saveWithFeedback";
+import { useToastStore } from "../store/toastStore";
+import { notifyCloudSyncFailure, saveWithFeedback } from "./saveWithFeedback";
 
 const MESSAGES = {
   success: "Rain alerts on",

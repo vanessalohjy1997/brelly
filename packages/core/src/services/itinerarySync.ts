@@ -9,9 +9,9 @@ import {
 } from "@brelly/platform/firestore";
 
 import { getFirebaseAuth, getFirebaseFirestore } from "@brelly/platform/firebase";
-import { groupSlotsIntoPlans, type CloudSlot } from "@/utils/planSelectors";
-import { notifyCloudSyncFailure } from "@/utils/saveWithFeedback";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import { groupSlotsIntoPlans, type CloudSlot } from "../utils/planSelectors";
+import { notifyCloudSyncFailure } from "../utils/saveWithFeedback";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
 
 /**
  * `notificationId`/`notificationLeadMinutes` must never reach Firestore in

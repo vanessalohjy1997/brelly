@@ -1,5 +1,5 @@
-import type { UpcomingPeriodForecast } from "@/services/weather";
-import { suggestDryWindow } from "@/utils/suggestDryWindow";
+import type { UpcomingPeriodForecast } from "../services/weather";
+import { suggestDryWindow } from "./suggestDryWindow";
 
 function period(
   start: string,

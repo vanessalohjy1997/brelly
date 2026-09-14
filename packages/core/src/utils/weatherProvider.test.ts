@@ -2,7 +2,7 @@ import {
   deriveWeatherProvider,
   isInSingapore,
   resolveSlotProvider,
-} from "@/utils/weatherProvider";
+} from "./weatherProvider";
 
 describe("isInSingapore", () => {
   it("is true for the mainland centre", () => {

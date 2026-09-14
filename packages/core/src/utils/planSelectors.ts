@@ -1,4 +1,4 @@
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import type { DayPlan, ItinerarySlot } from "../types/itinerary";
 
 export type FoundSlot = { date: string; slot: ItinerarySlot };
 

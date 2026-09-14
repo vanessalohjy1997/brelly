@@ -1,4 +1,4 @@
-import { parseDateKey, shiftDays } from "@/utils/dateKeys";
+import { parseDateKey, shiftDays } from "./dateKeys";
 
 /**
  * A day's heading, relative to today where a name is more useful than a date.
