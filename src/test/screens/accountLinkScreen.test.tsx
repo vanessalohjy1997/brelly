@@ -6,8 +6,8 @@ import { linkProvider } from "@brelly/platform/auth";
 import AccountLinkScreen from "@/app/account-link";
 import {
   mergeIntoExistingAccount,
+  readAnonymousData,
   signOutOfAccount,
-  snapshotLocalData,
 } from "@/services/accountLinkService";
 import { useToastStore } from "@/store/toastStore";
 import { fakeAuth } from "@/test/fakeAuth";
@@ -16,8 +16,8 @@ import { promptMergeChoice } from "@/utils/promptMergeChoice";
 
 jest.mock("@/services/accountLinkService", () => ({
   mergeIntoExistingAccount: jest.fn(),
+  readAnonymousData: jest.fn(),
   signOutOfAccount: jest.fn(),
-  snapshotLocalData: jest.fn(),
 }));
 // The screen no longer acquires a credential and then links it — those were
 // two steps only because a phone allows them to be. It states the intent and
@@ -32,7 +32,7 @@ jest.mock("@/utils/confirmSignOut", () => ({
 
 const mockLink = linkProvider as jest.Mock;
 const mockMerge = mergeIntoExistingAccount as jest.Mock;
-const mockSnapshot = snapshotLocalData as jest.Mock;
+const mockCloudRead = readAnonymousData as jest.Mock;
 const mockPrompt = promptMergeChoice as jest.Mock;
 const mockSignOut = signOutOfAccount as jest.Mock;
 const mockConfirmSignOut = confirmSignOut as jest.Mock;
@@ -67,7 +67,7 @@ describe("AccountLinkScreen", () => {
       status: "merge-required",
       credential: { providerId: "google.com" },
     });
-    mockSnapshot.mockReturnValue({
+    mockCloudRead.mockResolvedValue({
       slots: [{ date: "2025-06-01", slot: {} }],
       routines: [{}],
       isEmpty: false,
@@ -92,7 +92,7 @@ describe("AccountLinkScreen", () => {
       status: "merge-required",
       credential: { providerId: "google.com" },
     });
-    mockSnapshot.mockReturnValue({
+    mockCloudRead.mockResolvedValue({
       slots: [{ date: "2025-06-01", slot: {} }],
       routines: [],
       isEmpty: false,
@@ -116,7 +116,7 @@ describe("AccountLinkScreen", () => {
       status: "merge-required",
       credential: { providerId: "google.com" },
     });
-    mockSnapshot.mockReturnValue({
+    mockCloudRead.mockResolvedValue({
       slots: [{ date: "2025-06-01", slot: {} }],
       routines: [],
       isEmpty: false,
@@ -136,7 +136,7 @@ describe("AccountLinkScreen", () => {
       status: "merge-required",
       credential: { providerId: "google.com" },
     });
-    mockSnapshot.mockReturnValue({ slots: [], routines: [], isEmpty: true });
+    mockCloudRead.mockResolvedValue({ slots: [], routines: [], isEmpty: true });
     const view = await render(<AccountLinkScreen />);
 
     await fireEvent.press(view.getByText("Continue with Google"));

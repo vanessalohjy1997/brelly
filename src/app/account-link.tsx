@@ -19,8 +19,8 @@ import { useAuthUser } from "@/hooks/useAuthUser";
 import { useTheme } from "@/hooks/useTheme";
 import {
   mergeIntoExistingAccount,
+  readAnonymousData,
   signOutOfAccount,
-  snapshotLocalData,
 } from "@/services/accountLinkService";
 import { showToast } from "@/store/toastStore";
 import { confirmSignOut } from "@/utils/confirmSignOut";
@@ -62,21 +62,31 @@ export default function AccountLinkScreen() {
       }
 
       const { credential } = result;
-      const snapshot = snapshotLocalData();
-      if (snapshot.isEmpty) {
-        await mergeIntoExistingAccount(credential, snapshot, false);
+
+      // Read once, here, and thread the same value through the question and
+      // the merge. It used to read the Zustand stores, which are a mirror of
+      // these documents rather than the documents — so a session whose
+      // listeners had not hydrated yet saw "nothing to merge", skipped the
+      // question entirely and went straight into the discard branch. That is a
+      // silent, unprompted deletion of everything in the account. Asking
+      // "Add your 0 plans and 0 routines to it?" one line further down was the
+      // same bug, just visible.
+      const cloud = await readAnonymousData();
+
+      if (cloud.isEmpty) {
+        await mergeIntoExistingAccount(credential, cloud, false);
         showToast("Signed in", "success");
         router.back();
         return;
       }
 
       const choice = await promptMergeChoice(
-        snapshot.slots.length,
-        snapshot.routines.length,
+        cloud.slots.length,
+        cloud.routines.length,
       );
       if (choice === "cancel") return;
 
-      await mergeIntoExistingAccount(credential, snapshot, choice === "add");
+      await mergeIntoExistingAccount(credential, cloud, choice === "add");
       showToast(
         choice === "add" ? "Added your plans" : "Signed in",
         "success",

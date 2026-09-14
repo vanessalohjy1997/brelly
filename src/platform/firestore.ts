@@ -1,7 +1,7 @@
 /**
  * The Firestore modular API, under one specifier so core does not name a SDK.
  *
- * Deliberately a re-export and nothing more: the eleven symbols below are the
+ * Deliberately a re-export and nothing more: the twelve symbols below are the
  * entire Firestore surface of non-test `src/`, and every one exists
  * name-for-name in both `@react-native-firebase/firestore` and the web
  * `firebase/firestore`. Adding a symbol here is a decision — it commits the web
@@ -24,6 +24,7 @@ export {
   deleteDoc,
   deleteField,
   doc,
+  getDocsFromServer,
   getFirestore,
   onSnapshot,
   setDoc,

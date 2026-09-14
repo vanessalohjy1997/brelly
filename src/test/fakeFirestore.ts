@@ -255,6 +255,15 @@ export function createFirestoreMock() {
       ) => ref.set(data, options),
     ),
     deleteDoc: jest.fn((ref: FakeDocRef) => ref.delete()),
+    // Deliberately the *FromServer* variant and not `getDocs`: the merge reads
+    // the anonymous account's documents to decide what to delete, and an
+    // offline client answering that question out of its own cache would report
+    // "nothing here" and orphan everything. The fake has no cache to serve
+    // from, so what it models is the shape and the one-shot-ness, not the
+    // source.
+    getDocsFromServer: jest.fn((ref: FakeCollectionRef) =>
+      Promise.resolve(fakeFirestoreDb.querySnapshotAt(ref.path)),
+    ),
     onSnapshot: jest.fn(
       (ref: FakeDocRef | FakeCollectionRef, onNext: Listener & QueryListener) =>
         ref.onSnapshot(onNext),

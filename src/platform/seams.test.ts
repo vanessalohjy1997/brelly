@@ -46,6 +46,7 @@ describe("the @brelly/platform seams", () => {
       "deleteDoc",
       "deleteField",
       "doc",
+      "getDocsFromServer",
       "getFirestore",
       "onSnapshot",
       "setDoc",

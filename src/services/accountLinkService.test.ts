@@ -6,9 +6,9 @@ import * as Notifications from "expo-notifications";
 
 import {
   mergeIntoExistingAccount,
+  readAnonymousData,
   resumePendingMergeIfNeeded,
   signOutOfAccount,
-  snapshotLocalData,
 } from "@/services/accountLinkService";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
@@ -54,6 +54,19 @@ function routine(overrides: Partial<Routine> = {}): Routine {
   };
 }
 
+function seedCloudSlot(value: ItinerarySlot, date: string): void {
+  fakeFirestoreDb.docs.set(`users/${ANON_UID}/slots/${value.id}`, {
+    ...value,
+    date,
+  });
+}
+
+function seedCloudRoutine(value: Routine): void {
+  fakeFirestoreDb.docs.set(`users/${ANON_UID}/routines/${value.id}`, {
+    ...value,
+  });
+}
+
 beforeEach(() => {
   fakeAuth.reset();
   fakeFirestoreDb.reset();
@@ -76,22 +89,48 @@ beforeEach(() => {
 // separate "this identity already has an account" from a real failure belong
 // to the SDK rather than to core.
 
-describe("snapshotLocalData", () => {
-  it("reports isEmpty when there are no local plans or routines", () => {
-    expect(snapshotLocalData().isEmpty).toBe(true);
+describe("readAnonymousData", () => {
+  it("reports isEmpty when the account holds nothing", async () => {
+    await expect(readAnonymousData().then((d) => d.isEmpty)).resolves.toBe(true);
   });
 
-  it("flattens slots out of plans and includes routines, excluding settings", () => {
-    useItineraryStore.setState({
-      plans: [{ id: "2025-06-01", date: "2025-06-01", slots: [slot()] }],
+  it("reads the account's own documents, not the local mirror of them", async () => {
+    // The distinction this whole function exists for. The stores are
+    // populated by `onSnapshot` after boot; a session that starts a merge
+    // before they hydrate has empty stores and a full account, and this value
+    // decides what gets deleted.
+    useItineraryStore.setState({ plans: [] });
+    useRoutineStore.setState({ routines: [] });
+    seedCloudSlot(slot({ id: "s1" }), "2025-06-01");
+    seedCloudRoutine(routine({ id: "r1" }));
+
+    const cloud = await readAnonymousData();
+
+    expect(cloud.isEmpty).toBe(false);
+    expect(cloud.slots).toEqual([{ date: "2025-06-01", slot: slot({ id: "s1" }) }]);
+    expect(cloud.routines).toEqual([routine({ id: "r1" })]);
+  });
+
+  it("takes each document's id from the document, not from its body", async () => {
+    // An id written into the body and an id in the path can disagree after a
+    // collision-minted rename; the path is the one Firestore will honour on
+    // the delete.
+    fakeFirestoreDb.docs.set(`users/${ANON_UID}/slots/real-id`, {
+      ...slot({ id: "stale-id" }),
+      date: "2025-06-01",
     });
-    useRoutineStore.setState({ routines: [routine()] });
 
-    const snapshot = snapshotLocalData();
+    const cloud = await readAnonymousData();
 
-    expect(snapshot.isEmpty).toBe(false);
-    expect(snapshot.slots).toEqual([{ date: "2025-06-01", slot: slot() }]);
-    expect(snapshot.routines).toEqual([routine()]);
+    expect(cloud.slots[0].slot.id).toBe("real-id");
+  });
+
+  it("refuses to answer when there is no signed-in user to read as", async () => {
+    fakeAuth.setCurrentUser(null);
+
+    await expect(readAnonymousData()).rejects.toThrow(
+      "No anonymous user to merge from",
+    );
   });
 });
 
@@ -307,6 +346,96 @@ describe("mergeIntoExistingAccount", () => {
     ).toMatchObject({ id: "r1" });
     expect(mmkvStorage.getItem(PENDING_KEY)).toBeNull();
   });
+
+  it("restores every document by id after a failed switch, across batch boundaries", async () => {
+    // The scenario the whole delete-then-switch order has to survive, at a
+    // size that crosses more than one `writeBatch`: a full account, an empty
+    // local mirror, an email merge, a wrong password. Asserted on ids rather
+    // than counts, because an id-minting regression keeps the count right.
+    const credential = EmailAuthProvider.credential(
+      "person@example.com",
+      "correct-password",
+    );
+    fakeAuth.registerExistingAccount(credential, {
+      uid: EXISTING_UID,
+      isAnonymous: false,
+      email: "person@example.com",
+    });
+    const ids = Array.from({ length: 40 }, (_, i) => `s${i}`);
+    for (const id of ids) {
+      seedCloudSlot(slot({ id }), "2025-06-01");
+    }
+    useItineraryStore.setState({ plans: [] });
+
+    const cloud = await readAnonymousData();
+    expect(cloud.slots).toHaveLength(40);
+
+    const wrong = EmailAuthProvider.credential(
+      "person@example.com",
+      "wrong-password",
+    );
+
+    await expect(
+      mergeIntoExistingAccount(wrong, cloud, true),
+    ).rejects.toMatchObject({ code: "auth/wrong-password" });
+
+    expect(fakeAuth.currentUser?.uid).toBe(ANON_UID);
+    for (const id of ids) {
+      expect(
+        fakeFirestoreDb.docs.get(`users/${ANON_UID}/slots/${id}`),
+      ).toMatchObject({ id, date: "2025-06-01" });
+    }
+    expect(
+      Object.keys(Object.fromEntries(fakeFirestoreDb.docs)).filter((k) =>
+        k.startsWith(`users/${EXISTING_UID}/`),
+      ),
+    ).toEqual([]);
+  });
+
+  it("records the pending merge even in the don't-add branch", async () => {
+    // The branch that used to run the delete with no crash record at all: the
+    // record was written only when the user chose to add their data. The
+    // `catch` around the sign-in covers a *rejected* sign-in; nothing covers
+    // the process ending, and a browser tab is closed mid-flow all the time.
+    const credential = credentialForExistingAccount();
+    seedCloudSlot(slot({ id: "s1" }), "2025-06-01");
+    const cloud = await readAnonymousData();
+    const setItem = jest.spyOn(mmkvStorage, "setItem");
+
+    await mergeIntoExistingAccount(credential, cloud, false);
+
+    const written = setItem.mock.calls.find(([key]) => key === PENDING_KEY);
+    expect(written).toBeDefined();
+    expect(JSON.parse(written![1])).toMatchObject({
+      anonUid: ANON_UID,
+      addLocalData: false,
+    });
+    setItem.mockRestore();
+  });
+
+  it("refuses to start when the pending record cannot be stored", async () => {
+    // `localStorage.setItem` throws `QuotaExceededError` in Safari's private
+    // mode. A delete with no record is precisely what the record exists to
+    // prevent, so the only safe answer is not to begin.
+    const credential = credentialForExistingAccount();
+    seedCloudSlot(slot({ id: "s1" }), "2025-06-01");
+    const cloud = await readAnonymousData();
+    const setItem = jest
+      .spyOn(mmkvStorage, "setItem")
+      .mockImplementation(() => {
+        throw new Error("QuotaExceededError");
+      });
+
+    await expect(
+      mergeIntoExistingAccount(credential, cloud, true),
+    ).rejects.toThrow("QuotaExceededError");
+    setItem.mockRestore();
+
+    expect(
+      fakeFirestoreDb.docs.get(`users/${ANON_UID}/slots/s1`),
+    ).toBeDefined();
+    expect(fakeAuth.currentUser?.uid).toBe(ANON_UID);
+  });
 });
 
 describe("signOutOfAccount", () => {
@@ -391,26 +520,26 @@ describe("signOutOfAccount", () => {
 });
 
 describe("resumePendingMergeIfNeeded", () => {
+  const snapshot = {
+    slots: [{ date: "2025-06-01", slot: slot({ id: "s1" }) }],
+    routines: [routine({ id: "r1" })],
+  };
+
+  function seedPending(overrides: Record<string, unknown> = {}): void {
+    mmkvStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify({ anonUid: ANON_UID, snapshot, addLocalData: true, ...overrides }),
+    );
+  }
+
   it("does nothing when there is no pending merge", async () => {
     await resumePendingMergeIfNeeded();
 
     expect(fakeFirestoreDb.docs.size).toBe(0);
   });
 
-  it("does not resume while still signed in anonymously", async () => {
-    mmkvStorage.setItem(PENDING_KEY, JSON.stringify({ slots: [], routines: [] }));
-
-    await resumePendingMergeIfNeeded();
-
-    expect(mmkvStorage.getItem(PENDING_KEY)).not.toBeNull();
-  });
-
   it("finishes a merge interrupted after the identity switch", async () => {
-    const snapshot = {
-      slots: [{ date: "2025-06-01", slot: slot({ id: "s1" }) }],
-      routines: [routine({ id: "r1" })],
-    };
-    mmkvStorage.setItem(PENDING_KEY, JSON.stringify(snapshot));
+    seedPending();
     fakeAuth.setCurrentUser({ uid: EXISTING_UID, isAnonymous: false });
 
     await resumePendingMergeIfNeeded();
@@ -422,5 +551,90 @@ describe("resumePendingMergeIfNeeded", () => {
       "true",
     );
     expect(mmkvStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+
+  it("writes nothing into the target when the user chose not to add", async () => {
+    // `addLocalData: false` is why the record is written at all in that
+    // branch: it is a crash record for the delete, not a payload for a merge.
+    seedPending({ addLocalData: false });
+    fakeAuth.setCurrentUser({ uid: EXISTING_UID, isAnonymous: false });
+
+    await resumePendingMergeIfNeeded();
+
+    expect(fakeFirestoreDb.docs.get(`users/${EXISTING_UID}/slots/s1`)).toBeUndefined();
+    expect(mmkvStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+
+  it("restores the anonymous account when the session died before the switch", async () => {
+    // The case that used to be missing. The delete had already run, the
+    // sign-in never did, and the old code bailed on `isAnonymous` — leaving
+    // every deleted document sitting in the record with nobody coming back
+    // for it. Same uid, same ids, so this is an undo rather than a guess.
+    seedPending();
+
+    await resumePendingMergeIfNeeded();
+
+    expect(
+      fakeFirestoreDb.docs.get(`users/${ANON_UID}/slots/s1`),
+    ).toMatchObject({ id: "s1" });
+    expect(
+      fakeFirestoreDb.docs.get(`users/${ANON_UID}/routines/r1`),
+    ).toMatchObject({ id: "r1" });
+    expect(mmkvStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+
+  it("leaves the record alone when the anonymous uid is a different one", async () => {
+    // A record from another session on this device. `firestore.rules` would
+    // reject the write anyway, since this session does not own that uid.
+    seedPending({ anonUid: "some-other-anon" });
+
+    await resumePendingMergeIfNeeded();
+
+    expect(fakeFirestoreDb.docs.size).toBe(0);
+    expect(mmkvStorage.getItem(PENDING_KEY)).not.toBeNull();
+  });
+
+  it("ignores a record left by a build that wrote the older shape", async () => {
+    mmkvStorage.setItem(PENDING_KEY, JSON.stringify({ slots: [], routines: [] }));
+
+    await resumePendingMergeIfNeeded();
+
+    expect(fakeFirestoreDb.docs.size).toBe(0);
+  });
+
+  it("ignores an unparseable record rather than failing the boot", async () => {
+    // This runs from `useCloudBootstrap`'s boot effect, so throwing here would
+    // take the whole launch with it.
+    mmkvStorage.setItem(PENDING_KEY, "{not json");
+    fakeAuth.setCurrentUser({ uid: EXISTING_UID, isAnonymous: false });
+
+    await expect(resumePendingMergeIfNeeded()).resolves.toBeUndefined();
+    expect(fakeFirestoreDb.docs.size).toBe(0);
+  });
+
+  it("treats a record with no addLocalData as one that should be written", async () => {
+    // Every record written before the field existed came from the add branch —
+    // that was the only branch that wrote one.
+    mmkvStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify({ anonUid: ANON_UID, snapshot }),
+    );
+    fakeAuth.setCurrentUser({ uid: EXISTING_UID, isAnonymous: false });
+
+    await resumePendingMergeIfNeeded();
+
+    expect(
+      fakeFirestoreDb.docs.get(`users/${EXISTING_UID}/slots/s1`),
+    ).toMatchObject({ id: "s1" });
+  });
+
+  it("does nothing when there is no session at all", async () => {
+    seedPending();
+    fakeAuth.setCurrentUser(null);
+
+    await resumePendingMergeIfNeeded();
+
+    expect(fakeFirestoreDb.docs.size).toBe(0);
+    expect(mmkvStorage.getItem(PENDING_KEY)).not.toBeNull();
   });
 });

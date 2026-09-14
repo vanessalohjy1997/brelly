@@ -11,6 +11,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocsFromServer,
   onSnapshot,
   writeBatch,
 } from "@brelly/platform/firestore";
@@ -22,8 +23,9 @@ import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
 import { useRoutineStore } from "@/store/routineStore";
 import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
+import type { ItinerarySlot } from "@/types/itinerary";
+import type { Routine } from "@/types/routine";
 import { migrationFlagKey } from "@/utils/migrationFlagKey";
-import { allSlotsWithDates } from "@/utils/planSelectors";
 import {
   resolveMergeWrites,
   type ExistingAccountIds,
@@ -41,19 +43,59 @@ const MAX_BATCH_WRITES = 400;
 // any merge that was interrupted across the update.
 const PENDING_MERGE_STORAGE_KEY = "brelly-pending-merge";
 
-function persistPendingMerge(snapshot: LocalSnapshot): void {
-  platformStorage.setItem(PENDING_MERGE_STORAGE_KEY, JSON.stringify(snapshot));
+/**
+ * The record that makes the delete survivable.
+ *
+ * It used to be the snapshot alone, written only when the user chose to add
+ * their data to the account they were joining. That left the *"Don't add"*
+ * branch running the delete with no crash-recovery record at all, and the
+ * `try/catch` around the sign-in cannot help there: it compensates for a
+ * *rejected* sign-in, not for the process ending. On a phone the window is
+ * narrow. A browser tab gets closed mid-flow all the time.
+ *
+ * So the record carries three things now and is written before *every* delete.
+ * `anonUid` is what lets a resume know whether the documents it is holding
+ * belong to the account it has woken up as; `addLocalData` is the only part
+ * that was ever conditional, and it is now data rather than the difference
+ * between writing a record and not writing one.
+ */
+type PendingMerge = {
+  anonUid: string;
+  snapshot: LocalSnapshot;
+  addLocalData: boolean;
+};
+
+/**
+ * Throws rather than returning a failure, and the caller must let it abort the
+ * merge before anything is deleted.
+ *
+ * MMKV never throws. `localStorage.setItem` throws `QuotaExceededError` in
+ * Safari's private mode, which is exactly the situation where losing the
+ * record matters — a delete with no record is the thing this record exists to
+ * prevent, so refusing to start is the only safe answer.
+ */
+function persistPendingMerge(pending: PendingMerge): void {
+  platformStorage.setItem(PENDING_MERGE_STORAGE_KEY, JSON.stringify(pending));
 }
 
 function clearPendingMerge(): void {
   platformStorage.removeItem(PENDING_MERGE_STORAGE_KEY);
 }
 
-function readPendingMerge(): LocalSnapshot | null {
+function readPendingMerge(): PendingMerge | null {
   const raw = platformStorage.getItem(PENDING_MERGE_STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as LocalSnapshot;
+    const parsed = JSON.parse(raw) as Partial<PendingMerge>;
+    // A record written before the shape widened has no `anonUid`. There is
+    // nothing to check it against, so it can only be treated as the old
+    // "payload for a merge that already switched identity" case.
+    if (!parsed || !parsed.snapshot) return null;
+    return {
+      anonUid: parsed.anonUid ?? "",
+      snapshot: parsed.snapshot,
+      addLocalData: parsed.addLocalData ?? true,
+    };
   } catch {
     return null;
   }
@@ -64,13 +106,54 @@ function isSnapshotEmpty(snapshot: LocalSnapshot): boolean {
 }
 
 /**
- * Reads the local Zustand stores — not MMKV, which after phase 2–4 holds only
- * the frozen pre-migration blobs. Settings are excluded: per
- * FIREBASE_MIGRATION.md's "Account linking" step 8, settings never merge.
+ * Everything the anonymous account holds in Firestore, read from the server.
+ *
+ * This replaced a read of the local Zustand stores, and the difference is the
+ * whole point. The stores are a *mirror* of these documents, populated by
+ * `onSnapshot` after the app boots. A web tab that starts a merge before the
+ * listeners have hydrated has empty stores and a full account — and the value
+ * read here decides what gets deleted, so reading the mirror silently orphans
+ * every document the merge was supposed to move.
+ *
+ * `getDocsFromServer`, not `getDocs`: an offline client answering out of its
+ * own cache would report "nothing here" with complete confidence, which is the
+ * same failure wearing a different hat. Failing loudly is correct — there is
+ * no safe way to delete an account's contents without having seen them.
+ *
+ * Must run *before* the identity switch. `firestore.rules` gates reads on
+ * `request.auth.uid == <path uid>`, so once the session is the target account
+ * this read is `permission-denied`. It is deliberately a different read from
+ * the target-account one inside `writeMergeSnapshot`, which is post-switch and
+ * only needs ids.
+ *
+ * Settings are excluded, per FIREBASE_MIGRATION.md's "Account linking" step 8:
+ * settings never merge. The settings document is still deleted from the
+ * anonymous uid, and deliberately not restored on failure — it holds scalar
+ * preferences the local store still has and rewrites on the next change.
  */
-export function snapshotLocalData(): LocalSnapshot & { isEmpty: boolean } {
-  const slots = allSlotsWithDates(useItineraryStore.getState().plans);
-  const routines = useRoutineStore.getState().routines;
+export async function readAnonymousData(): Promise<
+  LocalSnapshot & { isEmpty: boolean }
+> {
+  const anonUid = getFirebaseAuth().currentUser?.uid;
+  if (!anonUid) throw new Error("No anonymous user to merge from");
+
+  const db = getFirebaseFirestore();
+
+  const [slotDocs, routineDocs] = await Promise.all([
+    getDocsFromServer(collection(db, "users", anonUid, "slots")),
+    getDocsFromServer(collection(db, "users", anonUid, "routines")),
+  ]);
+
+  const slots = slotDocs.docs.map((d) => {
+    const { date, ...slot } = (d.data() ?? {}) as ItinerarySlot & {
+      date: string;
+    };
+    return { date, slot: { ...slot, id: d.id } as ItinerarySlot };
+  });
+  const routines = routineDocs.docs.map(
+    (d) => ({ ...(d.data() ?? {}), id: d.id }) as Routine,
+  );
+
   const snapshot = { slots, routines };
   return { ...snapshot, isEmpty: isSnapshotEmpty(snapshot) };
 }
@@ -210,9 +293,12 @@ export async function mergeIntoExistingAccount(
   const anonUid = getFirebaseAuth().currentUser?.uid;
   if (!anonUid) throw new Error("No anonymous user to merge from");
 
-  if (addLocalData && !isSnapshotEmpty(snapshot)) {
-    persistPendingMerge(snapshot);
-  }
+  // Before every delete, not only before a delete that will be followed by a
+  // write. What is about to happen is destructive either way, and the record
+  // is the only thing that can undo it across a process that does not come
+  // back. Allowed to throw: a storage that cannot hold the record is a reason
+  // not to start, not a reason to proceed without one.
+  persistPendingMerge({ anonUid, snapshot, addLocalData });
 
   await deleteAnonymousUserData(anonUid, snapshot);
 
@@ -302,22 +388,46 @@ export async function signOutOfAccount(): Promise<void> {
 
 /**
  * Called once from `useCloudBootstrap`'s boot effect. A no-op on every
- * ordinary launch — it only does something when a previous session was
- * killed after `mergeIntoExistingAccount` had already switched identity but
- * before it finished writing the merge, leaving a pending snapshot in MMKV.
+ * ordinary launch — it only does something when a previous session died
+ * somewhere in the middle of `mergeIntoExistingAccount`, which is not atomic
+ * and cannot be: it spans two auth identities.
  *
- * If the current user is still anonymous, the identity switch itself never
- * completed — there's no credential left to retry it with, so this leaves
- * the pending snapshot in place rather than guessing.
+ * Three cases, and the middle one is the one that used to be missing.
+ *
+ * | state on this launch                | what it means                                  | action                          |
+ * | ----------------------------------- | ---------------------------------------------- | ------------------------------- |
+ * | signed in, not anonymous            | the switch completed; the merge write may not  | write into the target, clear    |
+ * | anonymous, uid matches `anonUid`    | the delete ran; the switch never happened      | restore under the same ids      |
+ * | anonymous, uid differs              | this record is not about this session           | leave it alone                  |
+ *
+ * The old code bailed on `user.isAnonymous` and left the record pending
+ * "rather than guessing". That was right while the record held only a payload
+ * for a merge that had already switched identity. It is wrong now that the
+ * record is also written before a delete, because the documents the delete
+ * removed are sitting in the record with nobody coming back for them.
+ * Restoring them to the same uid under the same ids is not a guess — it is the
+ * same undo the sign-in `catch` performs, a launch later.
+ *
+ * The third case is not caution for its own sake: `firestore.rules` would
+ * reject the write anyway, since the session is not the owner of `anonUid`.
  */
 export async function resumePendingMergeIfNeeded(): Promise<void> {
-  const snapshot = readPendingMerge();
-  if (!snapshot) return;
+  const pending = readPendingMerge();
+  if (!pending) return;
 
   const user = getFirebaseAuth().currentUser;
-  if (!user || user.isAnonymous) return;
+  if (!user) return;
+
+  if (user.isAnonymous) {
+    if (!pending.anonUid || user.uid !== pending.anonUid) return;
+    await writeMergeSnapshot(pending.anonUid, pending.snapshot);
+    clearPendingMerge();
+    return;
+  }
 
   platformStorage.setItem(migrationFlagKey(user.uid), "true");
-  await writeMergeSnapshot(user.uid, snapshot);
+  if (pending.addLocalData) {
+    await writeMergeSnapshot(user.uid, pending.snapshot);
+  }
   clearPendingMerge();
 }
