@@ -6,9 +6,9 @@ import {
   formatReverseGeocodedAddress,
   useCurrentLocation,
 } from "@/hooks/useCurrentLocation";
-import { reverseGeocode } from "@/services/geocoding";
+import { reverseGeocode } from "@brelly/core";
 
-jest.mock("@/services/geocoding", () => ({ reverseGeocode: jest.fn() }));
+jest.mock("@brelly/core/services/geocoding", () => ({ reverseGeocode: jest.fn() }));
 
 const googleReverseGeocode = reverseGeocode as jest.MockedFunction<
   typeof reverseGeocode

@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
-import { useToastStore } from "@/store/toastStore";
+import { useToastStore } from "@brelly/core";
 
 function setup() {
   const queryClient = new QueryClient({

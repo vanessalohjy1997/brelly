@@ -1,8 +1,11 @@
 import { getAuth } from "@react-native-firebase/auth";
 import { onSnapshot, setDoc } from "@react-native-firebase/firestore";
 
-import { subscribeToSettingsDoc, writeSettingsFields } from "@/services/settingsSync";
-import { useToastStore } from "@/store/toastStore";
+import {
+  subscribeToSettingsDoc,
+  useToastStore,
+  writeSettingsFields,
+} from "@brelly/core";
 import { fakeFirestoreDb } from "@/test/fakeFirestore";
 
 const mockGetAuth = getAuth as jest.Mock;

@@ -3,9 +3,9 @@ import { renderHook, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import { useLiveConditions } from "@/hooks/useLiveConditions";
-import { getLiveConditions } from "@/services/liveConditions";
+import { getLiveConditions } from "@brelly/core";
 
-jest.mock("@/services/liveConditions", () => ({
+jest.mock("@brelly/core/services/liveConditions", () => ({
   getLiveConditions: jest.fn(),
 }));
 

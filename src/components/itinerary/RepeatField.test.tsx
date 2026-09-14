@@ -2,7 +2,7 @@ import { fireEvent, waitFor } from "@testing-library/react-native";
 
 import { RepeatField } from "@/components/itinerary/RepeatField";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { RepeatRule } from "@/types/routine";
+import { type RepeatRule } from "@brelly/core";
 
 /**
  * 5 Aug 2026 is a Wednesday — day 3 of the week, the 5th of the month. A fresh

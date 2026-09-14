@@ -47,6 +47,34 @@ module.exports = defineConfig([
     },
   },
   {
+    // The app-facing half of the same boundary. `@brelly/core` is one module;
+    // a deep import is a dependency on where core keeps a file, and once one
+    // exists core cannot move its own files again.
+    //
+    // Deliberately a rule about *imports*, which leaves `jest.mock(
+    // "@brelly/core/services/weather")` alone — and that is the right line.
+    // `jest.mock` names a module to replace rather than a specifier the code
+    // under test used, and it has to name the real module: Jest keys its
+    // registry by resolved path, so replacing the file is what intercepts one
+    // core module calling another. The barrel cannot do that job, because
+    // those calls never pass through it.
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@brelly/core/*"],
+              message:
+                "Import from \"@brelly/core\" — the barrel is the package's only entry point. (jest.mock may still name a module directly.)",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: [
       "jest.setup.js",
       "__mocks__/**/*.js",

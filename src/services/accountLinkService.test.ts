@@ -5,20 +5,21 @@ import {
 import * as Notifications from "expo-notifications";
 
 import {
+  DEFAULT_SETTINGS,
   mergeIntoExistingAccount,
   readAnonymousData,
   resumePendingMergeIfNeeded,
   signOutOfAccount,
-} from "@/services/accountLinkService";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useSettingsStore,
+  type ItinerarySlot,
+  type Routine,
+} from "@brelly/core";
 import { mmkvStorage } from "@/store/mmkvStorage";
-import { useRoutineStore } from "@/store/routineStore";
-import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
 import { fakeAuth } from "@/test/fakeAuth";
 import { fakeFirestoreDb } from "@/test/fakeFirestore";
-import type { ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
 
 const ANON_UID = "anon-uid";
 const EXISTING_UID = "existing-uid";

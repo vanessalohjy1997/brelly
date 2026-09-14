@@ -1,8 +1,10 @@
 import * as Location from "expo-location";
 import { create } from "zustand";
 
-import { getRegionFromCoordinates } from "@/constants/neaRegions";
-import type { NeaRegion } from "@/types/weather";
+import {
+  getRegionFromCoordinates,
+  type NeaRegion,
+} from "@brelly/core";
 
 export type PermissionState =
   | "checking"

@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import { useCallback, useState } from "react";
 
-import { reverseGeocode } from "@/services/geocoding";
+import { reverseGeocode } from "@brelly/core";
 
 export type CurrentLocationResult = {
   location: string;

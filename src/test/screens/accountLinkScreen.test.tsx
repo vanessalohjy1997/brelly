@@ -8,13 +8,13 @@ import {
   mergeIntoExistingAccount,
   readAnonymousData,
   signOutOfAccount,
-} from "@/services/accountLinkService";
-import { useToastStore } from "@/store/toastStore";
+  useToastStore,
+} from "@brelly/core";
 import { fakeAuth } from "@/test/fakeAuth";
 import { confirmSignOut } from "@/utils/confirmSignOut";
 import { promptMergeChoice } from "@/utils/promptMergeChoice";
 
-jest.mock("@/services/accountLinkService", () => ({
+jest.mock("@brelly/core/services/accountLinkService", () => ({
   mergeIntoExistingAccount: jest.fn(),
   readAnonymousData: jest.fn(),
   signOutOfAccount: jest.fn(),

@@ -3,9 +3,9 @@ import { renderHook, waitFor } from "@testing-library/react-native";
 import type { ReactNode } from "react";
 
 import { useUvIndex } from "@/hooks/useUvIndex";
-import { fetchUvIndex } from "@/services/airQuality";
+import { fetchUvIndex } from "@brelly/core";
 
-jest.mock("@/services/airQuality", () => ({
+jest.mock("@brelly/core/services/airQuality", () => ({
   fetchUvIndex: jest.fn(),
 }));
 

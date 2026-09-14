@@ -1,6 +1,6 @@
 import { Linking } from "react-native";
 
-import { showToast } from "@/store/toastStore";
+import { showToast } from "@brelly/core";
 
 /**
  * Opens Brelly's own page in the system Settings app.

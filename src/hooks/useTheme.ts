@@ -4,8 +4,10 @@
  */
 
 import { Colors } from "@/constants/theme";
-import { useSettingsStore } from "@/store/settingsStore";
-import { resolveColorScheme } from "@/utils/resolveColorScheme";
+import {
+  resolveColorScheme,
+  useSettingsStore,
+} from "@brelly/core";
 import { useColorScheme } from "react-native";
 
 /**

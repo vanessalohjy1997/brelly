@@ -1,7 +1,7 @@
 import { Linking } from "react-native";
 
 import { openAppSettings } from "@/services/appSettings";
-import { useToastStore } from "@/store/toastStore";
+import { useToastStore } from "@brelly/core";
 
 beforeEach(() => {
   jest.clearAllMocks();

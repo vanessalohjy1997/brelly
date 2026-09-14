@@ -11,7 +11,7 @@ import {
   dismissToast,
   useToastStore,
   type ToastVariant,
-} from "@/store/toastStore";
+} from "@brelly/core";
 
 /**
  * Long enough to read a sentence at a glance, short enough that it never

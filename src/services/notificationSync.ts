@@ -3,15 +3,20 @@ import {
   scheduleDigestNotification,
   scheduleRainNotification,
 } from "@/services/notifications";
-import { getForecastForSlot, type SlotForecast } from "@/services/weather";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import {
+  buildDigestMessage,
+  buildWidgetSnapshot,
+  findPlanByDate,
+  getForecastForSlot,
+  nextOccurrenceOfTime,
+  planNotificationResync,
+  toDateKey,
+  upcomingSlots,
+  type DayPlan,
+  type ItinerarySlot,
+  type SlotForecast,
+} from "@brelly/core";
 import { writeWidgetSnapshot } from "@/services/widgetBridge";
-import { buildWidgetSnapshot } from "@/services/widgetSnapshot";
-import { buildDigestMessage } from "@/utils/buildDigestMessage";
-import { toDateKey } from "@/utils/dateKeys";
-import { planNotificationResync } from "@/utils/planNotificationResync";
-import { findPlanByDate, upcomingSlots } from "@/utils/planSelectors";
-import { nextOccurrenceOfTime } from "@/utils/timeOfDay";
 
 export type NotificationSyncContext = {
   plans: DayPlan[];

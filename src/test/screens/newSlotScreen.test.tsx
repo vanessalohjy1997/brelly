@@ -2,18 +2,21 @@ import { act, fireEvent, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import NewSlotScreen from "@/app/plan/new";
-import { getPlaceDetails, searchPlaces } from "@/services/geocoding";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useToastStore } from "@/store/toastStore";
+import {
+  getPlaceDetails,
+  searchPlaces,
+  useItineraryStore,
+  useRoutineStore,
+  useToastStore,
+} from "@brelly/core";
 import { renderWithProviders } from "@/test/renderWithProviders";
 
-jest.mock("@/services/geocoding", () => ({
+jest.mock("@brelly/core/services/geocoding", () => ({
   searchPlaces: jest.fn(),
   getPlaceDetails: jest.fn(),
 }));
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Cloudy", source: "24hr" }),

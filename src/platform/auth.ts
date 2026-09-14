@@ -6,7 +6,7 @@ import {
   getGoogleCredential,
 } from "@/services/auth";
 import { linkCurrentUser } from "@/services/firebase";
-import { authErrorCode } from "@/utils/describeAuthError";
+import { authErrorCode } from "@brelly/core";
 
 /**
  * An identity provider's credential, opaque to core.

@@ -20,23 +20,26 @@ import { useTheme } from "@/hooks/useTheme";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useWeatherForSlot } from "@/hooks/useWeatherForSlot";
 import { cancelNotification } from "@/services/notifications";
-import { getUpcomingForecast } from "@/services/weather";
+import {
+  derivePackingList,
+  describeRoutine,
+  findSlotById,
+  formatPeriodLabel,
+  getUpcomingForecast,
+  resolveSlotProvider,
+  retargetSlotDate,
+  routineForSlot,
+  routineUpdatesFromSlot,
+  saveWithFeedback,
+  suggestDryWindow,
+  toDateKey,
+  useCloudBootstrapError,
+  useCloudReady,
+  useItineraryStore,
+  useRoutineStore,
+} from "@brelly/core";
 import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
-import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
 import { askEditScope } from "@/utils/askEditScope";
-import { toDateKey } from "@/utils/dateKeys";
-import { derivePackingList } from "@/utils/derivePackingList";
-import { describeRoutine } from "@/utils/describeRoutine";
-import { formatPeriodLabel } from "@/utils/formatPeriodLabel";
-import { findSlotById } from "@/utils/planSelectors";
-import { retargetSlotDate } from "@/utils/retargetSlotDate";
-import { routineUpdatesFromSlot } from "@/utils/routineOccurrences";
-import { routineForSlot } from "@/utils/routineSelectors";
-import { saveWithFeedback } from "@/utils/saveWithFeedback";
-import { suggestDryWindow } from "@/utils/suggestDryWindow";
-import { resolveSlotProvider } from "@/utils/weatherProvider";
 
 export default function EditSlotScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -14,7 +14,13 @@ require("react-native-gesture-handler/jestSetup");
 // core the same way `src/app/_layout.tsx` does. The key is a fixture: every
 // test that reaches `geocoding.ts` mocks `fetch`, and one that did not would
 // be making a billed request from CI.
-require("@brelly/core").configureCore({
+// Reached by its own path rather than through `@brelly/core`, and that is not
+// a style choice. The barrel is `export *` over the whole package, so
+// requiring it here would eagerly instantiate every core module *before* any
+// test file's `jest.mock` factories run — and a module already in the registry
+// keeps the real bindings it closed over. `forecastProvider.test.ts`'s
+// `jest.mock("./weather")` would silently do nothing.
+require("./packages/core/src/config").configureCore({
   places: { mode: "direct", apiKey: "test-places-key" },
 });
 

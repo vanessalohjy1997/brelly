@@ -1,23 +1,25 @@
 import { renderHook } from "@testing-library/react-native";
 
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
-import { getForecastForSlotByProvider } from "@/services/forecastProvider";
+import {
+  getForecastForSlotByProvider,
+  useItineraryStore,
+  useSettingsStore,
+  type ItinerarySlot,
+} from "@brelly/core";
 import {
   cancelNotification,
   scheduleRainNotification,
 } from "@/services/notifications";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import type { ItinerarySlot } from "@/types/itinerary";
 
-jest.mock("@/services/forecastProvider", () => ({
+jest.mock("@brelly/core/services/forecastProvider", () => ({
   getForecastForSlotByProvider: jest.fn(),
 }));
 jest.mock("@/services/notifications", () => ({
   scheduleRainNotification: jest.fn(),
   cancelNotification: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock("@/services/itinerarySync", () => ({
+jest.mock("@brelly/core/services/itinerarySync", () => ({
   writeSlot: jest.fn(),
   writeSlotFields: jest.fn(),
   deleteSlotDoc: jest.fn(),

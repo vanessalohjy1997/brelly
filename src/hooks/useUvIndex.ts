@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchUvIndex } from "@/services/airQuality";
+import { fetchUvIndex } from "@brelly/core";
 
 export type UvIndex = {
   value: number | null;

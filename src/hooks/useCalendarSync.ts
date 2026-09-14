@@ -5,16 +5,16 @@ import {
   readImportableEvents,
   resolveEventLocation,
 } from "@/services/calendar";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { showToast } from "@/store/toastStore";
-import { toDateKey } from "@/utils/dateKeys";
 import {
   isAlreadyPlanned,
+  showToast,
+  splitPlansByTime,
   summarizeExport,
   summarizeImport,
+  toDateKey,
+  useItineraryStore,
   type ImportOutcome,
-} from "@/utils/calendarSync";
-import { splitPlansByTime } from "@/utils/splitPlansByTime";
+} from "@brelly/core";
 
 const PERMISSION_MESSAGE =
   "Brelly needs calendar access. You can grant it in system settings.";

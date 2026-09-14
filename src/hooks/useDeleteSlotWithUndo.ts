@@ -3,16 +3,19 @@ import { useCallback } from "react";
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
 import { useRoutineMaterializer } from "@/hooks/useRoutineMaterializer";
 import { cancelAndDeleteSlot } from "@/services/notifications";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import type { ItinerarySlot } from "@/types/itinerary";
+import {
+  describeRoutine,
+  findSlotById,
+  routineForSlot,
+  saveWithFeedback,
+  stripNotificationHandles,
+  useItineraryStore,
+  useRoutineStore,
+  type ItinerarySlot,
+  type SaveResult,
+} from "@brelly/core";
 import { askEditScope } from "@/utils/askEditScope";
-import { describeRoutine } from "@/utils/describeRoutine";
 import { hapticDelete } from "@/utils/haptics";
-import { findSlotById } from "@/utils/planSelectors";
-import { routineForSlot } from "@/utils/routineSelectors";
-import { saveWithFeedback, type SaveResult } from "@/utils/saveWithFeedback";
-import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 
 /**
  * A delete that was asked about and answered, or `null` because the question

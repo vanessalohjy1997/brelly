@@ -2,13 +2,17 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import * as Calendar from "expo-calendar";
 
 import { useCalendarSync } from "@/hooks/useCalendarSync";
-import { getPlaceDetails, searchPlaces } from "@/services/geocoding";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useToastStore } from "@/store/toastStore";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { toDateKey } from "@/utils/dateKeys";
+import {
+  getPlaceDetails,
+  searchPlaces,
+  toDateKey,
+  useItineraryStore,
+  useToastStore,
+  type DayPlan,
+  type ItinerarySlot,
+} from "@brelly/core";
 
-jest.mock("@/services/geocoding", () => ({
+jest.mock("@brelly/core/services/geocoding", () => ({
   searchPlaces: jest.fn(),
   getPlaceDetails: jest.fn(),
 }));

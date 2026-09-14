@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { useDeviceLocationPermission } from "@/hooks/useDeviceLocationPermission";
-import { getUpcomingForecast } from "@/services/weather";
+import {
+  getUpcomingForecast,
+  type NeaRegion,
+} from "@brelly/core";
 import { useDeviceLocationStore } from "@/store/deviceLocationStore";
-import type { NeaRegion } from "@/types/weather";
 
 /**
  * Weather for whatever's coming up nearby, used for the "no plans yet" empty

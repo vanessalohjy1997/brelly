@@ -4,7 +4,10 @@ import { StyleSheet } from "react-native";
 import { CopyToDateAction } from "@/components/itinerary/CopyToDateAction";
 import { Spacing } from "@/constants/theme";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import { DatePickerWidth, DateTimePickerHeight } from "@/utils/shouldStackDateTimeFields";
+import {
+  DatePickerWidth,
+  DateTimePickerHeight,
+} from "@brelly/core";
 
 describe("CopyToDateAction", () => {
   it("duplicates to the date shown in the picker", async () => {

@@ -8,11 +8,15 @@ import { ThemedView } from "@/components/themedView";
 import { IconSize, MaxContentWidth, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
-import { useCloudBootstrapError, useCloudReady } from "@/store/cloudSyncStore";
-import { useRoutineStore } from "@/store/routineStore";
-import type { Routine } from "@/types/routine";
-import { describeRoutine } from "@/utils/describeRoutine";
-import { resolveSlotKind, SLOT_KIND_LABELS } from "@/utils/slotKind";
+import {
+  describeRoutine,
+  resolveSlotKind,
+  SLOT_KIND_LABELS,
+  useCloudBootstrapError,
+  useCloudReady,
+  useRoutineStore,
+  type Routine,
+} from "@brelly/core";
 
 function RoutineRow({ routine }: { routine: Routine }) {
   const repeat = describeRoutine(routine);

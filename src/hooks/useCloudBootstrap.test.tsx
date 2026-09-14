@@ -2,17 +2,20 @@ import { renderHook, waitFor } from "@testing-library/react-native";
 
 import { retryCloudBootstrap, useCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { ensureAnonymousUser, getFirebaseAuth } from "@/services/firebase";
-import { subscribeToSlotsCollection } from "@/services/itinerarySync";
+import {
+  DEFAULT_SETTINGS,
+  subscribeToRoutinesCollection,
+  subscribeToSettingsDoc,
+  subscribeToSlotsCollection,
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useSettingsStore,
+} from "@brelly/core";
 import {
   confirmLocalDataMigration,
   enqueueLocalDataMigration,
 } from "@/services/localDataMigration";
-import { subscribeToRoutinesCollection } from "@/services/routinesSync";
-import { subscribeToSettingsDoc } from "@/services/settingsSync";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
 
 jest.mock("@/services/firebase", () => ({
   ensureAnonymousUser: jest.fn(),
@@ -22,13 +25,13 @@ jest.mock("@/services/localDataMigration", () => ({
   enqueueLocalDataMigration: jest.fn(),
   confirmLocalDataMigration: jest.fn(),
 }));
-jest.mock("@/services/settingsSync", () => ({
+jest.mock("@brelly/core/services/settingsSync", () => ({
   subscribeToSettingsDoc: jest.fn(),
 }));
-jest.mock("@/services/routinesSync", () => ({
+jest.mock("@brelly/core/services/routinesSync", () => ({
   subscribeToRoutinesCollection: jest.fn(),
 }));
-jest.mock("@/services/itinerarySync", () => ({
+jest.mock("@brelly/core/services/itinerarySync", () => ({
   subscribeToSlotsCollection: jest.fn(),
 }));
 

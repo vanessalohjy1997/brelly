@@ -18,13 +18,13 @@ import { Spacing } from "@/constants/theme";
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { useTheme } from "@/hooks/useTheme";
 import {
+  describeAuthError,
   mergeIntoExistingAccount,
   readAnonymousData,
+  showToast,
   signOutOfAccount,
-} from "@/services/accountLinkService";
-import { showToast } from "@/store/toastStore";
+} from "@brelly/core";
 import { confirmSignOut } from "@/utils/confirmSignOut";
-import { describeAuthError } from "@/utils/describeAuthError";
 import { promptMergeChoice } from "@/utils/promptMergeChoice";
 
 export default function AccountLinkScreen() {

@@ -6,12 +6,12 @@ import {
   deleteRoutineDoc,
   removeExceptionField,
   subscribeToRoutinesCollection,
+  useToastStore,
   writeRoutine,
   writeRoutineFields,
-} from "@/services/routinesSync";
-import { useToastStore } from "@/store/toastStore";
+  type Routine,
+} from "@brelly/core";
 import { fakeFirestoreDb } from "@/test/fakeFirestore";
-import type { Routine } from "@/types/routine";
 
 const mockGetAuth = getAuth as jest.Mock;
 

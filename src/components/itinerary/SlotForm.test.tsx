@@ -8,13 +8,16 @@ import {
   SlotForm,
   type SlotFormValues,
 } from "@/components/itinerary/SlotForm";
-import { getPlaceDetails, searchPlaces } from "@/services/geocoding";
-import { useSettingsStore } from "@/store/settingsStore";
+import {
+  getPlaceDetails,
+  searchPlaces,
+  toDateKey,
+  useSettingsStore,
+} from "@brelly/core";
 import { contrastRatio } from "@/test/contrast";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import { toDateKey } from "@/utils/dateKeys";
 
-jest.mock("@/services/geocoding", () => ({
+jest.mock("@brelly/core/services/geocoding", () => ({
   searchPlaces: jest.fn().mockResolvedValue([]),
   getPlaceDetails: jest.fn(),
 }));

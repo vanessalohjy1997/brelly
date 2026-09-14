@@ -6,7 +6,7 @@ import {
   WIDGET_SNAPSHOT_KEY,
   writeWidgetSnapshot,
 } from "@/services/widgetBridge";
-import type { WidgetSnapshot } from "@/services/widgetSnapshot";
+import { type WidgetSnapshot } from "@brelly/core";
 
 const setSpy = (ExtensionStorage as unknown as { setSpy: jest.Mock }).setSpy;
 const reloadWidget = ExtensionStorage.reloadWidget as jest.Mock;

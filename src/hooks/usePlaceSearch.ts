@@ -1,10 +1,10 @@
 import {
+  debounce,
   getPlaceDetails,
   searchPlaces,
   type PlaceDetails,
   type PlaceSuggestion,
-} from "@/services/geocoding";
-import { debounce } from "@/utils/debounce";
+} from "@brelly/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export function usePlaceSearch() {

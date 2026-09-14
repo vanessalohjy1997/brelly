@@ -3,23 +3,26 @@ import { router } from "expo-router";
 import { Alert } from "react-native";
 
 import HistoryScreen from "@/app/(tabs)/history";
-import { getForecastForSlot } from "@/services/weather";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useToastStore } from "@/store/toastStore";
+import {
+  getForecastForSlot,
+  toDateKey,
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useToastStore,
+  type DayPlan,
+  type ItinerarySlot,
+} from "@brelly/core";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { toDateKey } from "@/utils/dateKeys";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Cloudy", source: "24hr" }),
   getUpcomingForecast: jest.fn().mockResolvedValue([]),
 }));
 
-jest.mock("@/services/airQuality", () => ({
+jest.mock("@brelly/core/services/airQuality", () => ({
   fetchUvIndex: jest.fn().mockResolvedValue({
     updatedTimestamp: new Date().toISOString(),
     value: 8,

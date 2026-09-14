@@ -7,10 +7,13 @@ import {
   runNotificationSync,
   type NotificationSyncContext,
 } from "@/services/notificationSync";
-import { getForecastForSlot } from "@/services/weather";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
+import {
+  getForecastForSlot,
+  type DayPlan,
+  type ItinerarySlot,
+} from "@brelly/core";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest.fn(),
 }));
 

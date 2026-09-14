@@ -3,9 +3,11 @@ import { AppState } from "react-native";
 
 import { useNotificationSync } from "@/hooks/useNotificationSync";
 import { runNotificationSync } from "@/services/notificationSync";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import type { DayPlan } from "@/types/itinerary";
+import {
+  useItineraryStore,
+  useSettingsStore,
+  type DayPlan,
+} from "@brelly/core";
 
 jest.mock("@/services/notificationSync", () => ({
   runNotificationSync: jest.fn(),

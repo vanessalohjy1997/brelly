@@ -4,16 +4,16 @@ import { migrationFlagKey } from "@brelly/core";
 
 import { getFirebaseFirestore } from "@/services/firebase";
 import { mmkvStorage } from "@/store/mmkvStorage";
-import type { DayPlan } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { allSlotsWithDates } from "@/utils/planSelectors";
 import {
+  allSlotsWithDates,
   migrateSettingsDoc,
+  omitUndefinedFields,
   SETTINGS_SCHEMA_VERSION,
+  stripNotificationHandles,
   toCloudSettingsFields,
-} from "@/utils/migrateSettingsDoc";
-import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
-import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
+  type DayPlan,
+  type Routine,
+} from "@brelly/core";
 
 const SETTINGS_MMKV_KEY = "brelly-settings";
 const ROUTINES_MMKV_KEY = "brelly-routines";

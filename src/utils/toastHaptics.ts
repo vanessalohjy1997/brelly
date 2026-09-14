@@ -1,4 +1,4 @@
-import { useToastStore } from "@/store/toastStore";
+import { useToastStore } from "@brelly/core";
 import { hapticError, hapticSuccess } from "@/utils/haptics";
 
 /**

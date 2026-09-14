@@ -6,8 +6,10 @@ import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
 import { WeatherBadge } from "@/components/weather/WeatherBadge";
 import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import type { SlotForecast } from "@/services/weather";
-import { describeUmbrella } from "@/utils/describeUmbrella";
+import {
+  describeUmbrella,
+  type SlotForecast,
+} from "@brelly/core";
 
 /**
  * TEMPORARY — visual QA only, for the icon watermark that replaced the

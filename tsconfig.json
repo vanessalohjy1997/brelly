@@ -13,6 +13,9 @@
       ],
       "@brelly/platform/*": [
         "./src/platform/*"
+      ],
+      "@brelly/core/*": [
+        "./packages/core/src/*"
       ]
     }
   },
