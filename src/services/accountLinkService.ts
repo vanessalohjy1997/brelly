@@ -7,6 +7,8 @@ import {
   writeBatch,
 } from "@react-native-firebase/firestore";
 
+import { migrationFlagKey } from "@brelly/core";
+
 import { attachCloudListeners, detachCloudListeners } from "@/services/cloudListeners";
 import {
   ensureAnonymousUser,
@@ -17,7 +19,6 @@ import {
   signInWithLinkedCredential,
   signOutCurrentUser,
 } from "@/services/firebase";
-import { migrationFlagKey } from "@/services/localDataMigration";
 import { cancelAllNotifications } from "@/services/notifications";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";

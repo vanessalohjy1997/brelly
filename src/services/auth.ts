@@ -7,8 +7,6 @@ import {
 import * as AppleAuthentication from "expo-apple-authentication";
 import { GoogleSignin, isSuccessResponse } from "@react-native-google-signin/google-signin";
 
-const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!;
-
 /**
  * Must run once, before any other GoogleSignin call. `webClientId` is the
  * "Web client (auto created by Google Service)" OAuth client Firebase
@@ -17,7 +15,14 @@ const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!;
  * (tied to package name + SHA-1 / bundle ID) aren't used here.
  */
 export function configureGoogleSignIn(): void {
-  GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
+  // Read here rather than at module scope. It is the same literal bundler
+  // substitution either way, but a module-scope read runs at import time —
+  // before an entry point has had a chance to do anything about a missing
+  // value — and this file is imported by the account-link screen as well as by
+  // the root layout that calls this.
+  GoogleSignin.configure({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!,
+  });
 }
 
 /**

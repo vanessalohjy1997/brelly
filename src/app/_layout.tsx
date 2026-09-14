@@ -1,3 +1,4 @@
+import { configureCore } from "@brelly/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -15,6 +16,17 @@ import { configureNotificationHandler } from "@/services/notifications";
 import { subscribeToastHaptics } from "@/utils/toastHaptics";
 
 SplashScreen.preventAutoHideAsync();
+// Core reads no `process.env` of its own — `EXPO_PUBLIC_*` is a substitution
+// this app's bundler performs and the web app's does not, so the value is
+// handed in from the entry point that has it. `"direct"` is the mobile arm:
+// the key ships in the binary and goes straight to Google. Web configures the
+// `"proxy"` arm instead and holds no key at all.
+configureCore({
+  places: {
+    mode: "direct",
+    apiKey: process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY!,
+  },
+});
 configureGoogleSignIn();
 // Without a foreground handler, a notification that arrives while the app is
 // open is suppressed by the OS — including the test alert, which fires seconds

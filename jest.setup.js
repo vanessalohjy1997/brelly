@@ -7,6 +7,17 @@
 // factory that requires it makes the resolver recurse into itself).
 require("react-native-gesture-handler/jestSetup");
 
+// Core refuses to run unconfigured — deliberately, because the module-scope
+// `process.env.X!` it replaced failed by interpolating `undefined` into a URL
+// and getting a 400 back from Google, which reads as an API fault rather than
+// a build one. The suite is an entry point like any other, so it configures
+// core the same way `src/app/_layout.tsx` does. The key is a fixture: every
+// test that reaches `geocoding.ts` mocks `fetch`, and one that did not would
+// be making a billed request from CI.
+require("@brelly/core").configureCore({
+  places: { mode: "direct", apiKey: "test-places-key" },
+});
+
 // Reanimated's runtime declares `_WORKLET` as a global, and the stand-in above
 // can't: a module mock only replaces an import. Gesture Handler's own code
 // reads it bare — `ReanimatedSwipeable`'s `close()` branches on it to decide

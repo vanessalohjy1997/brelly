@@ -1,3 +1,5 @@
+import { configureCore } from "@brelly/core";
+
 import {
   getPlaceDetails,
   reverseGeocode,
@@ -281,6 +283,99 @@ describe("getPlaceDetails", () => {
 
     await expect(getPlaceDetails("p1")).rejects.toThrow(
       "Place details error: 404",
+    );
+  });
+});
+
+/**
+ * The two arms of `PlacesConfig`, asserted from the outside — what actually
+ * goes on the wire, rather than what the union says.
+ *
+ * The proxy cases are the load-bearing ones. A web build must send no key at
+ * all: `configureCore()` runs client-side there, so any key in the config
+ * object is a key Next inlines into the browser bundle, and a browser bundle
+ * is public. "There is no `apiKey` field on the proxy arm" is a compile-time
+ * claim; these are the runtime half of it.
+ */
+describe("where the requests go", () => {
+  const proxy = {
+    places: {
+      mode: "proxy" as const,
+      placesPath: "/api/places",
+      geocodePath: "/api/places/geocode",
+    },
+  };
+  const direct = {
+    places: { mode: "direct" as const, apiKey: "test-places-key" },
+  };
+
+  afterEach(() => {
+    // jest.setup.js configures the direct arm for the whole suite; put it back
+    // so a later file does not inherit this one's proxy.
+    configureCore(direct);
+  });
+
+  it("puts the key in a header and calls Google directly on the direct arm", async () => {
+    fetchMock.mockReturnValue(mockResponse({ suggestions: [] }));
+
+    await searchPlaces("orchard");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://places.googleapis.com/v1/places:autocomplete");
+    expect(init.headers["X-Goog-Api-Key"]).toBe("test-places-key");
+  });
+
+  it("puts the key in the query string for the Geocoding SKU, not a header", async () => {
+    fetchMock.mockReturnValue(mockResponse(AngMoKioResponse));
+
+    await reverseGeocode(1.3785, 103.856);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://maps.googleapis.com/maps/api/geocode/json?latlng=1.3785,103.856&key=test-places-key",
+    );
+  });
+
+  it("posts autocomplete at the proxy path with no key anywhere", async () => {
+    configureCore(proxy);
+    fetchMock.mockReturnValue(mockResponse({ suggestions: [] }));
+
+    await searchPlaces("orchard");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/places/places:autocomplete");
+    expect(JSON.stringify(init.headers)).not.toContain("Api-Key");
+  });
+
+  it("fetches place details at the proxy path with no key anywhere", async () => {
+    configureCore(proxy);
+    fetchMock.mockReturnValue(
+      mockResponse({
+        id: "p1",
+        displayName: { text: "Gardens by the Bay" },
+        formattedAddress: "18 Marina Gardens Dr, Singapore 018953",
+        location: { latitude: 1.2815683, longitude: 103.8636132 },
+        addressComponents: [],
+      }),
+    );
+
+    await getPlaceDetails("p1");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/places/places/p1");
+    expect(JSON.stringify(init.headers)).not.toContain("Api-Key");
+    // The field mask is a billing control, not an auth one — it survives the
+    // hop through the proxy, because the proxy forwards rather than rewrites.
+    expect(init.headers["X-Goog-FieldMask"]).toContain("addressComponents");
+  });
+
+  it("reverse-geocodes at the proxy path with no key in the query string", async () => {
+    configureCore(proxy);
+    fetchMock.mockReturnValue(mockResponse(AngMoKioResponse));
+
+    await reverseGeocode(1.3785, 103.856);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/places/geocode?latlng=1.3785,103.856",
     );
   });
 });

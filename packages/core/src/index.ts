@@ -1,11 +1,20 @@
 /**
- * The `@brelly/core` barrel.
+ * The `@brelly/core` barrel — the only specifier either app names.
  *
- * Empty of real exports until the move commits fill it in. It exists from the
- * first commit of the extraction so that the package has a file, a test, and
- * therefore its own coverage group — `jest.coverageThreshold` only splits a
- * path out of the global group when at least one file matches it, and a group
- * that appears for the first time halfway through the extraction would hide
- * whatever was uncovered before it.
+ * Apps import from here and never from a path inside the package. That is what
+ * lets core reorganise its own directories without touching two app trees, and
+ * it is the thing `no-restricted-imports` enforces from the other side: core
+ * must not reach back into an app, and an app must not reach past this file.
+ *
+ * It fills up over the course of the extraction; each move commit adds its
+ * exports here.
  */
-export const CORE_PACKAGE_NAME = "@brelly/core";
+export {
+  configureCore,
+  getCoreConfig,
+  resetCoreConfig,
+  type CoreConfig,
+  type PlacesConfig,
+} from "./config";
+
+export { migrationFlagKey } from "./utils/migrationFlagKey";

@@ -1,6 +1,37 @@
+import { getCoreConfig } from "@brelly/core";
+
 const PLACES_BASE_URL = "https://places.googleapis.com/v1";
 const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
-const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY!;
+
+// ─── Where the requests actually go ───────────────────────────────────────────
+// Two SKUs on two hosts: Places wants its key in an `X-Goog-Api-Key` header,
+// Geocoding wants it as a `key=` query parameter. A web build sends neither —
+// it posts to its own `/api/places` route, which holds a server-only key the
+// browser never sees. That is why `PlacesConfig` is a union rather than an
+// optional key: there is no web value to fill an `apiKey` field with, and a
+// field that exists gets filled.
+//
+// Read at call time, not at module scope. The `process.env.EXPO_PUBLIC_*` this
+// replaces was a literal substitution the Next bundler would never perform, so
+// the same line in a web build is not a variable that resolves to nothing — it
+// is a string nothing rewrites.
+
+function placesRequest(path: string): { url: string; headers: HeadersInit } {
+  const { places } = getCoreConfig();
+  return places.mode === "direct"
+    ? {
+        url: `${PLACES_BASE_URL}/${path}`,
+        headers: { "X-Goog-Api-Key": places.apiKey },
+      }
+    : { url: `${places.placesPath}/${path}`, headers: {} };
+}
+
+function geocodeUrl(query: string): string {
+  const { places } = getCoreConfig();
+  return places.mode === "direct"
+    ? `${GEOCODE_URL}?${query}&key=${places.apiKey}`
+    : `${places.geocodePath}?${query}`;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,11 +79,12 @@ function resetSessionToken(): void {
 export async function searchPlaces(input: string): Promise<PlaceSuggestion[]> {
   if (input.trim().length < 2) return [];
 
-  const res = await fetch(`${PLACES_BASE_URL}/places:autocomplete`, {
+  const { url, headers } = placesRequest("places:autocomplete");
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Goog-Api-Key": API_KEY,
+      ...headers,
     },
     body: JSON.stringify({
       input,
@@ -91,10 +123,11 @@ export async function searchPlaces(input: string): Promise<PlaceSuggestion[]> {
 // ─── Place Details ────────────────────────────────────────────────────────────
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
-  const res = await fetch(`${PLACES_BASE_URL}/places/${placeId}`, {
+  const { url, headers } = placesRequest(`places/${placeId}`);
+  const res = await fetch(url, {
     method: "GET",
     headers: {
-      "X-Goog-Api-Key": API_KEY,
+      ...headers,
       // Field mask controls exactly what data we get back — and what we're billed for.
       // Only requesting Essentials fields keeps us on the cheapest SKU, and
       // `addressComponents` is one of them (checked against Google's SKU
@@ -182,9 +215,7 @@ export async function reverseGeocode(
   latitude: number,
   longitude: number,
 ): Promise<string | null> {
-  const res = await fetch(
-    `${GEOCODE_URL}?latlng=${latitude},${longitude}&key=${API_KEY}`,
-  );
+  const res = await fetch(geocodeUrl(`latlng=${latitude},${longitude}`));
 
   if (!res.ok) throw new Error(`Reverse geocode error: ${res.status}`);
 
