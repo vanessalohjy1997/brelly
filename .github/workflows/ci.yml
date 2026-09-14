@@ -44,8 +44,16 @@ jobs:
 
   # The local .githooks copies of these checks can be bypassed with --no-verify;
   # this one cannot.
+  #
+  # Dependabot is exempt. Its branch prefix is always `dependabot/` and is not
+  # configurable, and its subjects carry a conventional-commit scope
+  # (`chore(deps): bump ...`), so every dependency PR failed this job on naming
+  # it cannot change. The convention exists to make *our* history findable;
+  # a bot's history already is.
   conventions:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

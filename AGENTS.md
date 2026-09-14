@@ -50,6 +50,11 @@ The git hooks activate through `yarn install` (the `prepare` script points
 `core.hooksPath` at `.githooks`). CI does not trust them — it re-runs the same
 checks, because `--no-verify` exists.
 
+The first two rules are ours, not Dependabot's: the `conventions` job skips a
+PR opened by `dependabot[bot]`, whose `dependabot/` branch prefix is fixed and
+whose subjects are scoped (`chore(deps): bump ...`). Without that skip every
+dependency bump sat red on naming it cannot change.
+
 The last two are the soft ones, and the difference matters. The first four fail
 a build. The SessionStart hook cannot fail anything; it just makes the docs
 present, which removes the reason the rule existed. The `doc-gate` reminder is
