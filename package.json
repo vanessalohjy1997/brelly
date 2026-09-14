@@ -84,13 +84,16 @@
     "verify": "yarn typecheck && yarn lint && yarn test:coverage"
   },
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "jest": {
     "preset": "jest-expo",
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.js"
     ],
     "testPathIgnorePatterns": [
-      "<rootDir>/node_modules/",
+      "/node_modules/",
       "<rootDir>/src/test/emulator/"
     ],
     "moduleNameMapper": {
@@ -100,10 +103,19 @@
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
       "!src/**/*.d.ts",
-      "!src/test/**"
+      "!src/test/**",
+      "packages/core/src/**/*.{ts,tsx}",
+      "!packages/core/src/**/*.d.ts",
+      "!packages/core/src/test/**"
     ],
     "coverageThreshold": {
       "global": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      },
+      "packages/core/src/": {
         "statements": 90,
         "branches": 85,
         "functions": 90,
