@@ -11,7 +11,7 @@ import {
   writeRoutineFields,
   type Routine,
 } from "@brelly/core";
-import { fakeFirestoreDb } from "@/test/fakeFirestore";
+import { fakeFirestoreDb } from "@brelly/core/test";
 
 const mockGetAuth = getAuth as jest.Mock;
 

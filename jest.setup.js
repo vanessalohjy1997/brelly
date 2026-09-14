@@ -58,9 +58,9 @@ jest.mock("react-native-mmkv", () => {
 // namespaced API doesn't exist in the installed SDK, so there's nothing to
 // fake beyond these. Stateful (a mutable `currentUser`, an
 // already-in-use registry) because phase 5's account linking needs to
-// simulate a credential swap mid-test — see src/test/fakeAuth.ts.
+// simulate a credential swap mid-test — see packages/core/src/test/fakeAuth.ts.
 jest.mock("@react-native-firebase/auth", () =>
-  require("./src/test/fakeAuth").createAuthMock(),
+  require("@brelly/core/test").createAuthMock(),
 );
 
 // GoogleSignin and expo-apple-authentication are native-backed too, and only
@@ -90,9 +90,9 @@ jest.mock("expo-apple-authentication", () => ({
 // @react-native-firebase/firestore is native-backed too, and — per
 // FIREBASE_MIGRATION.md — the installed SDK's modular entry point has no
 // chained `collection().doc().set()` API left to fake, only the standalone
-// functions in src/test/fakeFirestore.ts.
+// functions in packages/core/src/test/fakeFirestore.ts.
 jest.mock("@react-native-firebase/firestore", () =>
-  require("./src/test/fakeFirestore").createFirestoreMock(),
+  require("@brelly/core/test").createFirestoreMock(),
 );
 
 jest.mock("expo-notifications", () => ({

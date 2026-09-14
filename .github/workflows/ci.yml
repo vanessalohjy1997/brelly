@@ -42,6 +42,14 @@ jobs:
       - name: Test
         run: yarn test:coverage
 
+      # Same suite, different seams. Under the root config `@brelly/platform/*`
+      # resolves to the Expo implementations, so that run proves core works on
+      # a phone. This one resolves them to platform-free fakes in a Node
+      # environment, which is what proves core imports nothing secretly
+      # Expo-shaped — the question `apps/web` would otherwise answer late.
+      - name: Test packages/core standalone
+        run: yarn test:core
+
   # The local .githooks copies of these checks can be bypassed with --no-verify;
   # this one cannot.
   #

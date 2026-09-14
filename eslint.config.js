@@ -65,7 +65,12 @@ module.exports = defineConfig([
         {
           patterns: [
             {
-              group: ["@brelly/core/*"],
+              // `@brelly/core/test` is excepted because it is the package's
+              // other deliberate entry point, not a path into its insides: it
+              // holds the Firestore and auth fakes, which both apps' Jest
+              // setup needs and neither app owns. It stays out of the barrel
+              // so that test doubles never reach a bundle.
+              group: ["@brelly/core/*", "!@brelly/core/test"],
               message:
                 "Import from \"@brelly/core\" — the barrel is the package's only entry point. (jest.mock may still name a module directly.)",
             },
@@ -82,6 +87,10 @@ module.exports = defineConfig([
       "*.config.js",
       "plugins/**/*.js",
       "scripts/**/*.js",
+      // The workspace packages carry their own Jest config and setup, which
+      // are Node scripts for the same reason the root's are.
+      "packages/*/jest.config.js",
+      "packages/*/jest.setup.js",
     ],
     languageOptions: {
       globals: {

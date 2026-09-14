@@ -3,7 +3,7 @@ import {
   enqueueLocalDataMigration,
 } from "@/services/localDataMigration";
 import { mmkvStorage } from "@/store/mmkvStorage";
-import { fakeFirestoreDb } from "@/test/fakeFirestore";
+import { fakeFirestoreDb } from "@brelly/core/test";
 
 const UID = "test-uid";
 const FLAG_KEY = `brelly-migration-complete:${UID}`;

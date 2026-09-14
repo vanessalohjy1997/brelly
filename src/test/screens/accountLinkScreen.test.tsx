@@ -10,7 +10,7 @@ import {
   signOutOfAccount,
   useToastStore,
 } from "@brelly/core";
-import { fakeAuth } from "@/test/fakeAuth";
+import { fakeAuth } from "@brelly/core/test";
 import { confirmSignOut } from "@/utils/confirmSignOut";
 import { promptMergeChoice } from "@/utils/promptMergeChoice";
 

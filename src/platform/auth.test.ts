@@ -1,5 +1,5 @@
 import { linkProvider } from "@brelly/platform/auth";
-import { fakeAuth, type FakeCredential } from "@/test/fakeAuth";
+import { fakeAuth, type FakeCredential } from "@brelly/core/test";
 
 const account = { uid: "existing", isAnonymous: false, email: "taken@example.com" };
 

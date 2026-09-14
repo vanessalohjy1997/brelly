@@ -10,7 +10,7 @@ import {
   useSettingsStore,
 } from "@brelly/core";
 import { getFirebaseFirestore } from "@/services/firebase";
-import { fakeFirestoreDb } from "@/test/fakeFirestore";
+import { fakeFirestoreDb } from "@brelly/core/test";
 
 const UID = "test-uid";
 

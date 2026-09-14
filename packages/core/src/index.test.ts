@@ -8,6 +8,10 @@ const here = __dirname;
 function modulesUnder(dir: string, prefix = ""): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     if (entry.isDirectory()) {
+      // `test/` is the package's other entry point — the fakes, which the
+      // apps' Jest setup reaches at `@brelly/core/test`. Deliberately not in
+      // the barrel: that is what the apps bundle.
+      if (prefix === "" && entry.name === "test") return [];
       return modulesUnder(join(dir, entry.name), `${prefix}${entry.name}/`);
     }
     if (!entry.name.endsWith(".ts")) return [];

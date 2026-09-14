@@ -18,8 +18,7 @@ import {
   type Routine,
 } from "@brelly/core";
 import { mmkvStorage } from "@/store/mmkvStorage";
-import { fakeAuth } from "@/test/fakeAuth";
-import { fakeFirestoreDb } from "@/test/fakeFirestore";
+import { fakeAuth, fakeFirestoreDb } from "@brelly/core/test";
 
 const ANON_UID = "anon-uid";
 const EXISTING_UID = "existing-uid";

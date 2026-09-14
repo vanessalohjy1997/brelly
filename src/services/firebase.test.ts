@@ -10,8 +10,7 @@ import {
   signInWithLinkedCredential,
   subscribeToAuthUser,
 } from "@/services/firebase";
-import { fakeAuth } from "@/test/fakeAuth";
-import { fakeFirestoreDb } from "@/test/fakeFirestore";
+import { fakeAuth, fakeFirestoreDb } from "@brelly/core/test";
 
 const mockGetAuth = getAuth as jest.Mock;
 const mockSignInAnonymously = signInAnonymously as jest.Mock;

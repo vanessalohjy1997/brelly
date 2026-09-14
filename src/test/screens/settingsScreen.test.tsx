@@ -11,7 +11,7 @@ import {
   useSettingsStore,
   useToastStore,
 } from "@brelly/core";
-import { fakeAuth } from "@/test/fakeAuth";
+import { fakeAuth } from "@brelly/core/test";
 
 const getPermissions = Notifications.getPermissionsAsync as jest.Mock;
 const requestPermissions = Notifications.requestPermissionsAsync as jest.Mock;
