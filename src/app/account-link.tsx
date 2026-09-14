@@ -1,4 +1,4 @@
-import type { AuthCredential } from "@react-native-firebase/auth";
+import { linkProvider, type LinkRequest } from "@brelly/platform/auth";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -18,12 +18,6 @@ import { Spacing } from "@/constants/theme";
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { useTheme } from "@/hooks/useTheme";
 import {
-  getAppleCredential,
-  getEmailCredential,
-  getGoogleCredential,
-} from "@/services/auth";
-import {
-  linkAnonymousAccount,
   mergeIntoExistingAccount,
   signOutOfAccount,
   snapshotLocalData,
@@ -49,21 +43,25 @@ export default function AccountLinkScreen() {
     ? (authUser.email ?? authUser.displayName ?? "your account")
     : null;
 
-  const handleLink = async (
-    getCredential: () => Promise<AuthCredential>,
-  ): Promise<void> => {
+  const handleLink = async (request: LinkRequest): Promise<void> => {
     if (isLinking) return;
     setIsLinking(true);
     try {
-      const credential = await getCredential();
-      const result = await linkAnonymousAccount(credential);
+      // One call, not "get a credential, then link it". The two steps are
+      // separable on a phone and not on the web, where the provider popup is
+      // itself the sign-in — so the seam takes the intent and hands back the
+      // credential it ended up using. The merge below needs that credential
+      // rather than a fresh one: re-running the provider would mean a second
+      // sheet here, and a popup with no user gesture behind it on the web.
+      const result = await linkProvider(request);
 
-      if (result === "linked") {
+      if (result.status === "linked") {
         showToast("Backed up", "success");
         router.back();
         return;
       }
 
+      const { credential } = result;
       const snapshot = snapshotLocalData();
       if (snapshot.isEmpty) {
         await mergeIntoExistingAccount(credential, snapshot, false);
@@ -163,7 +161,7 @@ export default function AccountLinkScreen() {
               <ThemedView type="backgroundElement" style={styles.optionGroup}>
                 <ThemedView style={styles.subSetting}>
                   <Pressable
-                    onPress={() => handleLink(getGoogleCredential)}
+                    onPress={() => handleLink({ provider: "google" })}
                     disabled={isLinking}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: isLinking }}
@@ -182,7 +180,7 @@ export default function AccountLinkScreen() {
                 {Platform.OS === "ios" && (
                   <ThemedView style={styles.subSetting}>
                     <Pressable
-                      onPress={() => handleLink(getAppleCredential)}
+                      onPress={() => handleLink({ provider: "apple" })}
                       disabled={isLinking}
                       accessibilityRole="button"
                       accessibilityState={{ disabled: isLinking }}
@@ -229,11 +227,11 @@ export default function AccountLinkScreen() {
                   />
                   <Pressable
                     onPress={() =>
-                      handleLink(() =>
-                        Promise.resolve(
-                          getEmailCredential(email.trim(), password),
-                        ),
-                      )
+                      handleLink({
+                        provider: "email",
+                        email: email.trim(),
+                        password,
+                      })
                     }
                     disabled={isLinking || !canSubmitEmail}
                     accessibilityRole="button"

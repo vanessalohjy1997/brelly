@@ -5,7 +5,6 @@ import {
 import * as Notifications from "expo-notifications";
 
 import {
-  linkAnonymousAccount,
   mergeIntoExistingAccount,
   resumePendingMergeIfNeeded,
   signOutOfAccount,
@@ -71,31 +70,11 @@ beforeEach(() => {
   fakeAuth.setCurrentUser({ uid: ANON_UID, isAnonymous: true });
 });
 
-describe("linkAnonymousAccount", () => {
-  it("links a brand-new credential onto the current (anonymous) uid", async () => {
-    const credential = GoogleAuthProvider.credential("token-new");
-
-    const result = await linkAnonymousAccount(credential);
-
-    expect(result).toBe("linked");
-    expect(fakeAuth.currentUser?.uid).toBe(ANON_UID);
-    expect(fakeAuth.currentUser?.isAnonymous).toBe(false);
-  });
-
-  it("returns merge-required when the credential already belongs to an account", async () => {
-    const credential = GoogleAuthProvider.credential("token-existing");
-    fakeAuth.registerExistingAccount(credential, {
-      uid: EXISTING_UID,
-      isAnonymous: false,
-      email: "existing@example.com",
-    });
-
-    const result = await linkAnonymousAccount(credential);
-
-    expect(result).toBe("merge-required");
-    expect(fakeAuth.currentUser?.uid).toBe(ANON_UID);
-  });
-});
+// `linkAnonymousAccount` used to live here. It is `linkProvider` in
+// `@brelly/platform/auth` now, and so are its tests — acquiring a credential
+// and linking it cannot be two steps on the web, and the error codes that
+// separate "this identity already has an account" from a real failure belong
+// to the SDK rather than to core.
 
 describe("snapshotLocalData", () => {
   it("reports isEmpty when there are no local plans or routines", () => {
@@ -113,42 +92,6 @@ describe("snapshotLocalData", () => {
     expect(snapshot.isEmpty).toBe(false);
     expect(snapshot.slots).toEqual([{ date: "2025-06-01", slot: slot() }]);
     expect(snapshot.routines).toEqual([routine()]);
-  });
-});
-
-describe("linkAnonymousAccount with an email credential", () => {
-  it("returns merge-required for an email that already has an account", async () => {
-    // Firebase rejects this link with `auth/email-already-in-use`, not the
-    // `auth/credential-already-in-use` an OAuth credential gets. Treating
-    // only the latter as the merge signal is what made every repeat attempt
-    // with the same address fail outright.
-    const credential = EmailAuthProvider.credential(
-      "person@example.com",
-      "hunter2hunter2",
-    );
-    fakeAuth.registerExistingAccount(credential, {
-      uid: EXISTING_UID,
-      isAnonymous: false,
-      email: "person@example.com",
-    });
-
-    const result = await linkAnonymousAccount(credential);
-
-    expect(result).toBe("merge-required");
-    expect(fakeAuth.currentUser?.uid).toBe(ANON_UID);
-  });
-
-  it("still surfaces a genuine failure rather than starting a merge", async () => {
-    const credential = EmailAuthProvider.credential("x@example.com", "pw");
-    jest
-      .spyOn(fakeAuth, "linkWithCredential")
-      .mockRejectedValueOnce(
-        Object.assign(new Error("nope"), { code: "auth/operation-not-allowed" }),
-      );
-
-    await expect(linkAnonymousAccount(credential)).rejects.toMatchObject({
-      code: "auth/operation-not-allowed",
-    });
   });
 });
 

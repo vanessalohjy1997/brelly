@@ -81,6 +81,23 @@ describe("linkProvider", () => {
     );
   });
 
+  it("surfaces a disabled provider rather than starting a merge", async () => {
+    // The distinction the codes exist for. `auth/operation-not-allowed` means
+    // email sign-in is switched off in the Firebase console — a
+    // configuration fault the user can do nothing about — and reading it as
+    // "merge required" would delete the anonymous user's documents on the way
+    // to an identity switch that cannot happen.
+    jest
+      .spyOn(fakeAuth, "linkWithCredential")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("nope"), { code: "auth/operation-not-allowed" }),
+      );
+
+    await expect(
+      linkProvider({ provider: "email", email: "x@example.com", password: "pw" }),
+    ).rejects.toMatchObject({ code: "auth/operation-not-allowed" });
+  });
+
   it("rethrows a cancelled provider sheet without attempting a link", async () => {
     const { GoogleSignin } = jest.requireMock(
       "@react-native-google-signin/google-signin",

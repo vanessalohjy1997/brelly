@@ -1,37 +1,34 @@
-import type { AuthCredential } from "@react-native-firebase/auth";
+import type { PlatformCredential } from "@brelly/platform/auth";
+import {
+  ensureAnonymousUser,
+  generateDocId,
+  getFirebaseAuth,
+  getFirebaseFirestore,
+  signInWithLinkedCredential,
+  signOutCurrentUser,
+} from "@brelly/platform/firebase";
 import {
   collection,
   deleteDoc,
   doc,
   onSnapshot,
   writeBatch,
-} from "@react-native-firebase/firestore";
-
-import { migrationFlagKey } from "@brelly/core";
+} from "@brelly/platform/firestore";
+import { cancelAllNotifications } from "@brelly/platform/notifications";
+import { platformStorage } from "@brelly/platform/storage";
 
 import { attachCloudListeners, detachCloudListeners } from "@/services/cloudListeners";
-import {
-  ensureAnonymousUser,
-  generateDocId,
-  getFirebaseAuth,
-  getFirebaseFirestore,
-  linkCurrentUser,
-  signInWithLinkedCredential,
-  signOutCurrentUser,
-} from "@/services/firebase";
-import { cancelAllNotifications } from "@/services/notifications";
 import { useCloudSyncStore } from "@/store/cloudSyncStore";
 import { useItineraryStore } from "@/store/itineraryStore";
-import { mmkvStorage } from "@/store/mmkvStorage";
 import { useRoutineStore } from "@/store/routineStore";
 import { DEFAULT_SETTINGS, useSettingsStore } from "@/store/settingsStore";
+import { migrationFlagKey } from "@/utils/migrationFlagKey";
 import { allSlotsWithDates } from "@/utils/planSelectors";
 import {
   resolveMergeWrites,
   type ExistingAccountIds,
   type LocalSnapshot,
 } from "@/utils/mergeLocalIntoAccount";
-import { authErrorCode } from "@/utils/describeAuthError";
 import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
 import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
 
@@ -39,18 +36,21 @@ import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
  * same rationale as `localDataMigration.ts`'s constant of the same name. */
 const MAX_BATCH_WRITES = 400;
 
-const MERGE_SNAPSHOT_MMKV_KEY = "brelly-pending-merge";
+// The string is unchanged from when this was an MMKV-only constant: it is a
+// key in storage on devices already out there, and renaming it would strand
+// any merge that was interrupted across the update.
+const PENDING_MERGE_STORAGE_KEY = "brelly-pending-merge";
 
 function persistPendingMerge(snapshot: LocalSnapshot): void {
-  mmkvStorage.setItem(MERGE_SNAPSHOT_MMKV_KEY, JSON.stringify(snapshot));
+  platformStorage.setItem(PENDING_MERGE_STORAGE_KEY, JSON.stringify(snapshot));
 }
 
 function clearPendingMerge(): void {
-  mmkvStorage.removeItem(MERGE_SNAPSHOT_MMKV_KEY);
+  platformStorage.removeItem(PENDING_MERGE_STORAGE_KEY);
 }
 
 function readPendingMerge(): LocalSnapshot | null {
-  const raw = mmkvStorage.getItem(MERGE_SNAPSHOT_MMKV_KEY);
+  const raw = platformStorage.getItem(PENDING_MERGE_STORAGE_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as LocalSnapshot;
@@ -75,41 +75,14 @@ export function snapshotLocalData(): LocalSnapshot & { isEmpty: boolean } {
   return { ...snapshot, isEmpty: isSnapshotEmpty(snapshot) };
 }
 
-/**
- * The "this identity already has its own account" signal, which Firebase
- * spells differently per provider: an OAuth credential rejects a link with
- * `auth/credential-already-in-use`, while an email/password one rejects it
- * with `auth/email-already-in-use`. Only matching the first is why the email
- * flow could never reach the merge — a second attempt with an address that
- * had already been linked surfaced as a flat "Couldn't back up your data".
- */
-function isIdentityAlreadyInUse(error: unknown): boolean {
-  const code = authErrorCode(error);
-  return (
-    code === "auth/credential-already-in-use" ||
-    code === "auth/email-already-in-use" ||
-    code === "auth/account-exists-with-different-credential"
-  );
-}
-
-/**
- * Requirement 1's happy path and requirement 2's trigger, in one call — see
- * FIREBASE_MIGRATION.md's "Account linking". A brand-new identity links onto
- * the current uid with nothing else to do; an identity that already has an
- * account throws `auth/credential-already-in-use`, which is the signal to
- * run `mergeIntoExistingAccount`, not an error to surface.
- */
-export async function linkAnonymousAccount(
-  credential: AuthCredential,
-): Promise<"linked" | "merge-required"> {
-  try {
-    await linkCurrentUser(credential);
-    return "linked";
-  } catch (error) {
-    if (isIdentityAlreadyInUse(error)) return "merge-required";
-    throw error;
-  }
-}
+// Requirement 1's happy path and requirement 2's trigger used to live here as
+// `linkAnonymousAccount`. They are now `linkProvider` in
+// `@brelly/platform/auth`, because acquiring a credential and linking it are
+// one indivisible step on the web — `signInWithPopup` *is* the sign-in — and
+// the error codes that distinguish "already has an account" from a real
+// failure are the SDK's vocabulary rather than core's. What is left here is
+// what happens *after* that answer comes back, which is the part both
+// platforms share.
 
 /** Chunked `writeBatch()` deletes of everything under the anonymous uid —
  * the doc's step 4: the only chance to avoid orphaned data, since these
@@ -230,7 +203,7 @@ async function writeMergeSnapshot(
  * can finish an interrupted merge on the next launch.
  */
 export async function mergeIntoExistingAccount(
-  credential: AuthCredential,
+  credential: PlatformCredential,
   snapshot: LocalSnapshot,
   addLocalData: boolean,
 ): Promise<void> {
@@ -266,7 +239,7 @@ export async function mergeIntoExistingAccount(
   // would leave the next boot's ordinary migration re-uploading this
   // device's frozen pre-migration MMKV blobs into the account just joined —
   // see FIREBASE_MIGRATION.md's "One exception, and it is a real hazard".
-  mmkvStorage.setItem(migrationFlagKey(newUid), "true");
+  platformStorage.setItem(migrationFlagKey(newUid), "true");
 
   useCloudSyncStore.getState().resetReady();
   detachCloudListeners();
@@ -321,7 +294,7 @@ export async function signOutOfAccount(): Promise<void> {
   const anonUid = getFirebaseAuth().currentUser?.uid;
   if (!anonUid) throw new Error("Sign-out did not resolve a new anonymous uid");
 
-  mmkvStorage.setItem(migrationFlagKey(anonUid), "true");
+  platformStorage.setItem(migrationFlagKey(anonUid), "true");
   clearPendingMerge();
 
   attachCloudListeners(anonUid);
@@ -344,7 +317,7 @@ export async function resumePendingMergeIfNeeded(): Promise<void> {
   const user = getFirebaseAuth().currentUser;
   if (!user || user.isAnonymous) return;
 
-  mmkvStorage.setItem(migrationFlagKey(user.uid), "true");
+  platformStorage.setItem(migrationFlagKey(user.uid), "true");
   await writeMergeSnapshot(user.uid, snapshot);
   clearPendingMerge();
 }
