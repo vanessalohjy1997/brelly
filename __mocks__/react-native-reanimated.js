@@ -1,5 +1,3 @@
-/* eslint-env jest */
-
 // Reanimated 4's own `mock.js` re-imports the real entry point, which loads
 // react-native-worklets, which constructs `NativeWorklets` at module scope and
 // throws ("Cannot read properties of undefined (reading 'loadUnpackers')")
@@ -12,8 +10,13 @@
 const React = require("react");
 const { View, Text, ScrollView, Image } = require("react-native");
 
-const createAnimatedComponent = (Component) =>
-  React.forwardRef((props, ref) => React.createElement(Component, { ...props, ref }));
+const createAnimatedComponent = (Component) => {
+  const AnimatedComponent = React.forwardRef((props, ref) =>
+    React.createElement(Component, { ...props, ref }),
+  );
+  AnimatedComponent.displayName = `Animated(${Component.displayName || Component.name || "Component"})`;
+  return AnimatedComponent;
+};
 
 const Animated = {
   View: createAnimatedComponent(View),

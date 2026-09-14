@@ -17,7 +17,7 @@ if ! git status --porcelain 2>/dev/null | grep -qE '\.(ts|tsx|js|jsx)$'; then
   exit 0
 fi
 
-out=$(npx tsc --noEmit 2>&1 && yarn lint 2>&1 && yarn test 2>&1)
+out=$(yarn verify:fast 2>&1)
 status=$?
 
 [ "$status" -eq 0 ] && exit 0

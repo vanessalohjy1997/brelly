@@ -34,7 +34,7 @@ jobs:
           printf '/// <reference types="expo/types" />\n\n// NOTE: This file should not be edited and should be in your git ignore\n' > expo-env.d.ts
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: yarn typecheck
 
       - name: Lint
         run: yarn lint

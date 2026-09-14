@@ -35,10 +35,10 @@ describe("saveWithFeedback", () => {
   });
 
   it("reports a failed write instead of letting it take the screen down", () => {
-    // A persisted zustand store writes to MMKV synchronously inside `set`, so
-    // a storage failure surfaces as a throw out of the action itself.
+    // Nothing in the stores throws synchronously today; the point is that an
+    // action which does is reported rather than fatal.
     const result = saveWithFeedback(() => {
-      throw new Error("mmkv: no space left on device");
+      throw new Error("the store action threw");
     }, MESSAGES);
 
     expect(result.ok).toBe(false);
@@ -49,7 +49,7 @@ describe("saveWithFeedback", () => {
   });
 
   it("keeps the error for the caller", () => {
-    const error = new Error("mmkv: no space left on device");
+    const error = new Error("the store action threw");
 
     const result = saveWithFeedback(() => {
       throw error;
