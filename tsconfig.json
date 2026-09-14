@@ -9,6 +9,9 @@
       ],
       "@/assets/*": [
         "./assets/*"
+      ],
+      "@brelly/platform/*": [
+        "./src/platform/*"
       ]
     }
   },
