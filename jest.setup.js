@@ -7,6 +7,23 @@
 // factory that requires it makes the resolver recurse into itself).
 require("react-native-gesture-handler/jestSetup");
 
+// Core refuses to run unconfigured — deliberately, because the module-scope
+// `process.env.X!` it replaced failed by interpolating `undefined` into a URL
+// and getting a 400 back from Google, which reads as an API fault rather than
+// a build one. The suite is an entry point like any other, so it configures
+// core the same way `src/app/_layout.tsx` does. The key is a fixture: every
+// test that reaches `geocoding.ts` mocks `fetch`, and one that did not would
+// be making a billed request from CI.
+// Reached by its own path rather than through `@brelly/core`, and that is not
+// a style choice. The barrel is `export *` over the whole package, so
+// requiring it here would eagerly instantiate every core module *before* any
+// test file's `jest.mock` factories run — and a module already in the registry
+// keeps the real bindings it closed over. `forecastProvider.test.ts`'s
+// `jest.mock("./weather")` would silently do nothing.
+require("./packages/core/src/config").configureCore({
+  places: { mode: "direct", apiKey: "test-places-key" },
+});
+
 // Reanimated's runtime declares `_WORKLET` as a global, and the stand-in above
 // can't: a module mock only replaces an import. Gesture Handler's own code
 // reads it bare — `ReanimatedSwipeable`'s `close()` branches on it to decide
@@ -41,9 +58,9 @@ jest.mock("react-native-mmkv", () => {
 // namespaced API doesn't exist in the installed SDK, so there's nothing to
 // fake beyond these. Stateful (a mutable `currentUser`, an
 // already-in-use registry) because phase 5's account linking needs to
-// simulate a credential swap mid-test — see src/test/fakeAuth.ts.
+// simulate a credential swap mid-test — see packages/core/src/test/fakeAuth.ts.
 jest.mock("@react-native-firebase/auth", () =>
-  require("./src/test/fakeAuth").createAuthMock(),
+  require("@brelly/core/test").createAuthMock(),
 );
 
 // GoogleSignin and expo-apple-authentication are native-backed too, and only
@@ -73,9 +90,9 @@ jest.mock("expo-apple-authentication", () => ({
 // @react-native-firebase/firestore is native-backed too, and — per
 // FIREBASE_MIGRATION.md — the installed SDK's modular entry point has no
 // chained `collection().doc().set()` API left to fake, only the standalone
-// functions in src/test/fakeFirestore.ts.
+// functions in packages/core/src/test/fakeFirestore.ts.
 jest.mock("@react-native-firebase/firestore", () =>
-  require("./src/test/fakeFirestore").createFirestoreMock(),
+  require("@brelly/core/test").createFirestoreMock(),
 );
 
 jest.mock("expo-notifications", () => ({

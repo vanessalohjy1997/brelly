@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getForecastForSlotByProvider } from "@/services/forecastProvider";
-import { mmkvStorage } from "@/store/mmkvStorage";
-import { NeaRegion } from "@/types/weather";
 import {
   forecastCacheKey,
+  getForecastForSlotByProvider,
+  NeaRegion,
   readCachedForecast,
   writeCachedForecast,
-} from "@/utils/forecastCache";
-import type { WeatherProvider } from "@/utils/weatherProvider";
+  type WeatherProvider,
+} from "@brelly/core";
+import { mmkvStorage } from "@/store/mmkvStorage";
 
 type Params = {
   provider: WeatherProvider;

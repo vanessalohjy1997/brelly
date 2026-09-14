@@ -1,17 +1,19 @@
 import { doc, setDoc, writeBatch } from "@react-native-firebase/firestore";
 
+import { migrationFlagKey } from "@brelly/core";
+
 import { getFirebaseFirestore } from "@/services/firebase";
 import { mmkvStorage } from "@/store/mmkvStorage";
-import type { DayPlan } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { allSlotsWithDates } from "@/utils/planSelectors";
 import {
+  allSlotsWithDates,
   migrateSettingsDoc,
+  omitUndefinedFields,
   SETTINGS_SCHEMA_VERSION,
+  stripNotificationHandles,
   toCloudSettingsFields,
-} from "@/utils/migrateSettingsDoc";
-import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
-import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
+  type DayPlan,
+  type Routine,
+} from "@brelly/core";
 
 const SETTINGS_MMKV_KEY = "brelly-settings";
 const ROUTINES_MMKV_KEY = "brelly-routines";
@@ -19,13 +21,6 @@ const ITINERARY_MMKV_KEY = "brelly-itinerary";
 
 /** Firestore's own per-batch cap is 500; chunking below it leaves headroom. */
 const MAX_BATCH_WRITES = 400;
-
-/** Exported for `accountLinkService.ts` — a successful merge into an
- * existing account must set this for the *new* uid, or the next cold boot
- * re-uploads the frozen pre-migration blobs into the account just joined. */
-export function migrationFlagKey(uid: string): string {
-  return `brelly-migration-complete:${uid}`;
-}
 
 function settingsDocRef(uid: string) {
   return doc(getFirebaseFirestore(), "users", uid, "settings", "app");

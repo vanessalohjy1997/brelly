@@ -3,8 +3,12 @@ import { StyleSheet, type ViewStyle } from "react-native";
 
 import { WeekStrip } from "@/components/itinerary/WeekStrip";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { shiftDays, todayKey } from "@/utils/dateKeys";
+import {
+  shiftDays,
+  todayKey,
+  type DayPlan,
+  type ItinerarySlot,
+} from "@brelly/core";
 
 // ---------------------------------------------------------------------------
 // Helpers

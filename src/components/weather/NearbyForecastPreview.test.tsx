@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react-native";
 
 import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
-import type { UpcomingPeriodForecast } from "@/services/weather";
+import { type UpcomingPeriodForecast } from "@brelly/core";
 
 // NEA's 24hr endpoint splits the day into these named periods; the shapes
 // below mirror what `normalizeTwentyFourHour` produces from it.

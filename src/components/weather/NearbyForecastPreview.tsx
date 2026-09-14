@@ -6,10 +6,12 @@ import { UmbrellaVerdictIcon } from "@/components/weather/UmbrellaVerdictIcon";
 import { WeatherIcon } from "@/components/weather/WeatherIcon";
 import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import type { UpcomingPeriodForecast } from "@/services/weather";
-import { describeUmbrella } from "@/utils/describeUmbrella";
-import { formatPeriodLabel } from "@/utils/formatPeriodLabel";
-import { formatTempRange } from "@/utils/formatTempRange";
+import {
+  describeUmbrella,
+  formatPeriodLabel,
+  formatTempRange,
+  type UpcomingPeriodForecast,
+} from "@brelly/core";
 
 type Props = {
   forecasts: UpcomingPeriodForecast[];

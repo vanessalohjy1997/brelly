@@ -1,35 +1,28 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 
+import { linkProvider } from "@brelly/platform/auth";
+
 import AccountLinkScreen from "@/app/account-link";
 import {
-  linkAnonymousAccount,
   mergeIntoExistingAccount,
+  readAnonymousData,
   signOutOfAccount,
-  snapshotLocalData,
-} from "@/services/accountLinkService";
-import {
-  getAppleCredential,
-  getEmailCredential,
-  getGoogleCredential,
-} from "@/services/auth";
-import { useToastStore } from "@/store/toastStore";
-import { fakeAuth } from "@/test/fakeAuth";
+  useToastStore,
+} from "@brelly/core";
+import { fakeAuth } from "@brelly/core/test";
 import { confirmSignOut } from "@/utils/confirmSignOut";
 import { promptMergeChoice } from "@/utils/promptMergeChoice";
 
-jest.mock("@/services/accountLinkService", () => ({
-  linkAnonymousAccount: jest.fn(),
+jest.mock("@brelly/core/services/accountLinkService", () => ({
   mergeIntoExistingAccount: jest.fn(),
+  readAnonymousData: jest.fn(),
   signOutOfAccount: jest.fn(),
-  snapshotLocalData: jest.fn(),
 }));
-jest.mock("@/services/auth", () => ({
-  configureGoogleSignIn: jest.fn(),
-  getGoogleCredential: jest.fn(),
-  getAppleCredential: jest.fn(),
-  getEmailCredential: jest.fn(),
-}));
+// The screen no longer acquires a credential and then links it — those were
+// two steps only because a phone allows them to be. It states the intent and
+// the seam hands back whatever credential it ended up using.
+jest.mock("@brelly/platform/auth", () => ({ linkProvider: jest.fn() }));
 jest.mock("@/utils/promptMergeChoice", () => ({
   promptMergeChoice: jest.fn(),
 }));
@@ -37,12 +30,9 @@ jest.mock("@/utils/confirmSignOut", () => ({
   confirmSignOut: jest.fn(),
 }));
 
-const mockLink = linkAnonymousAccount as jest.Mock;
+const mockLink = linkProvider as jest.Mock;
 const mockMerge = mergeIntoExistingAccount as jest.Mock;
-const mockSnapshot = snapshotLocalData as jest.Mock;
-const mockGoogleCredential = getGoogleCredential as jest.Mock;
-const mockAppleCredential = getAppleCredential as jest.Mock;
-const mockEmailCredential = getEmailCredential as jest.Mock;
+const mockCloudRead = readAnonymousData as jest.Mock;
 const mockPrompt = promptMergeChoice as jest.Mock;
 const mockSignOut = signOutOfAccount as jest.Mock;
 const mockConfirmSignOut = confirmSignOut as jest.Mock;
@@ -51,9 +41,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   fakeAuth.reset();
   useToastStore.setState({ toast: null, modalHosts: [] });
-  mockGoogleCredential.mockResolvedValue({ providerId: "google.com" });
-  mockAppleCredential.mockResolvedValue({ providerId: "apple.com" });
-  mockEmailCredential.mockReturnValue({ providerId: "password" });
 });
 
 describe("AccountLinkScreen", () => {
@@ -66,7 +53,7 @@ describe("AccountLinkScreen", () => {
   });
 
   it("links and dismisses on a brand-new account", async () => {
-    mockLink.mockResolvedValue("linked");
+    mockLink.mockResolvedValue({ status: "linked" });
     const view = await render(<AccountLinkScreen />);
 
     await fireEvent.press(view.getByText("Continue with Google"));
@@ -76,8 +63,11 @@ describe("AccountLinkScreen", () => {
   });
 
   it("prompts for a merge and adds local data when the user chooses to", async () => {
-    mockLink.mockResolvedValue("merge-required");
-    mockSnapshot.mockReturnValue({
+    mockLink.mockResolvedValue({
+      status: "merge-required",
+      credential: { providerId: "google.com" },
+    });
+    mockCloudRead.mockResolvedValue({
       slots: [{ date: "2025-06-01", slot: {} }],
       routines: [{}],
       isEmpty: false,
@@ -98,8 +88,11 @@ describe("AccountLinkScreen", () => {
   });
 
   it("merges without local data when the user declines", async () => {
-    mockLink.mockResolvedValue("merge-required");
-    mockSnapshot.mockReturnValue({
+    mockLink.mockResolvedValue({
+      status: "merge-required",
+      credential: { providerId: "google.com" },
+    });
+    mockCloudRead.mockResolvedValue({
       slots: [{ date: "2025-06-01", slot: {} }],
       routines: [],
       isEmpty: false,
@@ -119,8 +112,11 @@ describe("AccountLinkScreen", () => {
   });
 
   it("does nothing further when the merge prompt is cancelled", async () => {
-    mockLink.mockResolvedValue("merge-required");
-    mockSnapshot.mockReturnValue({
+    mockLink.mockResolvedValue({
+      status: "merge-required",
+      credential: { providerId: "google.com" },
+    });
+    mockCloudRead.mockResolvedValue({
       slots: [{ date: "2025-06-01", slot: {} }],
       routines: [],
       isEmpty: false,
@@ -136,8 +132,11 @@ describe("AccountLinkScreen", () => {
   });
 
   it("skips the prompt and merges quietly when there is nothing local to bring across", async () => {
-    mockLink.mockResolvedValue("merge-required");
-    mockSnapshot.mockReturnValue({ slots: [], routines: [], isEmpty: true });
+    mockLink.mockResolvedValue({
+      status: "merge-required",
+      credential: { providerId: "google.com" },
+    });
+    mockCloudRead.mockResolvedValue({ slots: [], routines: [], isEmpty: true });
     const view = await render(<AccountLinkScreen />);
 
     await fireEvent.press(view.getByText("Continue with Google"));
@@ -180,11 +179,11 @@ describe("AccountLinkScreen", () => {
 
     await fireEvent.press(view.getByText("Continue with email"));
 
-    expect(mockEmailCredential).not.toHaveBeenCalled();
+    expect(mockLink).not.toHaveBeenCalled();
   });
 
   it("continues with email once both fields are filled", async () => {
-    mockLink.mockResolvedValue("linked");
+    mockLink.mockResolvedValue({ status: "linked" });
     const view = await render(<AccountLinkScreen />);
 
     await fireEvent.changeText(
@@ -195,10 +194,11 @@ describe("AccountLinkScreen", () => {
     await fireEvent.press(view.getByText("Continue with email"));
 
     await waitFor(() =>
-      expect(mockEmailCredential).toHaveBeenCalledWith(
-        "person@example.com",
-        "hunter2",
-      ),
+      expect(mockLink).toHaveBeenCalledWith({
+        provider: "email",
+        email: "person@example.com",
+        password: "hunter2",
+      }),
     );
   });
 
@@ -225,7 +225,7 @@ describe("AccountLinkScreen", () => {
   });
 
   it("trims the email before building the credential", async () => {
-    mockLink.mockResolvedValue("linked");
+    mockLink.mockResolvedValue({ status: "linked" });
     const view = await render(<AccountLinkScreen />);
 
     await fireEvent.changeText(
@@ -236,10 +236,11 @@ describe("AccountLinkScreen", () => {
     await fireEvent.press(view.getByText("Continue with email"));
 
     await waitFor(() =>
-      expect(mockEmailCredential).toHaveBeenCalledWith(
-        "person@example.com",
-        "hunter2",
-      ),
+      expect(mockLink).toHaveBeenCalledWith({
+        provider: "email",
+        email: "person@example.com",
+        password: "hunter2",
+      }),
     );
   });
 
@@ -250,7 +251,7 @@ describe("AccountLinkScreen", () => {
     await fireEvent.changeText(view.getByLabelText("Password"), "hunter2");
     await fireEvent.press(view.getByText("Continue with email"));
 
-    expect(mockEmailCredential).not.toHaveBeenCalled();
+    expect(mockLink).not.toHaveBeenCalled();
   });
 
   describe("signing out", () => {
@@ -308,12 +309,13 @@ describe("AccountLinkScreen", () => {
   });
 
   it("links with an Apple credential", async () => {
-    mockLink.mockResolvedValue("linked");
+    mockLink.mockResolvedValue({ status: "linked" });
     const view = await render(<AccountLinkScreen />);
 
     await fireEvent.press(view.getByText("Continue with Apple"));
 
-    await waitFor(() => expect(mockAppleCredential).toHaveBeenCalled());
-    expect(mockLink).toHaveBeenCalledWith({ providerId: "apple.com" });
+    await waitFor(() =>
+      expect(mockLink).toHaveBeenCalledWith({ provider: "apple" }),
+    );
   });
 });

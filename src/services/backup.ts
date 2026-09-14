@@ -3,14 +3,16 @@ import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
 import { getFirebaseAuth, getFirebaseFirestore } from "@/services/firebase";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import { omitUndefinedFields } from "@/utils/omitUndefinedFields";
-import { notifyCloudSyncFailure } from "@/utils/saveWithFeedback";
-import { stripNotificationHandles } from "@/utils/stripNotificationHandles";
-import type { DayPlan } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
+import {
+  notifyCloudSyncFailure,
+  omitUndefinedFields,
+  stripNotificationHandles,
+  useItineraryStore,
+  useRoutineStore,
+  useSettingsStore,
+  type DayPlan,
+  type Routine,
+} from "@brelly/core";
 
 /** Firestore's own per-batch cap is 500; chunking below it leaves headroom —
  * same rationale as `localDataMigration.ts`'s constant of the same name. */

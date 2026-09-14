@@ -1,10 +1,12 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-import type { SlotForecast } from "@/services/weather";
-import { computeNotificationTriggerTime } from "@/utils/computeNotificationTriggerTime";
-import { shouldNotifyForRain } from "@/utils/shouldNotifyForRain";
-import { isWithinQuietHours } from "@/utils/timeOfDay";
+import {
+  computeNotificationTriggerTime,
+  isWithinQuietHours,
+  shouldNotifyForRain,
+  type SlotForecast,
+} from "@brelly/core";
 
 // Android 8+ requires every notification to belong to a channel; the
 // channel's importance controls whether it can alert (vs. silently log).

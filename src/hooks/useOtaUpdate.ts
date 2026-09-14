@@ -2,11 +2,11 @@ import * as Updates from "expo-updates";
 import { useCallback, useEffect, useRef } from "react";
 import { AppState } from "react-native";
 
-import { showToast } from "@/store/toastStore";
 import {
   describeOtaUpdateState,
+  showToast,
   type OtaUpdateState,
-} from "@/utils/otaUpdateState";
+} from "@brelly/core";
 
 export type UseOtaUpdate = OtaUpdateState & {
   /** Checks, and downloads whatever it finds. A check alone buys nothing. */

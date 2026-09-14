@@ -1,12 +1,13 @@
 import * as Calendar from "expo-calendar";
 
-import { getPlaceDetails, searchPlaces } from "@/services/geocoding";
-import type { ItinerarySlot } from "@/types/itinerary";
 import {
+  getPlaceDetails,
+  searchPlaces,
   slotToCalendarEvent,
   toImportableEvents,
   type ImportableEvent,
-} from "@/utils/calendarSync";
+  type ItinerarySlot,
+} from "@brelly/core";
 
 /** How far ahead an import looks. */
 export const IMPORT_HORIZON_DAYS = 14;

@@ -23,6 +23,35 @@ A stale plan gets acted on as if it were true, and now it gets injected as if it
 were true too. Move finished work from `PLAN.md` into `NOTES.md` and tick the
 `UX.md` item you just addressed.
 
+# The `packages/core` boundary
+
+The repo is a Yarn workspace. `packages/core` holds the logic both the Expo app
+and (from Phase 3) the Next app need; the root is still the Expo app. Two rules
+govern what crosses:
+
+**Alias for behaviour, inject for values.** Where the two platforms do the same
+thing by different means, core imports a bare specifier no package provides —
+`@brelly/platform/firestore`, `/firebase`, `/auth`, `/storage`, `/dialogs`,
+`/haptics`, `/notifications`, `/appSettings` — and each app resolves it in its
+own `tsconfig.json` `paths`. Where they merely need a different *value*, no
+alias helps: `EXPO_PUBLIC_*` and `NEXT_PUBLIC_*` are literal text substitutions
+each bundler performs on its own files. Those go through `configureCore()`.
+
+**Apps import `@brelly/core`, never a path inside it.** Both directions are
+lint-enforced (`no-restricted-imports` in `eslint.config.js`), so you will be
+told rather than having to remember. The two exceptions are deliberate:
+`@brelly/core/test` is the fakes, a second entry point kept out of the barrel so
+test doubles never reach a bundle; and `jest.mock("@brelly/core/services/x")`
+names a *module to replace*, which is not an import and has to be the real
+module — Jest keys its registry by resolved path, and that is what intercepts
+one core module calling another. Mocking the barrel does not.
+
+Core is never compiled on its own; it is compiled inside each app's project, so
+a platform implementation that drifts from what core imports fails that app's
+`tsc --noEmit`. `yarn test:core` is the other half: it runs core's suite with
+the seams resolved to platform-free fakes, which is what catches core importing
+something secretly Expo-shaped before a Next build does.
+
 # Branches and commits
 
 Name the branch for what it does — `fix/weather-icon-crash`,

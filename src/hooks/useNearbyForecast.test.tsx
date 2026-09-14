@@ -5,13 +5,13 @@ import type { ReactNode } from "react";
 import { AppState } from "react-native";
 
 import { useNearbyForecast } from "@/hooks/useNearbyForecast";
-import { getUpcomingForecast } from "@/services/weather";
+import { getUpcomingForecast } from "@brelly/core";
 import {
   resetDeviceLocationStore,
   useDeviceLocationStore,
 } from "@/store/deviceLocationStore";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getUpcomingForecast: jest.fn().mockResolvedValue([]),
 }));
 

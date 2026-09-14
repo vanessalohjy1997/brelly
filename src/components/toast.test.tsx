@@ -7,7 +7,10 @@ import {
   ToastWithActionDurationMs,
 } from "@/components/toast";
 import { Colors } from "@/constants/theme";
-import { showToast, useToastStore } from "@/store/toastStore";
+import {
+  showToast,
+  useToastStore,
+} from "@brelly/core";
 
 // Jest renders under the light scheme, so the expected values come from
 // `Colors.light` rather than being hardcoded hex in two places.

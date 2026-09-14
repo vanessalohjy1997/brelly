@@ -15,6 +15,71 @@ module.exports = defineConfig([
     ignores: ["dist/*", ".expo/*"],
   },
   {
+    // The boundary, enforced rather than described. Core is compiled inside
+    // each app's project, so an app-only import here would typecheck in the
+    // Expo app and fail in the Next one — which is the worst possible place to
+    // find out. `@/` still resolves into `packages/core` for now, so without
+    // this rule a core file could reach back into `src/` and nothing would say
+    // so until the fallback is dropped.
+    //
+    // What core is allowed to name: relative paths inside itself, real npm
+    // packages, and `@brelly/platform/*` — the seams each app resolves to its
+    // own implementations.
+    files: ["packages/core/**/*.ts", "packages/core/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*"],
+              message:
+                "packages/core must not import app code. Use a relative path if the file is in core, or a @brelly/platform/* seam if it is not.",
+            },
+            {
+              group: ["@brelly/core", "@brelly/core/*"],
+              message:
+                "packages/core must not import itself by package name — use a relative path.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The app-facing half of the same boundary. `@brelly/core` is one module;
+    // a deep import is a dependency on where core keeps a file, and once one
+    // exists core cannot move its own files again.
+    //
+    // Deliberately a rule about *imports*, which leaves `jest.mock(
+    // "@brelly/core/services/weather")` alone — and that is the right line.
+    // `jest.mock` names a module to replace rather than a specifier the code
+    // under test used, and it has to name the real module: Jest keys its
+    // registry by resolved path, so replacing the file is what intercepts one
+    // core module calling another. The barrel cannot do that job, because
+    // those calls never pass through it.
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              // `@brelly/core/test` is excepted because it is the package's
+              // other deliberate entry point, not a path into its insides: it
+              // holds the Firestore and auth fakes, which both apps' Jest
+              // setup needs and neither app owns. It stays out of the barrel
+              // so that test doubles never reach a bundle.
+              group: ["@brelly/core/*", "!@brelly/core/test"],
+              message:
+                "Import from \"@brelly/core\" — the barrel is the package's only entry point. (jest.mock may still name a module directly.)",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: [
       "jest.setup.js",
       "__mocks__/**/*.js",
@@ -22,6 +87,10 @@ module.exports = defineConfig([
       "*.config.js",
       "plugins/**/*.js",
       "scripts/**/*.js",
+      // The workspace packages carry their own Jest config and setup, which
+      // are Node scripts for the same reason the root's are.
+      "packages/*/jest.config.js",
+      "packages/*/jest.setup.js",
     ],
     languageOptions: {
       globals: {

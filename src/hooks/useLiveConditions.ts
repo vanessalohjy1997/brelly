@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getLiveConditions } from "@/services/liveConditions";
+import { getLiveConditions } from "@brelly/core";
 
 /**
  * What the sensors nearest a point are measuring right now.

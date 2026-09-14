@@ -5,24 +5,27 @@ import * as Updates from "expo-updates";
 import { Linking } from "react-native";
 
 import TodayScreen from "@/app/(tabs)/index";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
+import {
+  todayKey,
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useSettingsStore,
+  useToastStore,
+  type DayPlan,
+  type ItinerarySlot,
+} from "@brelly/core";
 import { resetDeviceLocationStore } from "@/store/deviceLocationStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import { useToastStore } from "@/store/toastStore";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import { todayKey } from "@/utils/dateKeys";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Cloudy", source: "24hr" }),
   getUpcomingForecast: jest.fn().mockResolvedValue([]),
 }));
 
-jest.mock("@/services/liveConditions", () => ({
+jest.mock("@brelly/core/services/liveConditions", () => ({
   getLiveConditions: jest.fn().mockResolvedValue({
     stationName: "Tanjong Rhu",
     observedAt: new Date().toISOString(),
@@ -31,7 +34,7 @@ jest.mock("@/services/liveConditions", () => ({
   }),
 }));
 
-jest.mock("@/services/airQuality", () => ({
+jest.mock("@brelly/core/services/airQuality", () => ({
   fetchPsi: jest.fn().mockResolvedValue({
     updatedTimestamp: new Date().toISOString(),
     psi: { north: 52, south: 51, east: 52, west: 52, central: 57 },

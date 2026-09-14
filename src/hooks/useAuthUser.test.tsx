@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react-native";
 
 import { useAuthUser } from "@/hooks/useAuthUser";
-import { fakeAuth } from "@/test/fakeAuth";
+import { fakeAuth } from "@brelly/core/test";
 
 beforeEach(() => {
   fakeAuth.reset();

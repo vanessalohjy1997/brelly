@@ -3,14 +3,14 @@ import { AppState } from "react-native";
 
 import { useRainNotificationScheduler } from "@/hooks/useRainNotificationScheduler";
 import { cancelAndDeleteSlot } from "@/services/notifications";
-import { useCloudReady } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { planRoutineMaterialization } from "@/utils/planRoutineMaterialization";
 import {
   materializedSlotId,
+  planRoutineMaterialization,
   RoutineHorizonDays,
-} from "@/utils/routineOccurrences";
+  useCloudReady,
+  useItineraryStore,
+  useRoutineStore,
+} from "@brelly/core";
 
 /**
  * Fills in the next fortnight of every routine, and sweeps stops that no rule

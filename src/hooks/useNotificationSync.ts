@@ -5,8 +5,10 @@ import {
   runNotificationSync,
   type NotificationSyncContext,
 } from "@/services/notificationSync";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useSettingsStore } from "@/store/settingsStore";
+import {
+  useItineraryStore,
+  useSettingsStore,
+} from "@brelly/core";
 
 /**
  * How long to wait after the last structural plan change before re-syncing. A

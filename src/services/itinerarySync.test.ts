@@ -4,12 +4,12 @@ import { onSnapshot } from "@react-native-firebase/firestore";
 import {
   deleteSlotDoc,
   subscribeToSlotsCollection,
+  useToastStore,
   writeSlot,
   writeSlotFields,
-} from "@/services/itinerarySync";
-import { useToastStore } from "@/store/toastStore";
-import { fakeFirestoreDb } from "@/test/fakeFirestore";
-import type { ItinerarySlot } from "@/types/itinerary";
+  type ItinerarySlot,
+} from "@brelly/core";
+import { fakeFirestoreDb } from "@brelly/core/test";
 
 const mockGetAuth = getAuth as jest.Mock;
 

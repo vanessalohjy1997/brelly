@@ -1,17 +1,18 @@
 import { useEffect } from "react";
 
-import { resumePendingMergeIfNeeded } from "@/services/accountLinkService";
-import { attachCloudListeners, detachCloudListeners } from "@/services/cloudListeners";
+import {
+  attachCloudListeners,
+  describeCloudSyncError,
+  detachCloudListeners,
+  resumePendingMergeIfNeeded,
+  useCloudReady,
+  useCloudSyncStore,
+} from "@brelly/core";
 import { ensureAnonymousUser, getFirebaseAuth } from "@/services/firebase";
 import {
   confirmLocalDataMigration,
   enqueueLocalDataMigration,
 } from "@/services/localDataMigration";
-import {
-  describeCloudSyncError,
-  useCloudReady,
-  useCloudSyncStore,
-} from "@/store/cloudSyncStore";
 
 /**
  * `isCancelled` lets the mount-effect call abort after its own unmount —

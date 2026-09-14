@@ -1,8 +1,10 @@
 import RoutinesScreen from "@/app/routines";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useRoutineStore } from "@/store/routineStore";
+import {
+  useCloudSyncStore,
+  useRoutineStore,
+  type Routine,
+} from "@brelly/core";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { Routine } from "@/types/routine";
 
 function routine(overrides: Partial<Routine> = {}): Routine {
   return {

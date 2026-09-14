@@ -3,23 +3,25 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Alert } from "react-native";
 
 import EditSlotScreen from "@/app/plan/[id]";
-import { getUpcomingForecast } from "@/services/weather";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useToastStore } from "@/store/toastStore";
+import {
+  getUpcomingForecast,
+  toDateKey,
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useToastStore,
+  type DayPlan,
+  type Routine,
+} from "@brelly/core";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { DayPlan } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { toDateKey } from "@/utils/dateKeys";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Cloudy", source: "24hr" }),
   getUpcomingForecast: jest.fn().mockResolvedValue([]),
 }));
-jest.mock("@/services/openMeteo", () => ({
+jest.mock("@brelly/core/services/openMeteo", () => ({
   getOpenMeteoForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Fair (Day)", source: "openMeteoHourly" }),

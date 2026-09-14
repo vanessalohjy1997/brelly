@@ -5,17 +5,17 @@ import {
   useRoutineMaterializer,
   useRoutineSync,
 } from "@/hooks/useRoutineMaterializer";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import type { Routine } from "@/types/routine";
 import {
   materializedSlotId,
   RoutineHorizonDays,
-} from "@/utils/routineOccurrences";
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useSettingsStore,
+  type Routine,
+} from "@brelly/core";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Cloudy", source: "24hr" }),

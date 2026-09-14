@@ -3,7 +3,7 @@ import * as Updates from "expo-updates";
 import { AppState } from "react-native";
 
 import { useOtaUpdate } from "@/hooks/useOtaUpdate";
-import { useToastStore } from "@/store/toastStore";
+import { useToastStore } from "@brelly/core";
 
 const useUpdatesMock = Updates.useUpdates as jest.Mock;
 const checkForUpdateAsync = Updates.checkForUpdateAsync as jest.Mock;

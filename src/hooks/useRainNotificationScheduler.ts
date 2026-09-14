@@ -1,15 +1,17 @@
 import { useCallback } from "react";
 
-import { getForecastForSlotByProvider } from "@/services/forecastProvider";
+import {
+  findSlotById,
+  getForecastForSlotByProvider,
+  resolveSlotProvider,
+  useItineraryStore,
+  useSettingsStore,
+  type ItinerarySlot,
+} from "@brelly/core";
 import {
   cancelNotification,
   scheduleRainNotification,
 } from "@/services/notifications";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import type { ItinerarySlot } from "@/types/itinerary";
-import { findSlotById } from "@/utils/planSelectors";
-import { resolveSlotProvider } from "@/utils/weatherProvider";
 
 /**
  * Returns a function that fetches the current forecast for a slot and, if

@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 
 import { Icon, type IconName } from "@/components/icon";
-import type { UmbrellaReason } from "@/utils/describeUmbrella";
+import { type UmbrellaReason } from "@brelly/core";
 
 const UMBRELLA: IconName = { ios: "umbrella.fill", android: "umbrella" };
 const RAIN_MARK: IconName = { ios: "drop.fill", android: "water_drop" };

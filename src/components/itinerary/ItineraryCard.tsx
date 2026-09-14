@@ -18,11 +18,13 @@ import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useUvIndex } from "@/hooks/useUvIndex";
 import { useWeatherForSlot } from "@/hooks/useWeatherForSlot";
-import type { ItinerarySlot } from "@/types/itinerary";
-import { describeSlotTiming } from "@/utils/describeSlotTiming";
-import { describeUmbrella } from "@/utils/describeUmbrella";
-import { resolveSlotKind } from "@/utils/slotKind";
-import { resolveSlotProvider } from "@/utils/weatherProvider";
+import {
+  describeSlotTiming,
+  describeUmbrella,
+  resolveSlotKind,
+  resolveSlotProvider,
+  type ItinerarySlot,
+} from "@brelly/core";
 
 const ACTION_WIDTH = 88;
 

@@ -3,13 +3,16 @@ import { File } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
 import { exportBackup, importBackup } from "@/services/backup";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import { fakeFirestoreDb } from "@/test/fakeFirestore";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { planRoutineMaterialization } from "@/utils/planRoutineMaterialization";
+import {
+  planRoutineMaterialization,
+  useItineraryStore,
+  useRoutineStore,
+  useSettingsStore,
+  type DayPlan,
+  type ItinerarySlot,
+  type Routine,
+} from "@brelly/core";
+import { fakeFirestoreDb } from "@brelly/core/test";
 
 const mockGetAuth = getAuth as jest.Mock;
 

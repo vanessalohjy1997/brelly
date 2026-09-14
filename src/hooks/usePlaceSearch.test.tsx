@@ -1,9 +1,12 @@
 import { act, renderHook } from "@testing-library/react-native";
 
 import { usePlaceSearch } from "@/hooks/usePlaceSearch";
-import { getPlaceDetails, searchPlaces } from "@/services/geocoding";
+import {
+  getPlaceDetails,
+  searchPlaces,
+} from "@brelly/core";
 
-jest.mock("@/services/geocoding", () => ({
+jest.mock("@brelly/core/services/geocoding", () => ({
   searchPlaces: jest.fn(),
   getPlaceDetails: jest.fn(),
 }));

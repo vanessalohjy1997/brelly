@@ -2,12 +2,14 @@ import { fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 
 import { ItineraryCard } from "@/components/itinerary/ItineraryCard";
-import { getOpenMeteoForecastForSlot } from "@/services/openMeteo";
-import { getForecastForSlot } from "@/services/weather";
+import {
+  getForecastForSlot,
+  getOpenMeteoForecastForSlot,
+  type ItinerarySlot,
+} from "@brelly/core";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { ItinerarySlot } from "@/types/itinerary";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest.fn().mockResolvedValue({
     forecast: "Thundery Showers",
     source: "24hr",
@@ -15,7 +17,7 @@ jest.mock("@/services/weather", () => ({
     updatedAt: new Date().toISOString(),
   }),
 }));
-jest.mock("@/services/openMeteo", () => ({
+jest.mock("@brelly/core/services/openMeteo", () => ({
   getOpenMeteoForecastForSlot: jest.fn(),
 }));
 

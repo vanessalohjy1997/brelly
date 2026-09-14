@@ -1,7 +1,7 @@
 import { useQueryClient, type Query } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
-import { showToast } from "@/store/toastStore";
+import { showToast } from "@brelly/core";
 
 // Every query key this app uses for weather data. Refetching by prefix rather
 // than clearing the whole cache keeps unrelated queries (place lookups) alone.

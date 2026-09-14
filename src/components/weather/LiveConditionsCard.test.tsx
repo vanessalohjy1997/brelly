@@ -5,7 +5,7 @@ import {
   deriveLiveForecastText,
   LiveConditionsCard,
 } from "@/components/weather/LiveConditionsCard";
-import type { LiveConditions } from "@/types/weather";
+import { type LiveConditions } from "@brelly/core";
 
 const CONDITIONS: LiveConditions = {
   stationName: "Tanjong Rhu",

@@ -6,7 +6,10 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { Spacing } from "@/constants/theme";
 import { useAppColorScheme, useTheme } from "@/hooks/useTheme";
-import { DatePickerWidth, DateTimePickerHeight } from "@/utils/shouldStackDateTimeFields";
+import {
+  DatePickerWidth,
+  DateTimePickerHeight,
+} from "@brelly/core";
 
 type Props = {
   onDuplicate: (targetDate: Date) => void;

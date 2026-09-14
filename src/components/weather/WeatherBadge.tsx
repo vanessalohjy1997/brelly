@@ -5,10 +5,12 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { IconSize, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import type { SlotForecast } from "@/services/weather";
-import { describeUmbrella } from "@/utils/describeUmbrella";
-import { formatRelativeTimestamp } from "@/utils/formatRelativeTimestamp";
-import { formatTempRange } from "@/utils/formatTempRange";
+import {
+  describeUmbrella,
+  formatRelativeTimestamp,
+  formatTempRange,
+  type SlotForecast,
+} from "@brelly/core";
 
 type Props = {
   weather: SlotForecast | undefined;

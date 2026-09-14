@@ -1,4 +1,4 @@
-import type { AuthCredential } from "@react-native-firebase/auth";
+import { linkProvider, type LinkRequest } from "@brelly/platform/auth";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -18,19 +18,13 @@ import { Spacing } from "@/constants/theme";
 import { useAuthUser } from "@/hooks/useAuthUser";
 import { useTheme } from "@/hooks/useTheme";
 import {
-  getAppleCredential,
-  getEmailCredential,
-  getGoogleCredential,
-} from "@/services/auth";
-import {
-  linkAnonymousAccount,
+  describeAuthError,
   mergeIntoExistingAccount,
+  readAnonymousData,
+  showToast,
   signOutOfAccount,
-  snapshotLocalData,
-} from "@/services/accountLinkService";
-import { showToast } from "@/store/toastStore";
+} from "@brelly/core";
 import { confirmSignOut } from "@/utils/confirmSignOut";
-import { describeAuthError } from "@/utils/describeAuthError";
 import { promptMergeChoice } from "@/utils/promptMergeChoice";
 
 export default function AccountLinkScreen() {
@@ -49,36 +43,50 @@ export default function AccountLinkScreen() {
     ? (authUser.email ?? authUser.displayName ?? "your account")
     : null;
 
-  const handleLink = async (
-    getCredential: () => Promise<AuthCredential>,
-  ): Promise<void> => {
+  const handleLink = async (request: LinkRequest): Promise<void> => {
     if (isLinking) return;
     setIsLinking(true);
     try {
-      const credential = await getCredential();
-      const result = await linkAnonymousAccount(credential);
+      // One call, not "get a credential, then link it". The two steps are
+      // separable on a phone and not on the web, where the provider popup is
+      // itself the sign-in — so the seam takes the intent and hands back the
+      // credential it ended up using. The merge below needs that credential
+      // rather than a fresh one: re-running the provider would mean a second
+      // sheet here, and a popup with no user gesture behind it on the web.
+      const result = await linkProvider(request);
 
-      if (result === "linked") {
+      if (result.status === "linked") {
         showToast("Backed up", "success");
         router.back();
         return;
       }
 
-      const snapshot = snapshotLocalData();
-      if (snapshot.isEmpty) {
-        await mergeIntoExistingAccount(credential, snapshot, false);
+      const { credential } = result;
+
+      // Read once, here, and thread the same value through the question and
+      // the merge. It used to read the Zustand stores, which are a mirror of
+      // these documents rather than the documents — so a session whose
+      // listeners had not hydrated yet saw "nothing to merge", skipped the
+      // question entirely and went straight into the discard branch. That is a
+      // silent, unprompted deletion of everything in the account. Asking
+      // "Add your 0 plans and 0 routines to it?" one line further down was the
+      // same bug, just visible.
+      const cloud = await readAnonymousData();
+
+      if (cloud.isEmpty) {
+        await mergeIntoExistingAccount(credential, cloud, false);
         showToast("Signed in", "success");
         router.back();
         return;
       }
 
       const choice = await promptMergeChoice(
-        snapshot.slots.length,
-        snapshot.routines.length,
+        cloud.slots.length,
+        cloud.routines.length,
       );
       if (choice === "cancel") return;
 
-      await mergeIntoExistingAccount(credential, snapshot, choice === "add");
+      await mergeIntoExistingAccount(credential, cloud, choice === "add");
       showToast(
         choice === "add" ? "Added your plans" : "Signed in",
         "success",
@@ -163,7 +171,7 @@ export default function AccountLinkScreen() {
               <ThemedView type="backgroundElement" style={styles.optionGroup}>
                 <ThemedView style={styles.subSetting}>
                   <Pressable
-                    onPress={() => handleLink(getGoogleCredential)}
+                    onPress={() => handleLink({ provider: "google" })}
                     disabled={isLinking}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: isLinking }}
@@ -182,7 +190,7 @@ export default function AccountLinkScreen() {
                 {Platform.OS === "ios" && (
                   <ThemedView style={styles.subSetting}>
                     <Pressable
-                      onPress={() => handleLink(getAppleCredential)}
+                      onPress={() => handleLink({ provider: "apple" })}
                       disabled={isLinking}
                       accessibilityRole="button"
                       accessibilityState={{ disabled: isLinking }}
@@ -229,11 +237,11 @@ export default function AccountLinkScreen() {
                   />
                   <Pressable
                     onPress={() =>
-                      handleLink(() =>
-                        Promise.resolve(
-                          getEmailCredential(email.trim(), password),
-                        ),
-                      )
+                      handleLink({
+                        provider: "email",
+                        email: email.trim(),
+                        password,
+                      })
                     }
                     disabled={isLinking || !canSubmitEmail}
                     accessibilityRole="button"

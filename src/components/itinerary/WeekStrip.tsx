@@ -4,8 +4,11 @@ import { ThemedText } from "@/components/themedText";
 import { ThemedView } from "@/components/themedView";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import type { DayPlan } from "@/types/itinerary";
-import { todayKey, shiftDays } from "@/utils/dateKeys";
+import {
+  shiftDays,
+  todayKey,
+  type DayPlan,
+} from "@brelly/core";
 
 type DayCell = {
   dateKey: string;

@@ -1,7 +1,7 @@
 import { ExtensionStorage } from "@bacons/apple-targets";
 import { Platform } from "react-native";
 
-import type { WidgetSnapshot } from "@/services/widgetSnapshot";
+import { type WidgetSnapshot } from "@brelly/core";
 
 /**
  * The App Group the app and the WidgetKit extension share. It is written in

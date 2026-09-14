@@ -1,4 +1,7 @@
-import { showToast, useToastStore } from "@/store/toastStore";
+import {
+  showToast,
+  useToastStore,
+} from "@brelly/core";
 import { hapticError, hapticSuccess } from "@/utils/haptics";
 import { subscribeToastHaptics } from "@/utils/toastHaptics";
 

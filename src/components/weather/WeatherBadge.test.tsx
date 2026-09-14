@@ -5,8 +5,10 @@ import {
   ForecastTimestamp,
   WeatherBadge,
 } from "@/components/weather/WeatherBadge";
-import type { SlotForecast } from "@/services/weather";
-import { describeUmbrella } from "@/utils/describeUmbrella";
+import {
+  describeUmbrella,
+  type SlotForecast,
+} from "@brelly/core";
 
 const minutesAgo = (minutes: number) =>
   new Date(Date.now() - minutes * 60 * 1000).toISOString();

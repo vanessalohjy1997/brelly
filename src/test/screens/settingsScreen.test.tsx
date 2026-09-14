@@ -7,9 +7,11 @@ import { AppState, Linking } from "react-native";
 
 import SettingsScreen from "@/app/(tabs)/settings";
 import { resetDeviceLocationStore } from "@/store/deviceLocationStore";
-import { useSettingsStore } from "@/store/settingsStore";
-import { useToastStore } from "@/store/toastStore";
-import { fakeAuth } from "@/test/fakeAuth";
+import {
+  useSettingsStore,
+  useToastStore,
+} from "@brelly/core";
+import { fakeAuth } from "@brelly/core/test";
 
 const getPermissions = Notifications.getPermissionsAsync as jest.Mock;
 const requestPermissions = Notifications.requestPermissionsAsync as jest.Mock;

@@ -3,16 +3,19 @@ import { router } from "expo-router";
 import { Alert } from "react-native";
 
 import PlansScreen from "@/app/(tabs)/plans";
-import { useCloudSyncStore } from "@/store/cloudSyncStore";
-import { useItineraryStore } from "@/store/itineraryStore";
-import { useRoutineStore } from "@/store/routineStore";
-import { useToastStore } from "@/store/toastStore";
+import {
+  toDateKey,
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useToastStore,
+  type DayPlan,
+  type ItinerarySlot,
+  type Routine,
+} from "@brelly/core";
 import { renderWithProviders } from "@/test/renderWithProviders";
-import type { DayPlan, ItinerarySlot } from "@/types/itinerary";
-import type { Routine } from "@/types/routine";
-import { toDateKey } from "@/utils/dateKeys";
 
-jest.mock("@/services/weather", () => ({
+jest.mock("@brelly/core/services/weather", () => ({
   getForecastForSlot: jest
     .fn()
     .mockResolvedValue({ forecast: "Cloudy", source: "24hr" }),
