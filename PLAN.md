@@ -39,9 +39,10 @@ Read the phase there before starting it; these are the headings only.
 
 - [x] **Phase 0 — de-risk the harness.** Three commits, no structure change.
       Written up in [round 36](NOTES.md#round-36--phase-0-of-the-web-migration-de-risking-the-harness).
-- [ ] **Phase 1 — extract `packages/core`**, root still the Expo app
-      (~15 commits). See [WEB.md](WEB.md#phase-1--extract-packagescore-root-still-the-expo-app-15-commits).
-      Expected to be fingerprint-neutral — **measure it**, don't assume it.
+- [x] **Phase 1 — extract `packages/core`.** 15 commits plus a bug-fix commit.
+      Written up in [round 37](NOTES.md#round-37--phase-1-of-the-web-migration-packagescore).
+      Measured, and it is **not** fingerprint-neutral: `contents:packageJson:scripts`
+      moved (`test:core` is new), nothing else hashed did.
 - [ ] **Phase 2 — the physical move** to `apps/mobile` (one PR, 4 commits).
       Bumps the fingerprint unconditionally; OTA is frozen until both native
       builds land. See [WEB.md](WEB.md#phase-2--the-physical-move-one-pr-4-commits).
@@ -50,10 +51,11 @@ Read the phase there before starting it; these are the headings only.
 - [ ] **Phase 4 — deploy.** The `/api/places` abuse control is a gate here, not
       a follow-up. See [WEB.md](WEB.md#phase-4--deploy).
 
-Before Phase 1: cut `production` and `preview` native builds at the tag
-`ota-baseline-pre-monorepo`, and re-run
-`eas fingerprint:generate --platform ios --environment production` — all three
-Phase 0 commits touch `package.json` `scripts`, which the fingerprint hashes.
+Before Phase 2: cut `production` and `preview` native builds. The fingerprint
+has moved twice now — every Phase 0 commit touched `package.json` `scripts`, and
+so did Phase 1's last commit — and Phase 2 moves it again unconditionally, so
+OTA is closed until a native build ships from the post-Phase-2 tree. The tag
+`ota-baseline-pre-monorepo` still makes an emergency hotfix a checkout.
 
 Finished work moves into `NOTES.md` — the round history there says why each
 thing is the way it is. New work is added back here as a task, not as a

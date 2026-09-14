@@ -67,6 +67,18 @@ not defined`, then `Cannot read properties of undefined (reading 'System')`.
   stands in instead; because it sits next to `node_modules` it's picked up
   automatically, and adding a `jest.mock` factory that requires it makes the
   resolver recurse into itself.
+- **A `jest.mock` of `@brelly/core` does not reach inside core.** The barrel is
+  one module: replacing its `getForecastForSlot` leaves `forecastProvider`'s own
+  `./weather` import untouched, because core's internal calls never pass through
+  it. Mock the module — `jest.mock("@brelly/core/services/weather")` — which
+  works because Jest keys its registry by *resolved path*, so replacing the file
+  intercepts every importer, relative ones included. The `no-restricted-imports`
+  rule allows exactly this and forbids the matching `import`. The same trap has
+  a second face: anything that `require`s the barrel during setup instantiates
+  all 67 core modules before any test file's `jest.mock` factory runs, and a
+  module already in the registry keeps the real bindings it closed over — which
+  is why `jest.setup.js` reaches `packages/core/src/config` directly for
+  `configureCore` rather than going through `@brelly/core`.
 - **Keep non-trivial logic in plain `src/utils/` functions anyway.** Rendering
   is now possible but still slower and noisier than testing a pure function,
   and decisions expressed as data are easier to enumerate. `sortSlotsByStart`,
@@ -2465,3 +2477,152 @@ checkout. Cut `production` and `preview` native builds from that tag before
 Phase 1.
 
 Testing: 1381 tests across 122 suites.
+
+### Round 37 — Phase 1 of the web migration: `packages/core`
+
+Fifteen commits plus one bug-fix commit. The repo root is still the Expo app;
+what changed is that 16 of the 67 modules it used to own now live in
+`packages/core`, and the other app that will need them can have them without a
+copy. [`WEB.md`](WEB.md) holds the design; this is what actually happened and
+where it differed.
+
+**The rule the whole phase runs on: alias for behaviour, inject for values.**
+Where the two platforms do the same thing by different means, core imports a
+bare specifier no package provides — `@brelly/platform/firestore` and seven
+siblings — and each app resolves it in its own `tsconfig.json` `paths`, to its
+own directory of implementations. One declaration, honoured by `tsc`, by Metro
+(which reads tsconfig paths natively) and by Jest (through `jest-expo`'s
+`withTypescriptMapping`). Where the two platforms merely need *different
+values*, no alias can help: `EXPO_PUBLIC_*` and `NEXT_PUBLIC_*` are literal
+text substitutions each bundler performs on its own files, so
+`process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY` inside a file Next compiles is not
+a variable that resolves to nothing — it is a string nothing rewrites. Those go
+through `configureCore()`, called from `src/app/_layout.tsx` and from
+`jest.setup.js`.
+
+**The eighth seam is the one that makes the extraction possible.** Seven of the
+eight are what you would guess — Firestore, storage, dialogs, haptics,
+notifications, app settings, auth. The eighth is `@brelly/platform/firebase`,
+and without it the boundary is a fiction: six core-bound modules import
+`services/firebase.ts`'s *wrappers* (`getFirebaseAuth`, `generateDocId`,
+`ensureAnonymousUser`, …), which exist in **neither**
+`@react-native-firebase/firestore` nor `firebase/firestore`. A "re-export the
+same names" seam cannot carry a name that neither package has.
+
+`@brelly/platform/random` from `WEB.md`'s list is **not** here. Its reason to
+exist is the Phase 4 fix that mints the Places session token in the browser,
+and it needs `expo-crypto` added — `crypto.randomUUID()` does not exist on this
+runtime, with no polyfill in `expo/src/winter/` or RN 0.86/Hermes. An unused
+seam carrying a new native dependency for three phases is worse than no seam.
+
+**`signInWithProvider(request)` could not do the job the plan gave it.**
+Acquiring a credential and linking it are two steps only because a phone allows
+them to be; on the web `signInWithPopup` *is* the sign-in. So the seam is
+`linkProvider(request)`, which does both and hands the credential back —
+because the merge that follows switches identity *after* deleting the anonymous
+user's documents and needs that same credential. Re-acquiring it there is a
+second provider sheet on a phone and a popup blocked for want of a user gesture
+in a browser. The sign-in itself reuses the `firebase` seam's existing
+`signInWithLinkedCredential`.
+
+**The barrel cannot be where tests mock.** This is the trap of the phase, and
+it cost two false starts.
+
+- `jest.setup.js` requiring `@brelly/core` for `configureCore` instantiates all
+  67 modules during setup, *before* any test file's `jest.mock` factories run —
+  and a module already in the registry keeps the real bindings it closed over.
+  `forecastProvider.test.ts`'s own `jest.mock("./weather")` silently stopped
+  working. Setup reaches `packages/core/src/config` directly now.
+- Rewriting 29 app-side `jest.mock("@/services/weather")` calls to
+  `jest.mock("@brelly/core", …)` breaks six suites, and not for a fixable
+  reason: a barrel is one module, so replacing its `getForecastForSlot` does
+  nothing to `forecastProvider`'s own `./weather` import. Core's internal calls
+  never pass through the barrel.
+
+  They name the module instead — `jest.mock("@brelly/core/services/weather")` —
+  which works because Jest keys its registry by **resolved path**, so replacing
+  the file intercepts every importer including relative ones. The lint rule
+  draws the line at *imports*: `src/**` may not import `@brelly/core/*`, which
+  leaves `jest.mock` alone. Source depending on where core keeps a file is what
+  stops core moving its own files; a test naming a module to replace is not
+  that.
+
+**`export *` over 67 modules is safe here, and it was checked.** No two modules
+in the package export the same name, so nothing is dropped the way an ambiguous
+star re-export silently would be. `index.test.ts` asserts against the directory
+that every module is re-exported — a module missing from the barrel is exactly
+what makes someone reach past it. `test/` is the one exclusion: the fakes are a
+second entry point, `@brelly/core/test`, deliberately outside the barrel
+because the barrel is what the apps bundle.
+
+**Core now runs its own suite, and that is a claim rather than a convenience.**
+`packages/core/jest.config.js` resolves the five seams core actually uses to
+platform-free fakes in `src/test/platform/` and runs under `jest-expo/node`. It
+is not a duplicate of the root run: that one resolves `@brelly/platform/*` to
+`src/platform/`, so it proves core works *on a phone*. This one proves core
+imports nothing secretly Expo-shaped — the question `apps/web` would otherwise
+answer in Phase 3, by way of a Next build failing on `react-native`. All 59
+core suites, 581 tests, pass that way. `yarn test:core` runs it, `yarn verify`
+includes it, and CI has its own step. Two mechanical notes: `jest-expo/node`
+drops the babel `presets` the default preset supplies and this repo has no
+`babel.config.js` to fall back on, so the config restates the transform.
+
+**Three merge defects that the phone hides and a browser tab does not.** These
+came out of moving `accountLinkService.ts`, and all three are real today.
+
+1. `snapshotLocalData` read the **Zustand stores**, which are a mirror of the
+   Firestore documents populated by `onSnapshot` after boot — and the value it
+   returned decided what got *deleted*. A session that starts a merge before its
+   listeners hydrate saw an empty account, deleted nothing, and orphaned
+   everything under a uid nobody can reach again. It is `readAnonymousData` now,
+   a pre-switch `getDocsFromServer` read. `getDocsFromServer`, not `getDocs`: an
+   offline client answering out of its cache reports "nothing here" with
+   complete confidence, which is the same failure in a different coat.
+
+   The one value still feeds all three call sites — delete set,
+   restore-on-failure, merge into target. Repointing only the delete set is
+   *worse* than the bug: the delete removes what Firestore holds and the
+   restore, still reading an empty local snapshot, returns early and writes
+   nothing back.
+2. The crash record was written **only in the add branch**, so *"Don't add"*
+   ran the delete with nothing to recover from. The `try/catch` around the
+   sign-in compensates for a rejected sign-in; it cannot compensate for the
+   process ending, and a browser tab is closed mid-flow all the time. The record
+   is `{ anonUid, snapshot, addLocalData }` now and is written before *every*
+   delete — and it is allowed to throw, because `localStorage.setItem` raises
+   `QuotaExceededError` in Safari's private mode and a delete with no record is
+   precisely what it exists to prevent. `resumePendingMergeIfNeeded` gains the
+   third case that makes the wider record worth writing: still anonymous, uid
+   matches the record, so the delete ran and the switch never did — restore
+   under the same uid and the same ids.
+3. `snapshot.isEmpty` at the call site meant "the store has not loaded", not
+   "this user has no data", and `account-link.tsx` short-circuited on it
+   straight into the discard branch **without showing the merge prompt**. One
+   line down it would have asked "Add your 0 plans and 0 routines to it?", which
+   is the same bug with a dialog on it.
+
+**The merge order was not touched, deliberately.** `firestore.rules` gates read
+and delete on `request.auth.uid == <path uid>`, so signing in before deleting
+makes every delete under the anonymous uid fail `permission-denied` and orphans
+its documents permanently. Enumerate, persist, delete, then switch identity.
+The `try/catch` around the sign-in is the compensation that order requires, not
+a smell.
+
+**Phase 1 is not fingerprint-neutral, and `PLAN.md` asked for that to be
+measured rather than assumed.** It moved: `e6c67e75…` → `ec1ec143…`. The cause
+is a single source, `contents:packageJson:scripts` — `test:core` is new and
+`verify`/`verify:fast` changed. Nothing else hashed moved: `.gitignore`,
+`app.json`, `app.config.js`, `plugins/` and `eas.json` are byte-identical to
+`7b1fec9`, and dependencies are not hashed at all, so `@brelly/core` itself is
+invisible to it. (Measure in the real checkout, not a `git worktree` with a
+symlinked `node_modules` — the autolinking `dir` sources are relative paths and
+all ~150 of them move, which drowns the signal.) Phase 2 bumps the hash
+unconditionally anyway, so the practical consequence is only that a native
+build has to precede it.
+
+Verified beyond the suite: `npx expo export --platform ios` bundles clean, which
+is what proves Metro resolves `@brelly/core` through the Yarn workspace symlink
+and `@brelly/platform/*` through tsconfig paths.
+
+Testing: 1413 tests across 127 suites at the root, plus 581 across 59 in
+`packages/core`'s own run.
