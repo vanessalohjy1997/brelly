@@ -74,7 +74,7 @@
     "android": "expo run:android",
     "ios": "expo prebuild --clean && expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint --max-warnings 0",
+    "lint": "eslint . --max-warnings 0",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:emulator": "firebase emulators:exec --project demo-brelly --only firestore \"jest --config jest.emulator.config.js\"",

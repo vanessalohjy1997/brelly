@@ -1,5 +1,3 @@
-/* eslint-env jest */
-
 // Gesture Handler and Reanimated both reach for native modules at import
 // time. Gesture Handler ships a usable test double; Reanimated 4's own
 // `mock.js` re-imports the real entry point (and so still throws), so it has a
@@ -212,7 +210,9 @@ jest.mock("expo-router", () => {
     setParams: jest.fn(),
   };
   const Stack = () => null;
-  Stack.Screen = () => null;
+  Stack.Screen = function StackScreen() {
+    return null;
+  };
   Stack.Toolbar = Object.assign(() => null, { Button: () => null });
 
   // Shared across the mock so a test can assert on what a screen set — the

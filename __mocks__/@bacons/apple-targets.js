@@ -1,5 +1,3 @@
-/* eslint-env jest */
-
 // Test double for the App-Group bridge. The real `ExtensionStorage` is backed
 // by an iOS-only native module (reached through the `expo` global) that has no
 // implementation in the Jest environment, so importing it for real throws at
