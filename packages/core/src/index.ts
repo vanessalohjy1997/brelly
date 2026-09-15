@@ -33,6 +33,10 @@ export * from "./types/weather";
 
 // Facts about the world, not about a platform.
 export * from "./constants/neaRegions";
+// The design tokens. Both apps re-export these from their own
+// `constants/theme.ts`, which adds the `Platform.select` values core cannot
+// hold — so a screen still reaches a token as `@/constants/theme`.
+export * from "./constants/theme";
 
 // Fetching and parsing: weather, air quality, places, and the Firestore sync layer.
 export * from "./services/accountLinkService";
