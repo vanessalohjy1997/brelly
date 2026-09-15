@@ -30,13 +30,25 @@ else in the world via Open-Meteo.
 [Expo](https://expo.dev) + [Expo Router](https://docs.expo.dev/router/introduction),
 React Native, TypeScript, Zustand, Firebase (Auth + Firestore), TanStack Query.
 
+## Layout
+
+A Yarn workspace. The Expo app is `apps/mobile`; `packages/core` holds the
+logic the Next.js app in `apps/web` will share with it. `yarn install` runs
+once, at the repo root.
+
+```
+apps/mobile/    the Expo app
+packages/core/  platform-free logic, shared
+tests/          Firestore rules, against the emulator
+```
+
 ## Getting started
 
 ```bash
 yarn install
 ```
 
-Brelly needs a few things configured before it runs:
+Brelly needs a few things configured before it runs, all inside `apps/mobile`:
 
 - An `.env` with `EXPO_PUBLIC_GOOGLE_PLACES_KEY` (Places autocomplete/details)
   and `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (Google sign-in).
@@ -46,6 +58,7 @@ Brelly needs a few things configured before it runs:
 Then, for a native build:
 
 ```bash
+cd apps/mobile
 npx expo prebuild
 yarn ios      # or: yarn android
 ```
@@ -53,22 +66,33 @@ yarn ios      # or: yarn android
 Or to run in Expo Go / web:
 
 ```bash
-yarn start
+yarn workspace @brelly/mobile start
 ```
 
 ## Scripts
 
+Repo-wide, run from the root:
+
 | Command | Description |
 | --- | --- |
-| `yarn start` | Start the Expo dev server |
-| `yarn ios` / `yarn android` | Build and run natively |
-| `yarn web` | Run in the browser |
-| `yarn lint` | ESLint, zero warnings allowed |
-| `yarn test` | Jest test suite |
+| `yarn verify:fast` | Typecheck, lint and test — the gate everything must pass |
+| `yarn verify` | The same with coverage, as CI runs it |
+| `yarn typecheck` | `tsc --noEmit` for every app |
+| `yarn lint` | ESLint over the whole repo, zero warnings allowed |
+| `yarn test` | Both Jest suites |
+| `yarn test:core` | `packages/core` alone, with the seams resolved to fakes |
 | `yarn test:emulator` | Firestore rules tests against the Firebase emulator |
 
-Before shipping, all three of `npx tsc --noEmit`, `yarn lint`, and `yarn test`
-must be clean.
+The app's own scripts live in `apps/mobile` — run them with
+`yarn workspace @brelly/mobile <script>`, or from inside that directory:
+
+| Command | Description |
+| --- | --- |
+| `start` | Start the Expo dev server |
+| `ios` / `android` | Build and run natively |
+| `web` | Run in the browser |
+
+Before shipping, `yarn verify:fast` must be clean.
 
 ## Project docs
 

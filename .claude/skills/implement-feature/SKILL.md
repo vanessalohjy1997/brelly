@@ -20,8 +20,8 @@ This repo requires two things of every feature change, no exceptions:
 1. Implement the feature.
 2. For each new exported function/hook and each new component, write a test:
    - Co-locate as `<name>.test.ts` / `<name>.test.tsx` next to the file it
-     tests — see `src/services/weather.test.ts` and
-     `src/constants/neaRegions.test.ts` for the existing pattern. Fixtures
+     tests — see `packages/core/src/services/weather.test.ts` and
+     `packages/core/src/constants/neaRegions.test.ts` for the existing pattern. Fixtures
      should mirror real data (actual API response shapes, real coordinates),
      not a convenient guess at the shape — a prior pass in this repo shipped
      three separate NEA API parsing bugs that no test caught because the

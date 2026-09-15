@@ -1,6 +1,6 @@
 ---
 name: ui-implementation
-description: Use whenever writing or changing UI in this repo (brelly) — a screen, component, StyleSheet, colour, spacing, font size, icon size, or border radius. UI must be built from the declared design tokens in src/constants/theme.ts so it stays uniform across the app; a value that has no token is a stop-and-ask, never a new literal.
+description: Use whenever writing or changing UI in this repo (brelly) — a screen, component, StyleSheet, colour, spacing, font size, icon size, or border radius. UI must be built from the declared design tokens in apps/mobile/src/constants/theme.ts so it stays uniform across the app; a value that has no token is a stop-and-ask, never a new literal.
 ---
 
 # UI implementation
@@ -18,7 +18,7 @@ rules follow from that, and neither has an exception:
 
 ## The tokens
 
-All of these live in [theme.ts](src/constants/theme.ts) unless noted.
+All of these live in [theme.ts](apps/mobile/src/constants/theme.ts) unless noted.
 
 | Token | Use for |
 | --- | --- |
@@ -28,10 +28,10 @@ All of these live in [theme.ts](src/constants/theme.ts) unless noted.
 | `IconSize` | every icon's `size` prop |
 | `BottomTabInset` | bottom padding on scrollable content behind the tab bar |
 | `MaxContentWidth`, `HeaderHeight` | page layout |
-| `DateTimePickerWidth` | in [shouldStackDateTimeFields.ts](src/utils/shouldStackDateTimeFields.ts) |
+| `DateTimePickerWidth` | in [shouldStackDateTimeFields.ts](packages/core/src/utils/shouldStackDateTimeFields.ts) |
 
 Text sizes are **not** a token table — they are the `type` variants on
-[ThemedText](src/components/themedText.tsx) (`default`, `title`, `small`,
+[ThemedText](apps/mobile/src/components/themedText.tsx) (`default`, `title`, `small`,
 `smallBold`, `subtitle`, `link`, `linkPrimary`, `code`, `eyebrow`,
 `fieldLabel`). Render text through `ThemedText` with a `type`; never set
 `fontSize` on a `Text` in a screen's own StyleSheet.
@@ -39,7 +39,7 @@ Text sizes are **not** a token table — they are the `type` variants on
 ## How to use them
 
 - **Colour:** `const theme = useTheme()` from
-  [useTheme.ts](src/hooks/useTheme.ts), then `theme.textSecondary`. This
+  [useTheme.ts](apps/mobile/src/hooks/useTheme.ts), then `theme.textSecondary`. This
   respects the user's light/dark override. Colour is a runtime value, so it
   belongs in the inline style array, not in `StyleSheet.create`.
 - **Surfaces:** `<ThemedView type="backgroundElement">` rather than a

@@ -577,6 +577,11 @@ boundary design working.
 
 ## Phase 2 — the physical move (one PR, 4 commits)
 
+> **Landed.** Three commits plus the native build, which is not a commit. See
+> [round 38](NOTES.md#round-38--phase-2-of-the-web-migration-the-physical-move)
+> for what this section got wrong: the coverage number, the ESLint rule-count
+> check, and the two `import/no-unresolved` failures nobody predicted.
+
 **c2.1 is a single commit** containing ~250 pure renames plus the config
 relocation. Git rename detection is per-file, so splitting gains nothing and
 would leave a broken intermediate commit.
@@ -1054,11 +1059,32 @@ requirement above holds.)
 the `<rootDir>/__mocks__/styleMock.js` mapping retargets with it. `packages/core`
 needs none of the three mocks — a useful independent check that the boundary held.
 
-**Coverage: three independent gates, no merging.** Merging a React Native app and
-a Next.js app is arithmetic without meaning. Core is pure functions with
-structural seams, so raise it to 95/90/95/95. Mobile keeps 90/85/90/90 but the
-numbers are **set from observation** at the end of Phase 1, not guessed.
+**Coverage: three independent gates, no merging.** ✔ Not a preference —
+**coverage does not cross a `rootDir` boundary**, measured in Phase 2. With
+`../../packages/core/src/**` in `apps/mobile`'s `collectCoverageFrom`,
+`shouldInstrument` returns `true` for a core file, the module loads and
+executes, and it still never reaches the coverage map; the threshold group then
+fails `Coverage data ... was not found`. (Merging a React Native app and a
+Next.js app would be arithmetic without meaning anyway.)
+
+⚠ The number this section gave for core was wrong, and the correction is the
+useful part. "Core is pure functions with structural seams, so raise it to
+95/90/95/95" ✔ measured **81/85/79/82**: the five sync services live in core but
+their tests live in `apps/mobile`, because they exercise the mobile bindings
+(`accountLinkService.test.ts` imports `expo-notifications` and
+`@/store/mmkvStorage`) and cannot move. ✔ Exclude those five, plus `types/` and
+the `export *` barrel, and core's own suite measures **98.5/94.4/98.5/99.1** —
+so 95/90/95/95 holds after all, over the files the suite can actually reach.
+State the hole that leaves: a new core sync service is behind no coverage
+threshold in either workspace.
+
+Mobile keeps 90/85/90/90, ✔ measured 93.3/89.6/92.0/94.4 over `src/**` alone.
 `apps/web` gets no config and no threshold until it has real code.
+
+✔ Core's tests still run **twice**, as they did under the pre-monorepo root
+config: a `roots` entry in `apps/mobile/jest.config.js` keeps them in the mobile
+pass, where `@brelly/platform/*` resolves to the Expo implementations. Without
+it the "core works on a phone" half of the seam check is silently lost.
 
 **TypeScript: path mappings, one project per app. Not project references.**
 References need `composite: true`, which needs core to typecheck in isolation,
@@ -1093,21 +1119,42 @@ works:
    `@brelly/platform/auth` — ✔ that satisfies the rule trivially, and is a real
    boundary rather than an `allowTypeImports` exception.
 
+✔ Two more things break the moment the expo block is scoped, neither foreseen
+here, both found in Phase 2:
+
+- `eslint-import-resolver-typescript` looks for `tsconfig.json` beside the cwd,
+  and there is no root one any more — so every `@/…` import in `apps/mobile`
+  reports `import/no-unresolved`. The block needs
+  `settings: { "import/resolver": { typescript: { project: ["apps/mobile/tsconfig.json"] }, node: { extensions: [...] } } }`,
+  and **both** resolvers have to be restated: flat config replaces
+  `import/resolver` wholesale rather than merging into what `expoConfig` set.
+- the same rule then fires on `@brelly/platform/*` in core, which is correct
+  behaviour and the wrong answer — no package provides those specifiers, by
+  design. The core block needs
+  `"import/no-unresolved": ["error", { ignore: ["^@brelly/platform/"] }]`.
+
 `eslint-config-next` is still eslintrc-shaped in Next 15, so it needs `FlatCompat`.
 
-**The boundary rule's group list has holes.** ✔ `react-native/*` does **not**
-match `react-native-*`, so `react-native-mmkv`, `react-native-reanimated`,
-`react-native-safe-area-context` and `@bacons/apple-targets` all pass — and
-`mmkvStorage.ts` is exactly the file this exists to catch. ✔ `@/*` and `expo-*`
-do match deep paths.
+**The boundary rule's group list has holes**, and ⚠ the replacement offered
+below has a worse one. ✔ `react-native/*` does **not** match `react-native-*`,
+so `react-native-mmkv`, `react-native-reanimated`, `react-native-safe-area-context`
+and `@bacons/apple-targets` all pass — and `mmkvStorage.ts` is exactly the file
+this exists to catch.
+
+⚠ But these patterns are **gitignore syntax, not minimatch**: ESLint 9 matches
+them with the `ignore` package, where an unanchored pattern matches any path
+*segment*. So the bare `firebase` below matches `@brelly/platform/firebase` —
+the seam the rule exists to send people to — and `react-native` matches
+`@testing-library/react-native`. ✔ Anchor every entry with a leading slash, and
+keep `react-native-*` separate from `/react-native/**` for the original reason.
 
 ```js
 { files: ["packages/core/**/*.{ts,tsx}"],
   rules: { "no-restricted-imports": ["error", { patterns: [{
-    group: ["react-native", "react-native/*", "react-native-*",
-            "expo", "expo-*", "@expo/*", "@bacons/*",
-            "@react-native-firebase/*", "@react-native-google-signin/*",
-            "firebase", "firebase/*", "next", "next/*", "@/*"],
+    group: ["/react-native", "/react-native/**", "/react-native-*",
+            "/expo", "/expo-*", "/@expo/**", "/@bacons/**",
+            "/@react-native-firebase/**", "/@react-native-google-signin/**",
+            "/firebase", "/firebase/**", "/next", "/next/**", "/@/**"],
     message: "packages/core is platform-free: go through @brelly/platform/* (behaviour) or configureCore() (values).",
   }]}] }}
 ```
@@ -1247,8 +1294,11 @@ is also what the Stop hook runs, so a red tree blocks the next turn.
   ```
   npx eslint --print-config apps/web/src/app/page.tsx \
     | jq '.rules | keys | map(select(startswith("react-native")))'          # []
+  # ⚠ this check was fabricated and always prints 0: `eslint-config-expo/flat`
+  # contains NO `react-native/*` rules. Count all rules instead — 84 on a
+  # mobile or core file, 0 on a web one.
   npx eslint --print-config apps/mobile/src/app/_layout.tsx \
-    | jq '.rules | keys | map(select(startswith("react-native"))) | length' # > 0
+    | jq '.rules | keys | length'                                           # 84
   npx eslint --print-config packages/core/src/services/weather.ts \
     | jq '.languageOptions.parser'   # "typescript-eslint/parser@…", NOT "espree@…"
   npx eslint packages/core --max-warnings 0        # must not report "Parsing error"

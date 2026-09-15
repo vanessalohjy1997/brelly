@@ -14,39 +14,56 @@ before writing code against an Expo API — the SDK has changed.
 
 ## Project structure
 
-This is the real tree. Put new files where their neighbours already are.
+A Yarn workspace. **The repo root is not the Expo app** — `apps/mobile` is.
+This is the real tree; put new files where their neighbours already are.
 
 ```
-src/
+apps/mobile/src/
   app/            # expo-router routes — (tabs)/, plan/[id].tsx, _layout.tsx
   components/     # shared primitives at top level, domain folders below
     itinerary/    # ItineraryCard, SlotForm, WeekStrip, RepeatField, …
     weather/      # WeatherBadge, WeatherIcon, LiveConditionsCard, …
-  constants/      # theme.ts (design tokens), neaRegions.ts
+  constants/      # theme.ts (design tokens)
   hooks/          # custom hooks — including every TanStack Query hook
-  services/       # network + platform clients: NEA, Open-Meteo, Firebase,
-                  # notifications, calendar, and the *Sync.ts Firestore layer
-  store/          # zustand stores (singular "store"), mmkvStorage.ts
+  platform/       # the @brelly/platform/* seams, Expo implementations
+  services/       # the app's own clients: notifications, calendar, backup,
+                  # widgetBridge, and the auth/firebase bindings
+  store/          # device-local zustand stores, mmkvStorage.ts
   test/           # shared test helpers, plus test/screens/ route-level tests
+  utils/          # mobile-only pure functions
+
+packages/core/src/
+  constants/      # neaRegions.ts
+  services/       # NEA, Open-Meteo, geocoding, and the *Sync.ts Firestore layer
+  store/          # the itinerary/routine/toast stores
+  test/           # the fakes, reached at @brelly/core/test
   types/          # shared domain types: itinerary.ts, routine.ts, weather.ts
   utils/          # pure functions — formatters, selectors, date maths
 ```
 
-There is **no** `src/features/`, `src/queries/`, `src/api/`, or `src/lib/`.
-Fetch clients go in `services/`, query hooks in `hooks/`, pure helpers in
-`utils/`. Don't introduce a parallel folder for work that fits one of these.
+**Which of the two a new file belongs in is the first question, not an
+afterthought.** Anything the web app will also need is core, and core is
+platform-free: it may import npm packages, relative paths inside itself, and
+the `@brelly/platform/*` seams — nothing else. That is lint-enforced. See
+`AGENTS.md` for the boundary and `NOTES.md` for what bites.
 
-- Imports use the `@/*` path alias (`@/services/weather`), never deep
-  relative paths.
-- Routes in `src/app/` stay thin — a route composes components and hooks;
-  substantial logic belongs in a hook or a util that can be tested directly.
+There is **no** `features/`, `queries/`, `api/`, or `lib/` in either. Fetch
+clients go in `services/`, query hooks in `hooks/`, pure helpers in `utils/`.
+Don't introduce a parallel folder for work that fits one of these.
+
+- Mobile imports use the `@/*` path alias (`@/hooks/useTheme`), never deep
+  relative paths. Core is imported as `@brelly/core` — the barrel, never a
+  path inside it.
+- Routes in `apps/mobile/src/app/` stay thin — a route composes components and
+  hooks; substantial logic belongs in a hook or a util that can be tested
+  directly.
 
 ## TypeScript conventions
 
 - Strict mode on. No `any` — use `unknown` and narrow, or define a type.
-- Shared domain types live in `src/types/`. A type used by one module stays
-  in that module and is exported from it (`SlotForecast` from
-  `@/services/weather` is the pattern).
+- Shared domain types live in `packages/core/src/types/`. A type used by one
+  module stays in that module and is exported from it (`SlotForecast` from
+  `@brelly/core` is the pattern).
 - Don't leak raw API field names past the service layer. `services/` parses
   and returns a clean domain shape; nothing above it sees the wire format.
 
@@ -78,7 +95,7 @@ Fetch clients go in `services/`, query hooks in `hooks/`, pure helpers in
   runs in Expo Go. "MMKV undefined" is almost always this.
 - Native modules can't load in Jest. When a util would otherwise import one,
   declare the dependency structurally and inject it — see
-  [forecastCache.ts](src/utils/forecastCache.ts), which takes a `CacheStorage`
+  [forecastCache.ts](packages/core/src/utils/forecastCache.ts), which takes a `CacheStorage`
   rather than importing `mmkvStorage`.
 
 ## EAS Build
@@ -90,9 +107,10 @@ Fetch clients go in `services/`, query hooks in `hooks/`, pure helpers in
 
 ## Networking / API layer
 
-- Fetch clients live in `src/services/` and return typed, parsed data. No
+- Fetch clients live in `services/` (core's, for anything the web app needs) and return typed, parsed data. No
   `fetch` inside a component or a Zustand store.
-- Every external call goes through a TanStack Query hook in `src/hooks/` —
+- Every external call goes through a TanStack Query hook in
+  `apps/mobile/src/hooks/` —
   see [zustand-tanstack-conventions](../zustand-tanstack-conventions/SKILL.md).
 - For NEA response shapes and quirks, see
   [nea-weather-api](../nea-weather-api/SKILL.md).
@@ -100,9 +118,10 @@ Fetch clients go in `services/`, query hooks in `hooks/`, pure helpers in
 ## Testing
 
 Jest + React Native Testing Library. Tests co-locate as `<name>.test.ts(x)`
-next to the file they cover; route-level tests live in `src/test/screens/`.
+next to the file they cover; route-level tests live in
+`apps/mobile/src/test/screens/`.
 Shared harnesses (`renderWithProviders`, `fakeFirestore`, `fakeAuth`) are in
-`src/test/`.
+`apps/mobile/src/test/`.
 
 The full definition of done — `npx tsc --noEmit`, `yarn lint` at zero
 warnings, `yarn test`, and a test for every new component and function — is
