@@ -8,7 +8,7 @@
 // `yarn test` gate.
 module.exports = {
   testEnvironment: "node",
-  testMatch: ["<rootDir>/src/test/emulator/**/*.emulator.test.ts"],
+  testMatch: ["<rootDir>/tests/firestore-rules/**/*.emulator.test.ts"],
   transform: {
     "^.+\\.tsx?$": [
       "babel-jest",

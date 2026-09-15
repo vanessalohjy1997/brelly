@@ -616,6 +616,83 @@ from the "production" environment`. With the variable unset, `app.config.js`
   capability exists). Adding the target also moves the `fingerprint` runtime
   version, so it needs a fresh build before an OTA can follow it (see the
   fingerprint traps above).
+- **Jest has to be run with the cwd inside the workspace.** `yarn workspace
+  @brelly/mobile test` does that; `npx jest -c apps/mobile/jest.config.js` from
+  the repo root does not, and the difference is silent. Three things in
+  jest-expo and jest resolve against `process.cwd()` rather than `rootDir`:
+  `withTypescriptMapping.js:59` reads `tsconfig.json`, `jest-preset.js:44`
+  calls `resolveBabelOptions(process.cwd())`, and — the leg that actually rules
+  out a root `projects` array, because no per-project config can work around it
+  — `CoverageReporter.js:350` resolves `coverageThreshold`'s path keys the same
+  way. A run from the wrong directory checks less than it claims to.
+- **Coverage does not cross a `rootDir` boundary**, so the two suites carry two
+  separate gates and there is nothing to merge. Measured, because it looks like
+  it ought to work: with `../../packages/core/src/**` in `apps/mobile`'s
+  `collectCoverageFrom`, `shouldInstrument` returns `true` for a core file, the
+  file loads and executes, and it still never reaches the coverage map — the
+  threshold group then fails with `Coverage data for ../../packages/core/src/
+  was not found`. `apps/mobile` gates `src/**` at 90/85/90/90 and
+  `packages/core` gates itself at 95/90/95/95.
+  The hole that leaves is worth knowing: the five sync services in core are
+  excluded from core's own gate, because their tests live in `apps/mobile`
+  (they exercise the mobile bindings, and import `expo-notifications` and
+  `@/store/mmkvStorage`). They are tested, thoroughly; they are just not behind
+  a coverage threshold in either workspace, and neither would a new one be.
+- **The `no-restricted-imports` patterns are gitignore syntax, not minimatch.**
+  ESLint 9 matches them with the `ignore` package, where an unanchored pattern
+  matches any path *segment* — so a bare `firebase` in the core boundary rule
+  matched `@brelly/platform/firebase`, the seam the rule exists to send people
+  to. Every pattern in `eslint.config.js` is anchored with a leading slash for
+  that reason. The mirror-image trap: a slash makes a pattern a path segment,
+  so `react-native/**` does **not** match `react-native-mmkv` — which is the
+  import the rule was written to catch. `react-native-*` is listed separately.
+- **Keeping `apps/mobile/ios` and `apps/mobile/android` git-ignored holds the
+  project in the *managed* workflow for fingerprinting.** `@expo/fingerprint`'s
+  `ProjectWorkflow.resolveProjectWorkflowAsync` flips managed to generic when
+  `ios/` is not ignored, and does not then add `ios/**/*` to the ignore paths,
+  so the whole generated tree — `Pods/`, `build/` — becomes a hashed source and
+  local and CI stop agreeing on the runtime version. The rules live at the repo
+  root rather than in an `apps/mobile/.gitignore`: `isFileIgnoredAsync` shells
+  `git check-ignore` from the VCS root, so the two are equivalent.
+  Five rules in `.gitignore` are path-anchored, and `targets/*/Info.plist` is
+  anchored as firmly as `/ios` is — a slash anywhere in the pattern anchors it.
+- **The fingerprint hashes `package.json` `scripts`, not `dependencies`.**
+  `@expo/fingerprint`'s `getPackageJsonScriptSourcesAsync` (`Bare.js:45-68`)
+  reads only `scripts`, and none of the 15 sourcers reads `dependencies`. So
+  renaming a script in `apps/mobile/package.json` freezes OTA until a new
+  native build ships, and adding a dependency does not. `expoAutolinkingConfig`
+  is hashed too, and its source ids are relative to the project root — which is
+  why moving the app bumped the hash for all ~150 of them at once.
+- **The hashed `.gitignore` is `apps/mobile/.gitignore`, not the root one.**
+  `getGitIgnoreSourcesAsync` (`Bare.js:70-80`) reads `<projectRoot>/.gitignore`,
+  and the project root is `apps/mobile` now — so editing the root `.gitignore`
+  no longer moves the fingerprint, and editing the app's does.
+  **`apps/mobile/.gitignore` is therefore committed although every rule in it is
+  redundant.** It is `@generated` by expo-cli, which recreates it on any `expo
+  start` or `expo prebuild`, and the sourcer contributes nothing when the file
+  is absent — so leaving it untracked means every developer machine hashes it
+  and a fresh CI checkout does not. Measured: `5643fd7c…` with it,
+  `4703a201…` without. That divergence is silent, and it lands as an OTA update
+  that reaches nobody. Do not "tidy" the file away because the root
+  `.gitignore` already ignores `expo-env.d.ts`; it is not there to ignore
+  anything.
+  Note this is a *different* mechanism from the one that keeps `ios/` ignored:
+  `isFileIgnoredAsync` shells `git check-ignore` from the VCS root, so the
+  native-folder rules go on working from the root `.gitignore`.
+- **No `metro.config.js` is needed, and no `babel.config.js` either.**
+  `@expo/metro-config` 57.0.9 auto-detects the workspace
+  (`getWatchFolders.js`, `getModulesPaths.js:12-19`). Recorded so nobody
+  "fixes" it by adding one.
+- **`tests/firestore-rules/*.ts` is in no TypeScript program**, and that is the
+  one real loss from dropping the root `tsconfig.json`. It used to be
+  typechecked by the root `**/*.ts` glob. That glob also leaked `@types/node`
+  into every file in the program, through the emulator suite's own
+  `/// <reference types="node" />` — which is why `packages/core/src/index.test.ts`
+  now asks for those types itself.
+- **The `@/assets/*` tsconfig mapping has never worked.** `--showConfig` orders
+  `^@/(.*)$` before `^@/assets/(.*)$`, so the general alias shadows it — and
+  `apps/mobile/src/assets/` does not exist. Pre-existing, unrelated to the
+  monorepo, and still unfixed.
 
 ## Built so far
 
@@ -2626,3 +2703,111 @@ and `@brelly/platform/*` through tsconfig paths.
 
 Testing: 1413 tests across 127 suites at the root, plus 581 across 59 in
 `packages/core`'s own run.
+
+### Round 38 — Phase 2 of the web migration: the physical move
+
+The root stops being the Expo project. `src/`, `assets/`, `plugins/`,
+`targets/`, `__mocks__/`, `app.json`, `eas.json`, `tsconfig.json` and
+`jest.setup.js` move under `apps/mobile/`; `src/test/emulator/` comes out to
+`tests/firestore-rules/`, because it tests `firestore.rules`, which stays at
+the root. Four commits, and the first one is ~250 renames.
+
+**One commit for the renames, run as one non-interactive script.** Git's rename
+detection is per-file, so splitting gains nothing and leaves a broken
+intermediate commit. The reason to run it as a single tool call is the Stop
+hook: it triggers on working-tree state, so a pause halfway through 250
+`git mv`s blocks on a tree that cannot pass anything.
+
+`git mv` could not do all of it, and the two things it missed fail differently.
+The gitignored-but-load-bearing files — `.env`, `GoogleService-Info.plist`,
+`google-services.json` — fail **silently**: Expo reads `.env` from the project
+root only, so without the move a local run inlines `undefined` into
+`geocoding.ts` and `auth.ts`, both of which use `!`. (`prebuild` printing
+`env: load .env` is what proves it landed.) The untracked build output — `ios/`,
+`android/`, `coverage/`, the widget's generated `Info.plist` and
+`Assets.xcassets/` — fails **loudly but confusingly**: stranded at the old
+paths, the next commit's re-anchored ignores no longer cover them, and c2.2's
+own gate fails on artifacts with nothing to do with it.
+
+**Reviewability is two commands, not 250 diffs.** An earlier draft's version was
+wrong twice — `git show --numstat` always prints the commit header, and
+`--diff-filter=R` hides both the A+D pairs below the rename threshold and the
+genuinely modified files. The corrected pair also has a false-positive class
+worth filtering, because a 100%-similar *binary* rename prints `-\t-`:
+
+    git show --numstat -M --format= HEAD \
+      | awk '($1!="0" || $2!="0") && !($1=="-" && $2=="-")'
+
+    diff <(git ls-tree -r HEAD^ | awk '{print $3}' | sort) \
+         <(git ls-tree -r HEAD  | awk '{print $3}' | sort)
+
+The first named 12 files; the second proved it by blob hash rather than by
+heuristic. No `.git-blame-ignore-revs` entry — `blame` and `log --follow` do
+rename detection by default.
+
+**The coverage plan in `WEB.md` was half right, and the half that was wrong is
+the interesting half.** It called for three independent gates, and that turns
+out not to be a preference: coverage does not cross a `rootDir` boundary. With
+`../../packages/core/src/**` in `apps/mobile`'s `collectCoverageFrom`,
+`shouldInstrument` returns `true` for a core file, the module loads and
+executes, and it still never reaches the coverage map — the threshold group
+fails `Coverage data ... was not found`. What `WEB.md` got wrong was the
+number. "Core is pure functions, raise it to 95/90/95/95" measured at
+**81/85/79/82**, because the five sync services live in core but their tests
+live in `apps/mobile` — they exercise the mobile bindings and import
+`expo-notifications` and `@/store/mmkvStorage`, so they cannot move. Exclude
+those five and core's own suite measures **98.5/94.4/98.5/99.1**, and 95/90/95/95
+is right after all. The hole is in the traps section above.
+
+Core's tests still run twice, as they did under the old root config: `roots` in
+`apps/mobile/jest.config.js` keeps them in the mobile pass, where
+`@brelly/platform/*` resolves to the Expo implementations. `yarn test:core` is
+the other run, against the fakes. 128 suites / 1414 tests, plus 59 / 581.
+
+**Two lint bugs surfaced only once the config was rescoped, and both were
+silent.** Scoping `eslint-config-expo/flat` to `apps/mobile/**` takes the
+TypeScript parser away from `packages/core`, and the symptom is not an error
+about the config — it is `Parsing error: Unexpected token {` on every core file
+and a boundary rule that never runs. Element 7 of that config is this repo's
+only parser source (`typescript-eslint` itself is not installed; only
+`@typescript-eslint/parser`, transitively), so `packages/core/**` goes in the
+same `files` block. And the boundary rule's own patterns are gitignore syntax,
+not minimatch — the traps section has both halves of that.
+
+`WEB.md`'s ESLint verification asked for `react-native/*` rules on a mobile file
+and `> 0`. There are none: `eslint-config-expo/flat` contains no `react-native`
+rules at all. The check that discriminates is the parser
+(`typescript-eslint/parser@8.65.0`, not `espree@10.4.0`) plus the rule count —
+84 on a mobile or core file, and 0 on a web one once `apps/web` exists.
+
+**The gate for c2.2 is `prebuild --clean`, not `expo config --type introspect`.**
+Introspect proves the config evaluates and nothing about anchors:
+`withIntrospectionBaseMods` deletes every non-introspective mod, and all three
+local plugins are `withDangerousMod` or `withXcodeProject`. Run from
+`apps/mobile`, prebuild regenerated both native projects, CocoaPods installed,
+`git status --porcelain` came back empty, and all three anchors landed — two
+`[RNFB]` build phases in the pbxproj, `React-VFS.yaml` and
+`BRELLY_EMBED_DYLIBS_ONLY` in the Podfile.
+
+**The fingerprint moved, and this time it was guaranteed rather than measured.**
+`Hash.js:32` hashes `createSourceId(source)` = `filePath`, and the autolinking
+`sourceDir`s are `path.relative(projectRoot, …)` — so all ~150 `dir
+node_modules/…` sources gained `../../` and `expoAutolinkingConfig` changed with
+them. OTA is closed until a native build ships from this tree. Moving the plist
+into `apps/mobile` does *not* contribute: it is hashed
+`expoConfigExternalFile:contentsOnly`, and `postUpdateExpoConfig` deletes
+`ios.googleServicesFile` from the hashed config.
+
+No `.easignore` was added. None exists today, so it would be a new hashed source
+— and since EAS archives from the VCS root, a file at the Expo project root
+changes nothing about what is uploaded, which is the file's whole purpose.
+
+Other things that had to move with it: `plugins/withFirebaseSpmPostIntegrate.test.js`
+reached `../node_modules/@react-native-firebase/app/firebase_spm.rb`, which is
+empty under a hoisted workspace install — it resolves through the package now,
+and it is precisely the test that catches an upstream re-anchor.
+`packages/core/src/index.test.ts` asks for `@types/node` explicitly, having been
+getting them by accident from the emulator suite's triple-slash reference under
+the old root `**/*.ts` glob. And the root `package.json`'s inline `jest` key is
+retired, so a stray root `npx jest` can no longer pick up `preset: jest-expo`
+with `rootDir` at the repo root.

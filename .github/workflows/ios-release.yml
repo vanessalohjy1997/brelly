@@ -67,23 +67,29 @@ jobs:
       # what this runner gets, because EAS only ever uploads tracked files:
       #   git archive --format=tar HEAD | tar -x -C /tmp/brelly-clean
       #   cd /tmp/brelly-clean && yarn install --frozen-lockfile
-      #   npx expo config --type introspect
+      #   cd apps/mobile && npx expo config --type introspect
+      # The last step runs from the Expo project root, not the checkout root —
+      # they stopped being the same directory in the monorepo move.
       - name: Write the Firebase iOS config
         env:
           GOOGLE_SERVICES_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICES_INFO_PLIST_BASE64 }}
         run: |
           if [ -z "$GOOGLE_SERVICES_INFO_PLIST_BASE64" ]; then
             echo "GOOGLE_SERVICES_INFO_PLIST_BASE64 is unset — add it with:" >&2
-            echo "  base64 < GoogleService-Info.plist | tr -d '\n' \\" >&2
+            echo "  base64 < apps/mobile/GoogleService-Info.plist | tr -d '\n' \\" >&2
             echo "    | gh secret set GOOGLE_SERVICES_INFO_PLIST_BASE64" >&2
             exit 1
           fi
           printf '%s' "$GOOGLE_SERVICES_INFO_PLIST_BASE64" \
-            | base64 -d > GoogleService-Info.plist
-          plutil -lint GoogleService-Info.plist 2>/dev/null \
-            || python3 -c 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))' GoogleService-Info.plist
+            | base64 -d > apps/mobile/GoogleService-Info.plist
+          plutil -lint apps/mobile/GoogleService-Info.plist 2>/dev/null \
+            || python3 -c 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))' apps/mobile/GoogleService-Info.plist
 
+      # Every `eas` step runs from the Expo project root. `yarn install` above
+      # deliberately does not: the lockfile lives at the repo root, and that is
+      # also the VCS root EAS archives from, so what gets uploaded is unchanged.
       - name: Build (EAS)
+        working-directory: apps/mobile
         run: eas build --platform ios --profile ${{ inputs.profile }} --non-interactive --wait
 
       # Apple auth comes from an App Store Connect API key stored on EAS
@@ -92,6 +98,7 @@ jobs:
       # or app-specific password needs to live in this public repo's secrets.
       - name: Submit to App Store Connect
         if: ${{ inputs.submit }}
+        working-directory: apps/mobile
         run: eas submit --platform ios --profile ${{ inputs.profile }} --latest --non-interactive
 
   notify:

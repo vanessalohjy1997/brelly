@@ -69,13 +69,13 @@ jobs:
         run: |
           if [ -z "$GOOGLE_SERVICES_INFO_PLIST_BASE64" ]; then
             echo "GOOGLE_SERVICES_INFO_PLIST_BASE64 is unset — add it with:" >&2
-            echo "  base64 < GoogleService-Info.plist | tr -d '\n' \\" >&2
+            echo "  base64 < apps/mobile/GoogleService-Info.plist | tr -d '\n' \\" >&2
             echo "    | gh secret set GOOGLE_SERVICES_INFO_PLIST_BASE64" >&2
             exit 1
           fi
           printf '%s' "$GOOGLE_SERVICES_INFO_PLIST_BASE64" \
-            | base64 -d > GoogleService-Info.plist
-          python3 -c 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))' GoogleService-Info.plist
+            | base64 -d > apps/mobile/GoogleService-Info.plist
+          python3 -c 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))' apps/mobile/GoogleService-Info.plist
 
       # The whole point of the fingerprint runtime-version policy: it changes
       # whenever anything that could affect the native runtime does — a new
@@ -90,8 +90,13 @@ jobs:
       # the `environment` the same-named build profile uses in `eas.json`, or
       # the fingerprint is computed against a different config than the build
       # was.
+      # `working-directory`, like every `eas` step: the Expo project root and
+      # the checkout root stopped being the same directory in the monorepo
+      # move, and `eas fingerprint:generate` computes the hash from wherever it
+      # is run. A hash computed at the repo root would match no build at all.
       - name: Refuse to publish an update no build can run
         id: fingerprint
+        working-directory: apps/mobile
         env:
           CHANNEL: ${{ inputs.channel }}
         run: |
@@ -138,6 +143,7 @@ jobs:
           echo "Matched a finished build on '$CHANNEL'."
 
       - name: Publish (EAS Update)
+        working-directory: apps/mobile
         env:
           CHANNEL: ${{ inputs.channel }}
           MESSAGE: ${{ inputs.message }}

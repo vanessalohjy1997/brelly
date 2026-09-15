@@ -23,9 +23,13 @@ Run before checking off any item below, and after every change:
 yarn verify:fast
 ```
 
-That is `yarn typecheck && yarn lint && yarn test`. All three must be clean —
-`yarn lint` is `eslint . --max-warnings 0` and covers the whole repo, not just
-`src/`, so a single warning anywhere fails it. `yarn verify` is the same gate
+Run it **from the repo root**. That is `yarn typecheck && yarn lint && yarn
+test`, which fan out over the workspaces — `yarn typecheck` compiles each app's
+project, and `yarn test` runs `apps/mobile`'s suite and then `packages/core`'s
+own, each with the cwd inside its workspace, which is load-bearing (see the
+Jest trap in `NOTES.md`). All three must be clean — `yarn lint` is
+`eslint . --max-warnings 0` and covers the whole repo, not just `apps/mobile`,
+so a single warning anywhere fails it. `yarn verify` is the same gate
 with coverage, as CI runs it. See the `implement-feature` skill
 (`.claude/skills/implement-feature/SKILL.md`) for the full policy: zero
 lint warnings/errors, and a test for every new component and function.
@@ -43,18 +47,23 @@ Read the phase there before starting it; these are the headings only.
       Written up in [round 37](NOTES.md#round-37--phase-1-of-the-web-migration-packagescore).
       Measured, and it is **not** fingerprint-neutral: `contents:packageJson:scripts`
       moved (`test:core` is new), nothing else hashed did.
-- [ ] **Phase 2 — the physical move** to `apps/mobile` (one PR, 4 commits).
-      Bumps the fingerprint unconditionally; OTA is frozen until both native
-      builds land. See [WEB.md](WEB.md#phase-2--the-physical-move-one-pr-4-commits).
+- [x] **Phase 2 — the physical move** to `apps/mobile`. Three commits;
+      the fourth is the native build below, which is not a commit. Written up
+      in [round 38](NOTES.md#round-38--phase-2-of-the-web-migration-the-physical-move).
+      The fingerprint moved, as predicted and for the predicted reason.
+- [ ] **Cut `production` and `preview` iOS builds from the post-Phase-2 tree.**
+      This is Phase 2's last step and it gates Phase 3's OTA story, not just
+      tidiness: the fingerprint changed with the move, so **no OTA update can
+      reach anyone** until both profiles have a finished build carrying the new
+      hash. Run the *iOS Release* workflow once per profile. `ota-update.yml`
+      already refuses to publish before then, which is the failure being made
+      visible rather than one to work around.
 - [ ] **Phase 3 — `apps/web`.** Purely additive, cannot break mobile. See
       [WEB.md](WEB.md#phase-3--appsweb-purely-additive-cannot-break-mobile).
 - [ ] **Phase 4 — deploy.** The `/api/places` abuse control is a gate here, not
       a follow-up. See [WEB.md](WEB.md#phase-4--deploy).
 
-Before Phase 2: cut `production` and `preview` native builds. The fingerprint
-has moved twice now — every Phase 0 commit touched `package.json` `scripts`, and
-so did Phase 1's last commit — and Phase 2 moves it again unconditionally, so
-OTA is closed until a native build ships from the post-Phase-2 tree. The tag
+OTA is closed until the two builds above finish. The tag
 `ota-baseline-pre-monorepo` still makes an emergency hotfix a checkout.
 
 Finished work moves into `NOTES.md` — the round history there says why each

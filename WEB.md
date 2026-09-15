@@ -49,34 +49,55 @@ that `services/firebase.ts`'s *wrapper* functions exist in neither package.
 | Layout | Yarn 1 workspaces: `apps/mobile`, `apps/web`, `packages/core` |
 | Web framework | Next.js 15 App Router, React 19, TypeScript |
 | Styling | Tailwind v4, tokens generated from `src/constants/theme.ts` |
-| Hosting | Firebase **Hosting** custom domain → rewrite → App Hosting backend |
+| Hosting | Firebase **Hosting** on `brelly-50de6.web.app` → rewrite → App Hosting backend. No custom domain |
 | Feature scope | Graceful degradation — see "What web does not do" |
 | Merge order | **Enumerate → persist → delete → switch identity.** Not reordered |
 
 ### Hosting and popup auth
 
-`signInWithPopup` bounces through `/__/auth/handler`; on a foreign domain that
-is cross-site and Safari's storage partitioning breaks it. **App Hosting alone
-does not fix this.** It serves from `<backend>--<project>.<region>.hosted.app`,
-a different domain from the `*.web.app` Hosting site that serves the auth
-handler, and the default authorized-domains list holds two exact domains, not a
-wildcard. `signInWithRedirect` is **not** a fallback — partitioning breaks it
-identically.
+`signInWithPopup` bounces through `/__/auth/handler`, which is served from
+whatever `authDomain` names. When that is a *different* origin from the page,
+the hop is cross-site and Safari's storage partitioning breaks it —
+`signInWithRedirect` is **not** a fallback, partitioning breaks it identically.
+
+**So the whole problem is one condition: the app and the auth handler must be
+the same origin.** Everything below is in service of that, and nothing else.
+
+**App Hosting alone does not satisfy it.** It serves from
+`<backend>--<project>.<region>.hosted.app`, a different domain from the
+`*.web.app` Hosting site that serves the handler, and the default
+authorized-domains list holds two exact domains, not a wildcard.
+
+⚠ An earlier draft reached for a **custom domain** to force the same-origin
+condition, and locked it in as a decision. It is not needed, and the project is
+not buying one. Firebase Hosting already serves `brelly-50de6.web.app`, and
+that site serves `/__/**` itself — so putting the app there makes the handler
+same-origin for free. The custom domain was one way to satisfy the condition,
+never the condition itself.
 
 `firebase.json` **has no `hosting` block at all** today, so this is new
-configuration, not a setting. The concrete setup:
+configuration, not a setting. The concrete setup, two steps:
 
-1. Add a Hosting site; attach the custom domain to **Hosting**.
-2. `firebase.json` gets a `hosting.rewrites` entry sending `**` to the App
-   Hosting backend, leaving Hosting to serve `/__/**` itself.
-3. `authDomain` = that same custom domain; add it to Auth's authorized domains
-   and remove the unused ones.
-4. Test in Safari with "Prevent cross-site tracking" **on**. This is a Phase 4
-   gate, not a nice-to-have.
+1. `firebase.json` gets a `hosting.rewrites` entry sending `**` to the App
+   Hosting backend, leaving Hosting to serve `/__/**` itself. **This is the
+   load-bearing piece** — it is what puts the Next app and the auth handler on
+   one origin, and it is the piece to be suspicious of anyone simplifying away.
+   Deploying straight to the App Hosting domain is the broken case above.
+2. `authDomain` = `brelly-50de6.web.app`, the same origin the app is served
+   from. Nothing to add to Auth's authorized domains — `*.web.app` and
+   `*.firebaseapp.com` are there by default. **[unverified — confirm the
+   default list in the Auth console at Phase 4]**
 
-Cheaper alternative worth evaluating first: Google Identity Services returns an
-ID token straight to `signInWithCredential`, removing the handler hop for Google
-entirely. Apple still needs it.
+Then test in Safari with "Prevent cross-site tracking" **on**. Same-origin
+should make it a non-event, which is exactly why it is worth checking rather
+than assuming: a regression here looks like nothing until someone signs in on
+an iPhone.
+
+~~Cheaper alternative worth evaluating first: Google Identity Services returns
+an ID token straight to `signInWithCredential`, removing the handler hop for
+Google entirely.~~ ✔ Moot. That was a way to avoid the *cost of the hop*, and
+same-origin already removes it — for Apple as well as Google, where GIS never
+helped. Adding it now buys a second auth path to maintain and nothing else.
 
 ## Target layout
 
@@ -84,6 +105,7 @@ entirely. Apple still needs it.
 brelly/
   package.json          workspaces, verify scripts, .githooks prepare
   firebase.json         + a NEW hosting block (rewrites → App Hosting)
+                        on brelly-50de6.web.app; no custom domain
   firestore.rules  jest.emulator.config.js
   PLAN.md  NOTES.md  UX.md  AGENTS.md  .claude/  .github/  .githooks/
   .gitignore            web + repo-wide rules, incl. /apps/mobile/ios etc.
@@ -577,6 +599,11 @@ boundary design working.
 
 ## Phase 2 — the physical move (one PR, 4 commits)
 
+> **Landed.** Three commits plus the native build, which is not a commit. See
+> [round 38](NOTES.md#round-38--phase-2-of-the-web-migration-the-physical-move)
+> for what this section got wrong: the coverage number, the ESLint rule-count
+> check, and the two `import/no-unresolved` failures nobody predicted.
+
 **c2.1 is a single commit** containing ~250 pure renames plus the config
 relocation. Git rename detection is per-file, so splitting gains nothing and
 would leave a broken intermediate commit.
@@ -911,8 +938,8 @@ with notifications.
 
 ## Phase 4 — deploy
 
-`apphosting.yaml` in `apps/web`, GitHub-triggered, behind the Hosting rewrite and
-custom domain described at the top.
+`apphosting.yaml` in `apps/web`, GitHub-triggered, behind the Hosting rewrite
+described at the top — on `brelly-50de6.web.app`, not a custom domain.
 
 ### `/api/places` is a billed, public endpoint
 
@@ -1054,11 +1081,32 @@ requirement above holds.)
 the `<rootDir>/__mocks__/styleMock.js` mapping retargets with it. `packages/core`
 needs none of the three mocks — a useful independent check that the boundary held.
 
-**Coverage: three independent gates, no merging.** Merging a React Native app and
-a Next.js app is arithmetic without meaning. Core is pure functions with
-structural seams, so raise it to 95/90/95/95. Mobile keeps 90/85/90/90 but the
-numbers are **set from observation** at the end of Phase 1, not guessed.
+**Coverage: three independent gates, no merging.** ✔ Not a preference —
+**coverage does not cross a `rootDir` boundary**, measured in Phase 2. With
+`../../packages/core/src/**` in `apps/mobile`'s `collectCoverageFrom`,
+`shouldInstrument` returns `true` for a core file, the module loads and
+executes, and it still never reaches the coverage map; the threshold group then
+fails `Coverage data ... was not found`. (Merging a React Native app and a
+Next.js app would be arithmetic without meaning anyway.)
+
+⚠ The number this section gave for core was wrong, and the correction is the
+useful part. "Core is pure functions with structural seams, so raise it to
+95/90/95/95" ✔ measured **81/85/79/82**: the five sync services live in core but
+their tests live in `apps/mobile`, because they exercise the mobile bindings
+(`accountLinkService.test.ts` imports `expo-notifications` and
+`@/store/mmkvStorage`) and cannot move. ✔ Exclude those five, plus `types/` and
+the `export *` barrel, and core's own suite measures **98.5/94.4/98.5/99.1** —
+so 95/90/95/95 holds after all, over the files the suite can actually reach.
+State the hole that leaves: a new core sync service is behind no coverage
+threshold in either workspace.
+
+Mobile keeps 90/85/90/90, ✔ measured 93.3/89.6/92.0/94.4 over `src/**` alone.
 `apps/web` gets no config and no threshold until it has real code.
+
+✔ Core's tests still run **twice**, as they did under the pre-monorepo root
+config: a `roots` entry in `apps/mobile/jest.config.js` keeps them in the mobile
+pass, where `@brelly/platform/*` resolves to the Expo implementations. Without
+it the "core works on a phone" half of the seam check is silently lost.
 
 **TypeScript: path mappings, one project per app. Not project references.**
 References need `composite: true`, which needs core to typecheck in isolation,
@@ -1093,21 +1141,42 @@ works:
    `@brelly/platform/auth` — ✔ that satisfies the rule trivially, and is a real
    boundary rather than an `allowTypeImports` exception.
 
+✔ Two more things break the moment the expo block is scoped, neither foreseen
+here, both found in Phase 2:
+
+- `eslint-import-resolver-typescript` looks for `tsconfig.json` beside the cwd,
+  and there is no root one any more — so every `@/…` import in `apps/mobile`
+  reports `import/no-unresolved`. The block needs
+  `settings: { "import/resolver": { typescript: { project: ["apps/mobile/tsconfig.json"] }, node: { extensions: [...] } } }`,
+  and **both** resolvers have to be restated: flat config replaces
+  `import/resolver` wholesale rather than merging into what `expoConfig` set.
+- the same rule then fires on `@brelly/platform/*` in core, which is correct
+  behaviour and the wrong answer — no package provides those specifiers, by
+  design. The core block needs
+  `"import/no-unresolved": ["error", { ignore: ["^@brelly/platform/"] }]`.
+
 `eslint-config-next` is still eslintrc-shaped in Next 15, so it needs `FlatCompat`.
 
-**The boundary rule's group list has holes.** ✔ `react-native/*` does **not**
-match `react-native-*`, so `react-native-mmkv`, `react-native-reanimated`,
-`react-native-safe-area-context` and `@bacons/apple-targets` all pass — and
-`mmkvStorage.ts` is exactly the file this exists to catch. ✔ `@/*` and `expo-*`
-do match deep paths.
+**The boundary rule's group list has holes**, and ⚠ the replacement offered
+below has a worse one. ✔ `react-native/*` does **not** match `react-native-*`,
+so `react-native-mmkv`, `react-native-reanimated`, `react-native-safe-area-context`
+and `@bacons/apple-targets` all pass — and `mmkvStorage.ts` is exactly the file
+this exists to catch.
+
+⚠ But these patterns are **gitignore syntax, not minimatch**: ESLint 9 matches
+them with the `ignore` package, where an unanchored pattern matches any path
+*segment*. So the bare `firebase` below matches `@brelly/platform/firebase` —
+the seam the rule exists to send people to — and `react-native` matches
+`@testing-library/react-native`. ✔ Anchor every entry with a leading slash, and
+keep `react-native-*` separate from `/react-native/**` for the original reason.
 
 ```js
 { files: ["packages/core/**/*.{ts,tsx}"],
   rules: { "no-restricted-imports": ["error", { patterns: [{
-    group: ["react-native", "react-native/*", "react-native-*",
-            "expo", "expo-*", "@expo/*", "@bacons/*",
-            "@react-native-firebase/*", "@react-native-google-signin/*",
-            "firebase", "firebase/*", "next", "next/*", "@/*"],
+    group: ["/react-native", "/react-native/**", "/react-native-*",
+            "/expo", "/expo-*", "/@expo/**", "/@bacons/**",
+            "/@react-native-firebase/**", "/@react-native-google-signin/**",
+            "/firebase", "/firebase/**", "/next", "/next/**", "/@/**"],
     message: "packages/core is platform-free: go through @brelly/platform/* (behaviour) or configureCore() (values).",
   }]}] }}
 ```
@@ -1177,6 +1246,15 @@ Measured facts (hashes are machine-local; **re-measure, do not copy**):
   `DEFAULT_SOURCE_SKIPS` to `PackageJsonAndroidAndIosScriptsIfNotContainRun`, so
   `SourceSkips.GitIgnore` is **off**). Reproduced: appending `.next/` →
   `eb03c97eade8…`.
+  ⚠ Which `.gitignore`, though — `getGitIgnoreSourcesAsync` reads
+  `<projectRoot>/.gitignore`, so from Phase 2 on it is **`apps/mobile/.gitignore`**
+  and the root one is not hashed at all. That file did not exist before the
+  move; expo-cli generates it, and the sourcer contributes nothing when it is
+  absent. ✔ Measured: `5643fd7c…` present, `4703a201…` absent. It has to be
+  **committed**, or a developer machine that has run `expo start` hashes it and
+  a fresh CI checkout does not — and the two compute different runtime
+  versions. Unrelated to the ignore *rules*, which still come from the root
+  file via `git check-ignore` at the VCS root.
 - ✔ **Phase 2 bumps the hash unconditionally**, and an earlier draft filed the
   reason under Phase 3 as a conditional. `Hash.js:32` hashes
   `createSourceId(source)` = `filePath`, and autolinking `sourceDir`s are
@@ -1247,8 +1325,11 @@ is also what the Stop hook runs, so a red tree blocks the next turn.
   ```
   npx eslint --print-config apps/web/src/app/page.tsx \
     | jq '.rules | keys | map(select(startswith("react-native")))'          # []
+  # ⚠ this check was fabricated and always prints 0: `eslint-config-expo/flat`
+  # contains NO `react-native/*` rules. Count all rules instead — 84 on a
+  # mobile or core file, 0 on a web one.
   npx eslint --print-config apps/mobile/src/app/_layout.tsx \
-    | jq '.rules | keys | map(select(startswith("react-native"))) | length' # > 0
+    | jq '.rules | keys | length'                                           # 84
   npx eslint --print-config packages/core/src/services/weather.ts \
     | jq '.languageOptions.parser'   # "typescript-eslint/parser@…", NOT "espree@…"
   npx eslint packages/core --max-warnings 0        # must not report "Parsing error"
@@ -1291,7 +1372,9 @@ is also what the Stop hook runs, so a red tree blocks the next turn.
   the degraded flag when the persistent cache throws. Then reproduce by hand with
   DevTools offline + reload, and once in Safari private mode.
 - **Web auth** — sign-in tested in Safari with "Prevent cross-site tracking" on,
-  on the custom domain, through the Hosting rewrite. Gates Phase 4.
+  on `brelly-50de6.web.app`, through the Hosting rewrite. Gates Phase 4. Check
+  the page's origin and `authDomain` are the same string before blaming
+  anything else: that identity is the entire mechanism.
 - **`/api/places`** — an unauthenticated request returns 401; a request with a
   client-supplied `X-Goog-FieldMask` is ignored, not forwarded; a Google error
   body does not appear in the response.

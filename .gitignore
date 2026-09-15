@@ -44,15 +44,24 @@ google-services.json
 
 example
 
-# generated native folders
-/ios
-/android
+# generated native folders. Anchored, and that is load-bearing beyond tidiness:
+# @expo/fingerprint's ProjectWorkflow flips managed -> generic when `ios/` is
+# not ignored, and then hashes the whole generated tree, Pods/ and build/
+# included — so local and CI compute different runtime versions. It shells
+# `git check-ignore` from the VCS root, which is why a rule here works exactly
+# as well as one in apps/mobile/.gitignore would.
+/apps/mobile/ios
+/apps/mobile/android
 
 # @bacons/apple-targets regenerates these into the widget target dir on every
 # prebuild (from expo-target.config.js) — build artifacts like /ios, not source.
 # The source that IS tracked: expo-target.config.js and index.swift.
-targets/*/Info.plist
-targets/*/Assets.xcassets/
+/apps/mobile/targets/*/Info.plist
+/apps/mobile/targets/*/Assets.xcassets/
 
-# test coverage
-/coverage
+# test coverage. Unanchored on purpose: two workspaces write one of these now.
+coverage/
+
+# Next.js (apps/web, from phase 3)
+.next/
+out/

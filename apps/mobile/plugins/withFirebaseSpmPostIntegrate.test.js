@@ -148,12 +148,12 @@ describe('patchPodfile', () => {
 // generated Podfile does, and run the result — which is the only way to check
 // what actually lands in `Frameworks/`.
 
+// Resolved through the package rather than by walking up to a `node_modules`
+// directory: under a Yarn workspace the install is hoisted to the repo root,
+// so `../node_modules` from here is empty. `require.resolve` follows the same
+// lookup the bundler does, wherever the install ends up.
 const FIREBASE_SPM_RB = path.join(
-  __dirname,
-  '..',
-  'node_modules',
-  '@react-native-firebase',
-  'app',
+  path.dirname(require.resolve('@react-native-firebase/app/package.json')),
   'firebase_spm.rb',
 );
 

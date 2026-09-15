@@ -11,7 +11,9 @@ in case" — it desyncs from the cache and you lose retry and invalidation.
 
 ## What goes in Zustand
 
-Stores live in `src/store/`, one file per store, named `xxxStore.ts`
+Stores live in `store/`, one file per store, named `xxxStore.ts` — in
+`packages/core/src/store/` if the web app will need them (itinerary, routines,
+toast), in `apps/mobile/src/store/` if they are device-local
 exporting `useXxxStore`.
 
 - User-authored data: the itinerary (`itineraryStore`), routines
@@ -29,12 +31,12 @@ new pattern, so raise it rather than slipping it into a store.
 
 ## What goes in TanStack Query
 
-Query hooks live in `src/hooks/`, **not** a `queries/` folder, and are named
+Query hooks live in `apps/mobile/src/hooks/`, **not** a `queries/` folder, and are named
 for what they return — `useLiveConditions`, `useNearbyForecast`, `useUvIndex`,
 `useWeatherForSlot`, `usePlaceSearch`. There is no `Query` suffix; don't
 introduce one.
 
-Each hook wraps a client from `src/services/` and owns its `staleTime`.
+Each hook wraps a client from `packages/core/src/services/` and owns its `staleTime`.
 
 ## Query keys
 
@@ -47,14 +49,14 @@ queryKey: ["weather", provider, region, latitude, longitude, slotStartTime]
 ```
 
 There is no key factory and no `keys.ts`. That first element is load-bearing:
-[useWeatherRefresh.ts](src/hooks/useWeatherRefresh.ts) selects queries to
+[useWeatherRefresh.ts](apps/mobile/src/hooks/useWeatherRefresh.ts) selects queries to
 refetch by matching `queryKey[0]` against `["weather", "nearbyForecast",
 "liveConditions", "airQuality"]`. A new weather query must use one of those
 prefixes or add itself to that list, or pull-to-refresh will silently skip it.
 
 ## staleTime
 
-The `QueryClient` in [src/app/_layout.tsx](src/app/_layout.tsx) sets a 10
+The `QueryClient` in [src/app/_layout.tsx](apps/mobile/src/app/_layout.tsx) sets a 10
 minute default with `retry: 2`. Override per hook to match how fast the real
 data moves, and say why in a comment:
 
@@ -76,10 +78,10 @@ data moves, and say why in a comment:
 ## Persistence
 
 **Firestore is the persistence layer, not MMKV.** Store state reaches the
-cloud through the `*Sync.ts` services in `src/services/` —
+cloud through the `*Sync.ts` services in `packages/core/src/services/` —
 `itinerarySync`, `routinesSync`, `settingsSync` — and comes back through
 `onSnapshot` listeners attached by
-[cloudListeners.ts](src/services/cloudListeners.ts), which writes straight
+[cloudListeners.ts](packages/core/src/services/cloudListeners.ts), which writes straight
 into the stores. `useCloudBootstrap` mounts this once at the root.
 
 Two rules that layer enforces:
@@ -90,9 +92,9 @@ Two rules that layer enforces:
 - A listener failure must flip `cloudSyncStore`'s error state — otherwise the
   skeleton never resolves.
 
-MMKV (`src/store/mmkvStorage.ts`) is used only for:
+MMKV (`apps/mobile/src/store/mmkvStorage.ts`) is used only for:
 
-- the offline forecast cache ([forecastCache.ts](src/utils/forecastCache.ts),
+- the offline forecast cache ([forecastCache.ts](packages/core/src/utils/forecastCache.ts),
   24-hour max age, read by `useWeatherForSlot`),
 - one-time migration flags and the account-merge snapshot in
   `localDataMigration` / `accountLinkService`.

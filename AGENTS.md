@@ -23,11 +23,31 @@ A stale plan gets acted on as if it were true, and now it gets injected as if it
 were true too. Move finished work from `PLAN.md` into `NOTES.md` and tick the
 `UX.md` item you just addressed.
 
+# Where things are
+
+The repo is a Yarn workspace, and the root is no longer the Expo app.
+
+```
+apps/mobile/     the Expo app — src/, assets/, plugins/, targets/, app.json,
+                 eas.json, its own tsconfig.json and jest.config.js
+apps/web/        the Next.js app (from Phase 3)
+packages/core/   the logic both apps need, platform-free
+tests/           Firestore rules, against the emulator
+```
+
+The root keeps the workspace manifest, `eslint.config.js`, the project docs,
+`firestore.rules` and `.githooks/`. **There is no root `tsconfig.json`** — a
+`files: []` stub would let `tsc --noEmit` succeed while checking nothing, so
+each app owns its project and `yarn typecheck` fans out over them.
+
+Run repo-wide scripts from the root (`yarn verify:fast`, `yarn lint`,
+`yarn test`). Run the app's own scripts with
+`yarn workspace @brelly/mobile <script>`, which cds into the workspace — and
+that cd is load-bearing, not cosmetic. See the Jest trap in `NOTES.md`.
+
 # The `packages/core` boundary
 
-The repo is a Yarn workspace. `packages/core` holds the logic both the Expo app
-and (from Phase 3) the Next app need; the root is still the Expo app. Two rules
-govern what crosses:
+`packages/core` holds the logic both apps need. Two rules govern what crosses:
 
 **Alias for behaviour, inject for values.** Where the two platforms do the same
 thing by different means, core imports a bare specifier no package provides —
@@ -71,7 +91,8 @@ can follow them from memory — nothing lands if they fail.
 | Commit subject starts with `feat:` / `fix:` / `chore:` | `.githooks/commit-msg`, and the `conventions` job in `.github/workflows/ci.yml` |
 | Branch starts with `feat/` / `fix/` / `chore/` | `.githooks/pre-push`, and the same CI job |
 | `tsc --noEmit`, `yarn lint`, `yarn test:coverage` all clean | the `verify` job in `.github/workflows/ci.yml`; run it locally with `yarn verify` |
-| New code comes with tests | the 90% coverage threshold in `package.json`, checked by `yarn test:coverage` |
+| New code comes with tests | two coverage thresholds — 90/85/90/90 in `apps/mobile/jest.config.js`, 95/90/95/95 in `packages/core/jest.config.js` — checked by `yarn test:coverage` |
+| No workspace grows its own lockfile | the `No stray workspace lockfiles` step in `ci.yml`; one inside `apps/*` breaks the root `--frozen-lockfile` quietly and permanently |
 | The project docs are in context when you work | `.claude/hooks/session-context.sh`, a SessionStart hook — it injects them rather than asking that they be read |
 | The v57 docs are named when writing code | `.claude/hooks/doc-gate.sh`, a PreToolUse hook on `Edit`/`Write` |
 
