@@ -1,3 +1,9 @@
+/// <reference types="node" />
+// The node reference is explicit because it used to arrive by accident: the
+// pre-monorepo root `tsconfig.json` globbed `**/*.ts`, which pulled in the
+// emulator suite's own `/// <reference types="node" />` and leaked `@types/node`
+// into every file in the program. That suite now lives at `tests/firestore-rules/`,
+// outside `apps/mobile`'s project, so this file has to ask for what it uses.
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 

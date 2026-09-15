@@ -20,7 +20,7 @@ require("react-native-gesture-handler/jestSetup");
 // test file's `jest.mock` factories run — and a module already in the registry
 // keeps the real bindings it closed over. `forecastProvider.test.ts`'s
 // `jest.mock("./weather")` would silently do nothing.
-require("./packages/core/src/config").configureCore({
+require("../../packages/core/src/config").configureCore({
   places: { mode: "direct", apiKey: "test-places-key" },
 });
 

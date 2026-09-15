@@ -42,9 +42,41 @@ module.exports = {
   },
   setupFilesAfterEnv: [path.join(__dirname, "jest.setup.js")],
   testPathIgnorePatterns: ["/node_modules/"],
+  // Core's own gate, and it stops at what this run can honestly measure.
+  // Coverage cannot cross a `rootDir` boundary — the mobile workspace's run
+  // executes core's modules but cannot instrument them — so anything core owns
+  // whose tests live in `apps/mobile` is excluded here rather than dragging
+  // the threshold down to meet it.
+  //
+  // What that means per exclusion:
+  //   - the five sync services exercise the *mobile bindings*; their tests are
+  //     in `apps/mobile/src/services/` because they import `expo-notifications`
+  //     and `@/store/mmkvStorage`, and they cannot move here.
+  //   - `types/` is type-only and `index.ts` is `export *` — neither has
+  //     statements worth a threshold.
+  // The hole this leaves is real and worth knowing: a new core sync service is
+  // gated by no coverage threshold in either workspace. See NOTES.md.
   collectCoverageFrom: [
     "src/**/*.ts",
     "!src/**/*.d.ts",
     "!src/test/**",
+    "!src/types/**",
+    "!src/index.ts",
+    "!src/services/accountLinkService.ts",
+    "!src/services/cloudListeners.ts",
+    "!src/services/itinerarySync.ts",
+    "!src/services/routinesSync.ts",
+    "!src/services/settingsSync.ts",
   ],
+  // Set from observation, not aspiration: the suite measures 98.5/94.4/98.5/99.1
+  // over the files above. Higher than the app's 90/85/90/90 because what is
+  // left after the exclusions is pure functions behind structural seams.
+  coverageThreshold: {
+    global: {
+      statements: 95,
+      branches: 90,
+      functions: 95,
+      lines: 95,
+    },
+  },
 };

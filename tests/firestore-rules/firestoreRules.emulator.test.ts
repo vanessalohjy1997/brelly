@@ -59,7 +59,7 @@ function unauthedDb() {
 
 beforeAll(async () => {
   const rules = fs.readFileSync(
-    path.join(__dirname, "../../../firestore.rules"),
+    path.join(__dirname, "../../firestore.rules"),
     "utf8",
   );
   const [host, portStr] = (
