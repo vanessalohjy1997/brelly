@@ -64,13 +64,20 @@ jobs:
       - name: Typecheck apps/mobile
         run: yarn typecheck:mobile
 
+      # Core is compiled a second time here, inside the Next project. That
+      # duplication *is* the platform-drift detector — a core file that starts
+      # importing something only the Expo seams provide fails this step and
+      # not the one above.
+      - name: Typecheck apps/web
+        run: yarn typecheck:web
+
       - name: Lint
         run: yarn lint
 
-      # Two coverage gates, not one merged number: coverage does not cross a
+      # Three coverage gates, not one merged number: coverage does not cross a
       # `rootDir` boundary, so the mobile run cannot measure core even though
-      # it executes it. There is no `apps/web` step until Phase 3 — it would
-      # fail "Unknown workspace" for the whole of Phase 2.
+      # it executes it — and merging a React Native app's number with a
+      # Next.js app's would be arithmetic without meaning anyway.
       - name: Test apps/mobile
         run: yarn workspace @brelly/mobile test:coverage
 
@@ -82,6 +89,23 @@ jobs:
       # otherwise answer late, by way of a Next build failing on `react-native`.
       - name: Test packages/core standalone
         run: yarn workspace @brelly/core test:coverage
+
+      - name: Test apps/web
+        run: yarn workspace @brelly/web test:coverage
+
+      # `configureCore()` exists so that no bundler substitution has to cross
+      # the boundary, and the web app's half of that bargain is that it holds
+      # no Places key at all — it proxies through its own route instead. A
+      # `NEXT_PUBLIC_` key would be inlined into the browser bundle, defeating
+      # the proxy in the same commit that added it, and the type system cannot
+      # see it: `NEXT_PUBLIC_*` is text, not a value.
+      - name: No Places key in the web bundle
+        run: |
+          if grep -rn 'NEXT_PUBLIC_[A-Z_]*PLACES' apps/web --exclude-dir=.next; then
+            echo "::error::apps/web must not read a Places key — it goes" \
+              "through /api/places, which holds a server-only key." >&2
+            exit 1
+          fi
 
   # The local .githooks copies of these checks can be bypassed with --no-verify;
   # this one cannot.

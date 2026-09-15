@@ -49,10 +49,6 @@
         "android.permission.WRITE_CALENDAR"
       ]
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/icon/favicon.png"
-    },
     "plugins": [
       "expo-router",
       [

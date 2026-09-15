@@ -1,7 +1,16 @@
 // https://docs.expo.dev/guides/using-eslint/
 const { defineConfig } = require('eslint/config');
+const { FlatCompat } = require("@eslint/eslintrc");
 const expoConfig = require("eslint-config-expo/flat");
 const globals = require("globals");
+
+// `eslint-config-next` ships eslintrc-shaped configs only, so this is the
+// bridge. `recommendedConfig` is required by FlatCompat even when nothing
+// here extends "eslint:recommended"; an empty object is the documented stand-in.
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
+  recommendedConfig: {},
+});
 
 // `expo lint` only ever walks src/, app/ and components/, so the repo's other
 // JavaScript — jest.setup.js, __mocks__/, plugins/, the config tests — went
@@ -15,6 +24,10 @@ module.exports = defineConfig([
       "apps/mobile/dist/*",
       "apps/mobile/.expo/*",
       "apps/web/.next/*",
+      // Written by Next itself and marked "should not be edited" in its own
+      // header. Its triple-slash references are exactly what
+      // `@typescript-eslint/triple-slash-reference` objects to.
+      "apps/web/next-env.d.ts",
       // Istanbul's HTML report ships its own vendored JS, complete with
       // eslint-disable directives that are unused under this config.
       "**/coverage/**",
@@ -115,6 +128,52 @@ module.exports = defineConfig([
     },
   },
   {
+    // `eslint-config-next` is still eslintrc-shaped in Next 15 — there is no
+    // `/flat` entry in the installed package — so it comes through FlatCompat
+    // rather than `extends`. Scoped to this app for the same reason the Expo
+    // block is scoped to its own: neither config's rules mean anything in the
+    // other app's files.
+    files: ["apps/web/**/*.{js,jsx,mjs,ts,tsx}"],
+    // `jest.config.js` is a CommonJS Node script, like every other
+    // `*.config.js` in this repo, and `next/typescript` forbids `require()`.
+    // It is linted by the Node/Jest globals block at the bottom instead.
+    ignores: ["apps/web/jest.config.js"],
+    extends: compat.extends("next/core-web-vitals", "next/typescript"),
+    settings: {
+      // Same trap as the Expo block: there is no root `tsconfig.json` for
+      // `eslint-import-resolver-typescript` to find beside the cwd, and flat
+      // config replaces `import/resolver` wholesale rather than merging.
+      "import/resolver": {
+        typescript: { project: ["apps/web/tsconfig.json"] },
+        node: {
+          extensions: [".cjs", ".mjs", ".js", ".jsx", ".ts", ".tsx", ".d.ts"],
+        },
+      },
+      next: { rootDir: "apps/web" },
+    },
+  },
+  {
+    // The app-facing half of the same boundary, for web. Identical to the
+    // mobile block below it and deliberately not merged with it: the two apps
+    // have different `files` globs and one of them may need an exception the
+    // other does not.
+    files: ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@brelly/core/*", "!@brelly/core/test"],
+              message:
+                "Import from \"@brelly/core\" — the barrel is the package's only entry point. (jest.mock may still name a module directly.)",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // The app-facing half of the same boundary. `@brelly/core` is one module;
     // a deep import is a dependency on where core keeps a file, and once one
     // exists core cannot move its own files again.
@@ -156,6 +215,7 @@ module.exports = defineConfig([
       "apps/*/*.config.js",
       "apps/mobile/plugins/**/*.js",
       "apps/mobile/scripts/**/*.js",
+      "apps/web/jest.config.js",
       // The workspace packages carry their own Jest config and setup, which
       // are Node scripts for the same reason the root's are.
       "packages/*/jest.config.js",
