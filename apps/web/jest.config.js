@@ -21,6 +21,13 @@ module.exports = createJestConfig({
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
     "^@brelly/platform/(.*)$": "<rootDir>/src/platform/$1",
+    // `@brelly/core/test` is the package's *other* deliberate entry point —
+    // the Firestore and auth fakes, kept out of the barrel so test doubles
+    // never reach a bundle. The package has no `exports` map, so the workspace
+    // symlink alone would resolve this to `packages/core/test`, which does not
+    // exist. Declared here and in `tsconfig.json`, exactly as `apps/mobile`
+    // does it.
+    "^@brelly/core/(.*)$": "<rootDir>/../../packages/core/src/$1",
   },
   // Only this workspace — coverage does not cross a `rootDir` boundary, so
   // core is measured by its own gate in `packages/core/jest.config.js`.

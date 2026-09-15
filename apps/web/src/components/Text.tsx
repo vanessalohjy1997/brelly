@@ -2,6 +2,8 @@ import type { ElementType, ReactNode } from "react";
 
 import type { TextVariant, ThemeColor } from "@/constants/theme";
 
+import { TEXT_COLOR } from "./colorClasses";
+
 /**
  * `ThemedText`'s web twin, and the reason the text scale is ten variants rather
  * than a table of sizes: a variant says what the text *is*, so it can carry a
@@ -52,22 +54,6 @@ const VARIANT_CLASS: Record<TextVariant, string> = {
   fieldLabel: "text-field-label uppercase",
 };
 
-const COLOR_CLASS: Record<ThemeColor | "inherit", string> = {
-  inherit: "text-inherit",
-  text: "text-text",
-  textSecondary: "text-text-secondary",
-  background: "text-background",
-  backgroundElement: "text-background-element",
-  backgroundSelected: "text-background-selected",
-  danger: "text-danger",
-  onDanger: "text-on-danger",
-  success: "text-success",
-  primary: "text-primary",
-  onPrimary: "text-on-primary",
-  border: "text-border",
-  umbrellaRain: "text-umbrella-rain",
-  umbrellaSun: "text-umbrella-sun",
-};
 
 export function Text({
   variant = "default",
@@ -85,7 +71,7 @@ export function Text({
   return (
     <Component
       id={id}
-      className={[VARIANT_CLASS[variant], COLOR_CLASS[resolved], className]
+      className={[VARIANT_CLASS[variant], TEXT_COLOR[resolved], className]
         .filter(Boolean)
         .join(" ")}
     >
