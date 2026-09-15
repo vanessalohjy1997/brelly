@@ -65,7 +65,19 @@ Read the phase there before starting it; these are the headings only.
       and `app.json` are both hashed sources — which changes nothing, because
       OTA is already closed on the task above.
 - [ ] **Phase 4 — deploy.** The `/api/places` abuse control is a gate here, not
-      a follow-up. See [WEB.md](WEB.md#phase-4--deploy).
+      a follow-up. See [WEB.md](WEB.md#phase-4--deploy). Phase 3 built the half
+      that is about *shape*: three outbound calls and nothing else, server-side
+      input validation, a server-side field mask, `Cache-Control: no-store`, and
+      no Google error body crossing the route. What is still open is the half
+      that is about *volume and identity* — a verified Firebase ID token,
+      per-IP and per-uid rate limiting in Firestore or Redis (never in-process:
+      App Hosting is multi-instance Cloud Run), an `Origin` allowlist, App
+      Check, a budget alert and a Places quota cap. Two smaller pieces go with
+      it: the session token becomes a browser-minted UUID, which needs
+      `expo-crypto` behind a new `@brelly/platform/random` seam because
+      `crypto.randomUUID()` does not exist on Hermes; and `reverseGeocode`
+      returning `null` for a *denied key* is a silent failure the proxy should
+      surface as a 5xx.
 
 OTA is closed until the two builds above finish. The tag
 `ota-baseline-pre-monorepo` still makes an emergency hotfix a checkout.

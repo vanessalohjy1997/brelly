@@ -15,6 +15,13 @@ import "server-only";
  * entire Places API. So there is no passthrough: exactly three upstream calls
  * are reachable, each with its own validated inputs, and everything else is a
  * 404 before a key is ever read.
+ *
+ * **This is the half of the control that is about shape. The half about volume
+ * is a Phase 4 gate and is not here yet** — a verified Firebase ID token, per-IP
+ * and per-uid rate limiting held in Firestore rather than in-process (App
+ * Hosting is multi-instance Cloud Run, so a counter in memory resets on every
+ * scale-out), an `Origin` allowlist and App Check. Narrowing the surface bounds
+ * what an attacker can *ask for*; it does nothing about how often.
  */
 
 const PLACES_BASE_URL = "https://places.googleapis.com/v1";
