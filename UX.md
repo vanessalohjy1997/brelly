@@ -38,6 +38,13 @@ outside a `[ ]` bullet is read, never injected.
   scroll-driven collapsing title has to resolve that first rather than work
   around it.
 
+  **Diverged on web (round 39).** The constraint is native-only. `apps/web`
+  navigates from a sidebar at `>=768px` and a bottom bar below it, so there are
+  no tabs to shift, and `HeaderHeight` is a *minimum* there rather than a fixed
+  height — a narrow window is allowed to wrap the title and its actions.
+  CSS `position: sticky` is the collapsing mechanism whenever it is wanted. This
+  stays open because none of that closes it on the phone.
+
 - [ ] **No day outlook when plans exist.** `NearbyForecastPreview` renders only
   in the empty state, so having any plan loses the rest-of-day view. Blocked on
   a decision this file can't make: the preview is anchored to the *device*
@@ -53,6 +60,12 @@ outside a `[ ]` bullet is read, never injected.
   to Sat, 2 Aug" toast); its placement is not. Moving it out is a navigation
   change, and the obvious home — a header action — is the one place iOS 26 wraps
   in Liquid Glass.
+
+  **Diverged on web (round 39).** Liquid Glass is not a constraint in a browser,
+  so `apps/web` ships the answer this item wanted: a labelled field and a button
+  that acts on it, spaced like every other field
+  ([CopyToDateAction.tsx](apps/web/src/components/itinerary/CopyToDateAction.tsx)).
+  The phone is unchanged, so this stays open.
 
 - [ ] **Two questions on Save is one more than a form usually asks.** A
   routine's stop raises a scope prompt on Save *and* the unsaved-changes guard

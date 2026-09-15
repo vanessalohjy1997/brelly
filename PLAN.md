@@ -58,8 +58,12 @@ Read the phase there before starting it; these are the headings only.
       hash. Run the *iOS Release* workflow once per profile. `ota-update.yml`
       already refuses to publish before then, which is the failure being made
       visible rather than one to work around.
-- [ ] **Phase 3 — `apps/web`.** Purely additive, cannot break mobile. See
-      [WEB.md](WEB.md#phase-3--appsweb-purely-additive-cannot-break-mobile).
+- [x] **Phase 3 — `apps/web`.** Purely additive, and it was: `apps/mobile`'s
+      only changes are the two deletions the phase called for. Written up in
+      [round 39](NOTES.md#round-39--phase-3-of-the-web-migration-appsweb).
+      Those deletions move the Expo fingerprint again — `package.json` scripts
+      and `app.json` are both hashed sources — which changes nothing, because
+      OTA is already closed on the task above.
 - [ ] **Phase 4 — deploy.** The `/api/places` abuse control is a gate here, not
       a follow-up. See [WEB.md](WEB.md#phase-4--deploy).
 
