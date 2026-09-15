@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { MaxContentWidth } from "@/constants/theme";
+import { guardNavigation } from "@/store/unsavedChangesStore";
 
 import { Icon } from "./Icon";
 import { Icons } from "./icons";
@@ -61,6 +62,7 @@ function useIsActive(): (href: string) => boolean {
 
 function SideNav() {
   const isActive = useIsActive();
+  const router = useRouter();
 
   return (
     <nav
@@ -75,6 +77,12 @@ function SideNav() {
           <li key={destination.href}>
             <Link
               href={destination.href}
+              // The sidebar is the exit a modal never had. `onNavigate` is the
+              // only hook that can ask *before* the navigation happens — see
+              // `useUnsavedChangesGuard` for the two exits that cannot.
+              onNavigate={(event) =>
+                guardNavigation(event, () => router.push(destination.href))
+              }
               aria-current={isActive(destination.href) ? "page" : undefined}
               className={`flex min-h-[var(--brelly-hit-target)] items-center gap-two rounded-control px-two ${
                 isActive(destination.href)
@@ -96,6 +104,7 @@ function SideNav() {
 
 function BottomNav() {
   const isActive = useIsActive();
+  const router = useRouter();
 
   return (
     <nav
@@ -110,6 +119,9 @@ function BottomNav() {
           <li key={destination.href} className="flex-1">
             <Link
               href={destination.href}
+              onNavigate={(event) =>
+                guardNavigation(event, () => router.push(destination.href))
+              }
               aria-current={isActive(destination.href) ? "page" : undefined}
               className={`flex min-h-[var(--brelly-hit-target)] flex-col items-center justify-center gap-half py-one ${
                 isActive(destination.href) ? "text-primary" : "text-text-secondary"

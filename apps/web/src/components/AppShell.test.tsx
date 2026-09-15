@@ -3,7 +3,11 @@ import { render, screen, within } from "@testing-library/react";
 import { AppShell } from "./AppShell";
 
 const pathname = jest.fn(() => "/");
-jest.mock("next/navigation", () => ({ usePathname: () => pathname() }));
+const push = jest.fn();
+jest.mock("next/navigation", () => ({
+  usePathname: () => pathname(),
+  useRouter: () => ({ push }),
+}));
 
 beforeEach(() => {
   pathname.mockReturnValue("/");
