@@ -660,10 +660,25 @@ from the "production" environment`. With the variable unset, `app.config.js`
   `@expo/fingerprint`'s `getPackageJsonScriptSourcesAsync` (`Bare.js:45-68`)
   reads only `scripts`, and none of the 15 sourcers reads `dependencies`. So
   renaming a script in `apps/mobile/package.json` freezes OTA until a new
-  native build ships, and adding a dependency does not. `.gitignore` *is* a
-  hashed source. So is `expoAutolinkingConfig`, whose source ids are relative
-  to the project root — which is why moving the app bumped the hash for all
-  ~150 of them at once.
+  native build ships, and adding a dependency does not. `expoAutolinkingConfig`
+  is hashed too, and its source ids are relative to the project root — which is
+  why moving the app bumped the hash for all ~150 of them at once.
+- **The hashed `.gitignore` is `apps/mobile/.gitignore`, not the root one.**
+  `getGitIgnoreSourcesAsync` (`Bare.js:70-80`) reads `<projectRoot>/.gitignore`,
+  and the project root is `apps/mobile` now — so editing the root `.gitignore`
+  no longer moves the fingerprint, and editing the app's does.
+  **`apps/mobile/.gitignore` is therefore committed although every rule in it is
+  redundant.** It is `@generated` by expo-cli, which recreates it on any `expo
+  start` or `expo prebuild`, and the sourcer contributes nothing when the file
+  is absent — so leaving it untracked means every developer machine hashes it
+  and a fresh CI checkout does not. Measured: `5643fd7c…` with it,
+  `4703a201…` without. That divergence is silent, and it lands as an OTA update
+  that reaches nobody. Do not "tidy" the file away because the root
+  `.gitignore` already ignores `expo-env.d.ts`; it is not there to ignore
+  anything.
+  Note this is a *different* mechanism from the one that keeps `ios/` ignored:
+  `isFileIgnoredAsync` shells `git check-ignore` from the VCS root, so the
+  native-folder rules go on working from the root `.gitignore`.
 - **No `metro.config.js` is needed, and no `babel.config.js` either.**
   `@expo/metro-config` 57.0.9 auto-detects the workspace
   (`getWatchFolders.js`, `getModulesPaths.js:12-19`). Recorded so nobody

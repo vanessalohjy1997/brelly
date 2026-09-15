@@ -1246,6 +1246,15 @@ Measured facts (hashes are machine-local; **re-measure, do not copy**):
   `DEFAULT_SOURCE_SKIPS` to `PackageJsonAndroidAndIosScriptsIfNotContainRun`, so
   `SourceSkips.GitIgnore` is **off**). Reproduced: appending `.next/` →
   `eb03c97eade8…`.
+  ⚠ Which `.gitignore`, though — `getGitIgnoreSourcesAsync` reads
+  `<projectRoot>/.gitignore`, so from Phase 2 on it is **`apps/mobile/.gitignore`**
+  and the root one is not hashed at all. That file did not exist before the
+  move; expo-cli generates it, and the sourcer contributes nothing when it is
+  absent. ✔ Measured: `5643fd7c…` present, `4703a201…` absent. It has to be
+  **committed**, or a developer machine that has run `expo start` hashes it and
+  a fresh CI checkout does not — and the two compute different runtime
+  versions. Unrelated to the ignore *rules*, which still come from the root
+  file via `git check-ignore` at the VCS root.
 - ✔ **Phase 2 bumps the hash unconditionally**, and an earlier draft filed the
   reason under Phase 3 as a conditional. `Hash.js:32` hashes
   `createSourceId(source)` = `filePath`, and autolinking `sourceDir`s are
