@@ -26,29 +26,62 @@ jobs:
 
       - run: yarn install --frozen-lockfile
 
+      # A lockfile inside a workspace makes `yarn install --frozen-lockfile`
+      # at the root resolve against the wrong tree, permanently and quietly.
+      # `create-next-app` drops one, which is why this guard arrives before
+      # `apps/web` does. Both commands are needed: the second catches an
+      # untracked one on a developer's machine, and prints nothing for a
+      # *committed* one — and CI checks out clean, so on its own it would pass
+      # on exactly the case that breaks.
+      - name: No stray workspace lockfiles
+        run: |
+          set -u
+          patterns=(
+            'apps/*/yarn.lock' 'apps/*/package-lock.json'
+            'apps/*/pnpm-lock.yaml' 'apps/*/bun.lock'
+          )
+          tracked=$(git ls-files -- "${patterns[@]}")
+          present=$(git status --porcelain --ignored -- "${patterns[@]}")
+          if [ -n "$tracked" ] || [ -n "$present" ]; then
+            echo "::error::A workspace has its own lockfile. Delete it and" \
+              "re-run \`yarn install\` from the repo root." >&2
+            printf '%s\n' "$tracked" "$present" >&2
+            exit 1
+          fi
+
       # expo-env.d.ts is gitignored and normally written by `expo start`;
       # it declares the `*.css` module type theme.ts's side-effect import
       # needs. Write it here so tsc sees the same types a local run does.
       - name: Generate Expo env types
         run: |
-          printf '/// <reference types="expo/types" />\n\n// NOTE: This file should not be edited and should be in your git ignore\n' > expo-env.d.ts
+          printf '/// <reference types="expo/types" />\n\n// NOTE: This file should not be edited and should be in your git ignore\n' > apps/mobile/expo-env.d.ts
 
-      - name: Typecheck
-        run: yarn typecheck
+      # One step per app rather than one `yarn typecheck`, so the Telegram
+      # message names the app that broke. There is deliberately no root
+      # tsconfig to check them both at once: a `files: []` stub would let
+      # `tsc --noEmit` succeed while checking nothing, and compiling core once
+      # inside each app *is* the platform-drift detector.
+      - name: Typecheck apps/mobile
+        run: yarn typecheck:mobile
 
       - name: Lint
         run: yarn lint
 
-      - name: Test
-        run: yarn test:coverage
+      # Two coverage gates, not one merged number: coverage does not cross a
+      # `rootDir` boundary, so the mobile run cannot measure core even though
+      # it executes it. There is no `apps/web` step until Phase 3 — it would
+      # fail "Unknown workspace" for the whole of Phase 2.
+      - name: Test apps/mobile
+        run: yarn workspace @brelly/mobile test:coverage
 
-      # Same suite, different seams. Under the root config `@brelly/platform/*`
-      # resolves to the Expo implementations, so that run proves core works on
-      # a phone. This one resolves them to platform-free fakes in a Node
-      # environment, which is what proves core imports nothing secretly
-      # Expo-shaped — the question `apps/web` would otherwise answer late.
+      # Same suite as the one apps/mobile's run picks up, different seams.
+      # There `@brelly/platform/*` resolves to the Expo implementations, so
+      # that run proves core works on a phone. This one resolves them to
+      # platform-free fakes in a Node environment, which is what proves core
+      # imports nothing secretly Expo-shaped — the question `apps/web` would
+      # otherwise answer late, by way of a Next build failing on `react-native`.
       - name: Test packages/core standalone
-        run: yarn test:core
+        run: yarn workspace @brelly/core test:coverage
 
   # The local .githooks copies of these checks can be bypassed with --no-verify;
   # this one cannot.
