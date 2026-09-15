@@ -49,34 +49,55 @@ that `services/firebase.ts`'s *wrapper* functions exist in neither package.
 | Layout | Yarn 1 workspaces: `apps/mobile`, `apps/web`, `packages/core` |
 | Web framework | Next.js 15 App Router, React 19, TypeScript |
 | Styling | Tailwind v4, tokens generated from `src/constants/theme.ts` |
-| Hosting | Firebase **Hosting** custom domain → rewrite → App Hosting backend |
+| Hosting | Firebase **Hosting** on `brelly-50de6.web.app` → rewrite → App Hosting backend. No custom domain |
 | Feature scope | Graceful degradation — see "What web does not do" |
 | Merge order | **Enumerate → persist → delete → switch identity.** Not reordered |
 
 ### Hosting and popup auth
 
-`signInWithPopup` bounces through `/__/auth/handler`; on a foreign domain that
-is cross-site and Safari's storage partitioning breaks it. **App Hosting alone
-does not fix this.** It serves from `<backend>--<project>.<region>.hosted.app`,
-a different domain from the `*.web.app` Hosting site that serves the auth
-handler, and the default authorized-domains list holds two exact domains, not a
-wildcard. `signInWithRedirect` is **not** a fallback — partitioning breaks it
-identically.
+`signInWithPopup` bounces through `/__/auth/handler`, which is served from
+whatever `authDomain` names. When that is a *different* origin from the page,
+the hop is cross-site and Safari's storage partitioning breaks it —
+`signInWithRedirect` is **not** a fallback, partitioning breaks it identically.
+
+**So the whole problem is one condition: the app and the auth handler must be
+the same origin.** Everything below is in service of that, and nothing else.
+
+**App Hosting alone does not satisfy it.** It serves from
+`<backend>--<project>.<region>.hosted.app`, a different domain from the
+`*.web.app` Hosting site that serves the handler, and the default
+authorized-domains list holds two exact domains, not a wildcard.
+
+⚠ An earlier draft reached for a **custom domain** to force the same-origin
+condition, and locked it in as a decision. It is not needed, and the project is
+not buying one. Firebase Hosting already serves `brelly-50de6.web.app`, and
+that site serves `/__/**` itself — so putting the app there makes the handler
+same-origin for free. The custom domain was one way to satisfy the condition,
+never the condition itself.
 
 `firebase.json` **has no `hosting` block at all** today, so this is new
-configuration, not a setting. The concrete setup:
+configuration, not a setting. The concrete setup, two steps:
 
-1. Add a Hosting site; attach the custom domain to **Hosting**.
-2. `firebase.json` gets a `hosting.rewrites` entry sending `**` to the App
-   Hosting backend, leaving Hosting to serve `/__/**` itself.
-3. `authDomain` = that same custom domain; add it to Auth's authorized domains
-   and remove the unused ones.
-4. Test in Safari with "Prevent cross-site tracking" **on**. This is a Phase 4
-   gate, not a nice-to-have.
+1. `firebase.json` gets a `hosting.rewrites` entry sending `**` to the App
+   Hosting backend, leaving Hosting to serve `/__/**` itself. **This is the
+   load-bearing piece** — it is what puts the Next app and the auth handler on
+   one origin, and it is the piece to be suspicious of anyone simplifying away.
+   Deploying straight to the App Hosting domain is the broken case above.
+2. `authDomain` = `brelly-50de6.web.app`, the same origin the app is served
+   from. Nothing to add to Auth's authorized domains — `*.web.app` and
+   `*.firebaseapp.com` are there by default. **[unverified — confirm the
+   default list in the Auth console at Phase 4]**
 
-Cheaper alternative worth evaluating first: Google Identity Services returns an
-ID token straight to `signInWithCredential`, removing the handler hop for Google
-entirely. Apple still needs it.
+Then test in Safari with "Prevent cross-site tracking" **on**. Same-origin
+should make it a non-event, which is exactly why it is worth checking rather
+than assuming: a regression here looks like nothing until someone signs in on
+an iPhone.
+
+~~Cheaper alternative worth evaluating first: Google Identity Services returns
+an ID token straight to `signInWithCredential`, removing the handler hop for
+Google entirely.~~ ✔ Moot. That was a way to avoid the *cost of the hop*, and
+same-origin already removes it — for Apple as well as Google, where GIS never
+helped. Adding it now buys a second auth path to maintain and nothing else.
 
 ## Target layout
 
@@ -84,6 +105,7 @@ entirely. Apple still needs it.
 brelly/
   package.json          workspaces, verify scripts, .githooks prepare
   firebase.json         + a NEW hosting block (rewrites → App Hosting)
+                        on brelly-50de6.web.app; no custom domain
   firestore.rules  jest.emulator.config.js
   PLAN.md  NOTES.md  UX.md  AGENTS.md  .claude/  .github/  .githooks/
   .gitignore            web + repo-wide rules, incl. /apps/mobile/ios etc.
@@ -916,8 +938,8 @@ with notifications.
 
 ## Phase 4 — deploy
 
-`apphosting.yaml` in `apps/web`, GitHub-triggered, behind the Hosting rewrite and
-custom domain described at the top.
+`apphosting.yaml` in `apps/web`, GitHub-triggered, behind the Hosting rewrite
+described at the top — on `brelly-50de6.web.app`, not a custom domain.
 
 ### `/api/places` is a billed, public endpoint
 
@@ -1341,7 +1363,9 @@ is also what the Stop hook runs, so a red tree blocks the next turn.
   the degraded flag when the persistent cache throws. Then reproduce by hand with
   DevTools offline + reload, and once in Safari private mode.
 - **Web auth** — sign-in tested in Safari with "Prevent cross-site tracking" on,
-  on the custom domain, through the Hosting rewrite. Gates Phase 4.
+  on `brelly-50de6.web.app`, through the Hosting rewrite. Gates Phase 4. Check
+  the page's origin and `authDomain` are the same string before blaming
+  anything else: that identity is the entire mechanism.
 - **`/api/places`** — an unauthenticated request returns 401; a request with a
   client-supplied `X-Goog-FieldMask` is ignored, not forwarded; a Google error
   body does not appear in the response.
