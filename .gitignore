@@ -69,3 +69,7 @@ coverage/
 # Next.js (apps/web, from phase 3)
 .next/
 out/
+
+# firebase CLI deploy cache (hosting hashes, apphosting scratch)
+.firebase/
+.local_build_*

@@ -30,6 +30,7 @@
     "build": "next build",
     "start": "next start",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "deploy": "firebase deploy"
   }
 }

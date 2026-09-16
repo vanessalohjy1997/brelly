@@ -33,6 +33,7 @@
     "test:emulator": "firebase emulators:exec --project demo-brelly --only firestore \"jest --config jest.emulator.config.js\"",
     "prepare": "git config core.hooksPath .githooks",
     "verify:fast": "yarn typecheck && yarn lint && yarn test",
-    "verify": "yarn typecheck && yarn lint && yarn test:coverage"
+    "verify": "yarn typecheck && yarn lint && yarn test:coverage",
+    "deploy:rules": "firebase deploy --only firestore"
   }
 }

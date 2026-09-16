@@ -84,9 +84,20 @@ configuration, not a setting. The concrete setup, two steps:
    one origin, and it is the piece to be suspicious of anyone simplifying away.
    Deploying straight to the App Hosting domain is the broken case above.
 2. `authDomain` = `brelly-50de6.web.app`, the same origin the app is served
-   from. Nothing to add to Auth's authorized domains — `*.web.app` and
-   `*.firebaseapp.com` are there by default. **[unverified — confirm the
-   default list in the Auth console at Phase 4]**
+   from. Nothing to add to Auth's authorized domains — ✔ verified, the list is
+   exactly `localhost`, `brelly-50de6.firebaseapp.com`, `brelly-50de6.web.app`.
+3. **But that is not the list that blocks the sign-in.** Auth's authorized
+   domains and the Google OAuth client's *authorized redirect URIs* are two
+   separate lists, and only the first one has `.web.app` in it by default. The
+   client Firebase auto-creates (`Web client (auto created by Google Service)`,
+   id `87595606048-qfq1c45ssooq7hlaful6l5dveum901q6`) is registered for
+   `https://brelly-50de6.firebaseapp.com/__/auth/handler` and nothing else — so
+   the moment `authDomain` becomes `brelly-50de6.web.app`, every Google sign-in
+   dies at Google with `Error 400: redirect_uri_mismatch`, before Firebase is
+   consulted at all. Add
+   `https://brelly-50de6.web.app/__/auth/handler` to that client's **Authorized
+   redirect URIs** in the Google Cloud console (APIs & Services → Credentials).
+   It is a console change; no code or env value is wrong.
 
 Then test in Safari with "Prevent cross-site tracking" **on**. Same-origin
 should make it a non-event, which is exactly why it is worth checking rather

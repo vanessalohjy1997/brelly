@@ -2,6 +2,34 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "apphosting": {
+    "backendId": "brelly-web",
+    "rootDir": "apps/web",
+    "ignore": [
+      "node_modules",
+      "**/node_modules",
+      ".git",
+      ".github",
+      ".claude",
+      "docs",
+      "hosting",
+      "firestore-debug.log"
+    ]
+  },
+  "hosting": {
+    "site": "brelly-50de6",
+    "public": "hosting",
+    "ignore": ["**/.*"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "brelly-web",
+          "region": "asia-southeast1"
+        }
+      }
+    ]
+  },
   "emulators": {
     "firestore": {
       "port": 8080
