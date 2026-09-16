@@ -785,8 +785,15 @@ from the "production" environment`. With the variable unset, `app.config.js`
   install. Hence the `git rev-parse --git-dir` guard in front of it. The hooks
   still install locally; the deploy no longer depends on them being installable.
 - **The web deploy is a local-source rollout, and the backend has no GitHub
-  connection.** `.github/workflows/deploy-web.yml` runs `firebase deploy --only
-  apphosting,hosting` after CI goes green on main. `--only apphosting` archives
+  connection.** The `deploy` job in `.github/workflows/ci.yml` runs `firebase
+  deploy --only apphosting,hosting` on a push to main, behind `needs: [verify]`.
+  It sits in CI rather than in a `workflow_run` workflow of its own on purpose:
+  `workflow_run` fires privileged — full secrets, `id-token: write` — over a
+  commit named by the triggering event's payload, which is code a fork controls
+  on a PR. Guards can exclude that, but CodeQL flags the shape and is right to;
+  `needs:` buys the same "only after the checks passed" without any untrusted
+  ref, because the job runs inside the same trusted run and `actions/checkout`
+  takes its default `github.sha`. `--only apphosting` archives
   the repo root and hands it to App Hosting's builder, which is why the job
   installs nothing: `firebase.json` already carries the `backendId`/`rootDir`/
   `ignore` triple that shape requires, and a connected repo would be a second,
