@@ -694,8 +694,82 @@ from the "production" environment`. With the variable unset, `app.config.js`
   `apps/mobile/src/assets/` does not exist. Pre-existing, unrelated to the
   monorepo, and still unfixed.
 
+### `apps/web`
+
+- **Tailwind's own utilities do not exist in this app.** `globals.css` clears
+  the default namespaces (`--color-*: initial`, and the same for spacing,
+  radius, text, font, shadow) and re-declares them from the tokens, so `p-4`,
+  `rounded-lg` and `bg-slate-200` compile to nothing. The classes that work are
+  `px-three`, `rounded-control`, `bg-background-element`, `text-title`. That is
+  on purpose: it turns the `ui-implementation` skill's "never write a raw value"
+  into something the compiler enforces rather than something to remember.
+- **Clearing the spacing scale takes zero with it, so `--spacing-0` is declared
+  by hand.** `--spacing-*: initial` also removes `--spacing`, the base every
+  numeric spacing utility multiplies — which kills `p-4` as intended and `p-0`,
+  `inset-x-0`, `bottom-0` and `min-w-0` as collateral. Tailwind emits nothing
+  for a class it cannot resolve and warns about nothing, so the failure is
+  silent and looks like a layout bug: `fixed inset-x-0 bottom-0` on the mobile
+  tab bar became `position: fixed` with auto insets, whose static position in a
+  flex container is the container's top-left corner, and the bar appeared at
+  the top of the page with its items shrunk to their labels. `globals.test.ts`
+  compiles `globals.css` and asserts every `-0` class the app uses still
+  resolves, because nothing else can see this — the class name is a valid
+  string to TypeScript and to ESLint, and jsdom has no Tailwind.
+- **The CSS custom properties are emitted at render time**, by `buildTokensCss()`
+  in the root layout — there is no generated file to keep in step and no build
+  ordering to get wrong. The TypeScript in `packages/core/src/constants/theme.ts`
+  is the only copy of the palette.
+- **Any test that writes to a core store needs the Firebase mocks.** The write
+  reaches the sync layer, which calls `getAuth()`, so without them the first
+  `setState` throws `auth/invalid-api-key`. They are global in
+  `apps/web/jest.setup.ts`; adding one there needs `@brelly/core/*` in both the
+  Jest `moduleNameMapper` and the tsconfig paths, because the package has no
+  `exports` map.
+- **Route handlers and anything under `src/server/` need
+  `@jest-environment node`.** The web project's Jest environment is jsdom, which
+  has no `Response`.
+- **Leave `apps/web/next-env.d.ts` as the stock two lines.** `typedRoutes: true`
+  rewrites it to reference a generated `./.next/types/routes.d.ts`, which a
+  fresh CI checkout has never built. It is in the ESLint ignores because its
+  triple-slash references trip `@typescript-eslint/triple-slash-reference`.
+- **`components/icons.ts` is a closed registry because the font is a subset of
+  it.** `iconFontHref()` asks Google Fonts for exactly those `icon_names`, so an
+  icon drawn from outside the list has no glyph and renders as its own name in
+  words — which reads as a typo in the copy rather than as a missing icon.
+  `next/font/google` cannot host this: its catalogue excludes the icon fonts,
+  checked by a failing `next build`.
+- **`/api/places` is an allowlist and must stay one.** Three upstream calls are
+  reachable, the autocomplete body is rebuilt from validated fields rather than
+  forwarded, and the field mask is a server-side constant because it decides
+  which SKU the call is billed at. Anything more general is a public,
+  unauthenticated, billed relay for the whole Places API.
+- **The navigation is two shapes of one list, and exactly one is ever live.**
+  `AppShell` renders a sidebar at `md` and up and a `<dialog>` drawer behind a
+  hamburger below it, both from `DESTINATIONS` and both labelled
+  `aria-label="Main"`. Two landmarks with the same name would be a bug if both
+  were reachable; they are not, because `display: none` — which is what a
+  closed `<dialog>` and the `hidden md:block` sidebar each are — takes a
+  subtree out of the accessibility tree and the tab order. The drawer also has
+  to be closed by hand when the window crosses the breakpoint: the hamburger is
+  gone above `md`, so a modal left open there is a focus trap with no exit but
+  Escape.
+- **RN accessibility roles are not ARIA roles.** `role="text"` is WebKit-only,
+  `summary` is not a role at all, and claiming `radiogroup` owes arrow keys and
+  a roving `tabindex`. Use the real elements — `<fieldset>` with radios or
+  checkboxes — and let the browser supply the keyboard model.
+
 ## Built so far
 
+- **Brelly on the web.** `apps/web` is a Next.js 15 App Router app on the same
+  `packages/core`, with real URLs for all eight screens — `/`, `/plans`,
+  `/history`, `/plan/new`, `/plan/[id]`, `/routines`, `/settings`, `/account` —
+  plus `/api/places`, the proxy that exists so no browser ever holds a Places
+  key. Navigation is a sidebar at `>=768px` and a bottom bar below it, from one
+  `DESTINATIONS` list. The palette is shared rather than copied: the tokens live
+  in core and the web emits them as CSS custom properties at render time. What
+  it deliberately does not have — notifications, the digest, calendar import and
+  export, the widget, OTA, haptics — is hidden rather than half-built; see
+  [round 39](#round-39--phase-3-of-the-web-migration-appsweb).
 - **Over-the-air updates.** `expo-updates` on the `fingerprint` runtime-version
   policy, with `preview` and `production` channels wired to the same-named
   build profiles. `checkAutomatically` is left at its `ON_LOAD` default, so a
@@ -2811,3 +2885,224 @@ getting them by accident from the emulator suite's triple-slash reference under
 the old root `**/*.ts` glob. And the root `package.json`'s inline `jest` key is
 retired, so a stray root `npx jest` can no longer pick up `preset: jest-expo`
 with `rootDir` at the repo root.
+
+
+### Round 39 — Phase 3 of the web migration: `apps/web`
+
+A Next.js 15 App Router app in `apps/web`, reusing `packages/core` through the
+`@brelly/platform/*` seams. Seven commits. ~8,100 lines of source and ~7,900 of
+test, 549 tests at 96.6/90.8/93.4/98.2. `apps/mobile` changed in two ways only,
+both of them deletions the phase called for: `react-native-web` and the
+`"web": "expo start --web"` script, and `app.json`'s now-meaningless `web`
+block.
+
+**The seams were the schedule.** The first `yarn typecheck:web` failed eight
+times with `Cannot find module '@brelly/platform/*'`, and that is the design
+working rather than a setback: core is compiled a second time inside the Next
+project, so the list of missing modules *is* the list of files to write. Nothing
+about core changed to make the web build work.
+
+**One palette, two apps, and the copy lives in TypeScript.** `Colors`,
+`Spacing`, `IconSize`, `MaxContentWidth`, `HeaderHeight` and the `ThemedText`
+variants moved into `packages/core/src/constants/theme.ts`; both apps re-export
+them *by name* through the barrel. `apps/mobile/src/constants/theme.ts` keeps
+only what is `Platform.select` — `Fonts`, `BottomTabInset` — plus its
+`global.css` import.
+
+The web's CSS custom properties are emitted **at render time** by
+`buildTokensCss()` in the root layout, not written to a committed generated
+file. A generated file has two failure modes a function has none of: it can be
+stale, and it has to be built before anything that reads it. There is one copy
+of the palette and it is the TypeScript.
+
+Tailwind's own namespaces are cleared in `@theme` (`--color-*: initial`, and the
+same for spacing, radius, text, font, shadow), so `p-4`, `rounded-lg` and
+`bg-slate-200` do not exist in this app. What is emitted instead is
+`px-three`, `rounded-control`, `bg-background-element`, `text-title` — checked
+in the compiled CSS, not assumed. That is the `ui-implementation` skill's rule
+made mechanical: an untokened value is not a lapse of discipline, it is a class
+that does not compile.
+
+Six token groups were genuinely missing and were added under the skill's
+stop-and-ask gate rather than invented: `Radius`, `ZIndex`, `Opacity`,
+`Elevation.dropdown`, `Duration`, `HitTarget`.
+
+**Material Symbols is not in `next/font/google`'s catalogue.** Found by a
+failing `next build`, not by reading. The answer is a Google Fonts `<link>` with
+`icon_names=` subsetting — the full rounded variable font is megabytes and the
+subset for this app's list is kilobytes — and `components/icons.ts` is a closed
+registry because the font *is* that subset: an icon drawn from outside the list
+has no glyph and renders as its own name in words.
+
+**Four accessibility corrections, all of them the same shape: RN markup that is
+not HTML.**
+
+- `role="text"` is WebKit-only and not an ARIA role. `WeatherBadge` uses
+  visually-hidden text plus `aria-hidden` visible parts instead.
+- `accessibilityRole="radiogroup"` is free on iOS and a promise on the web: an
+  ARIA radiogroup owes arrow keys and roving `tabindex`, and half-implementing
+  that is worse than not claiming the role. `ChipGroup` and `RepeatField` are
+  real `<input type="radio">`/`<input type="checkbox">` in a `<fieldset>`, so
+  the browser supplies the keyboard model.
+- `accessibilityRole="summary"` on the routine row is not an ARIA role at all.
+- `Text as="label"` around a `<label htmlFor>` nests two labels. Both sites now
+  render one plain `<label>` carrying the token classes.
+
+**The dirty-form guard is three mechanisms, because a web page has three
+exits.** In-app links go through `guardNavigation` on `Link`'s `onNavigate`,
+which is the only one that can ask *before* anything happens. Browser Back
+cannot be cancelled, so the guard pushes a sentinel history entry while the form
+is dirty and re-pushes it on a "keep editing". Tab close is `beforeunload`. The
+known cost is recorded in the hook: a spare history entry survives a save, so
+Back needs one extra press afterwards — unwinding it on unmount races the
+navigation that caused the unmount.
+
+Worth recording that the native baseline was weaker than it read:
+`gestureEnabled: false` blocks the iOS swipe only, so Android's hardware Back
+already discarded a dirty form. Two of three platforms gain behaviour here.
+
+**Three decisions about what a second client may do.**
+
+- The web **does** run the routine materialiser. Deleting a routine is a delete
+  plus a sweep, so a client that materialised nothing would delete the rule and
+  leave a fortnight of its stops standing. The write is idempotent by
+  construction: `materializedSlotId` is deterministic in `(routine, date)`, so
+  two clients computing the same action produce the same document id.
+- The web **does** let a stop be muted. `notificationsMuted` is read off the
+  same document by the phone, so muting from a laptop is a real cross-client
+  action rather than a feature the web does not have.
+- The web **must not** write `hasSeenOnboarding` and shows no primer. That flag
+  suppresses the phone's location primer — the copy App Review litigated — and a
+  new web user flipping it would turn that off for a phone that had never asked.
+
+**`/api/places` is an allowlist, not a proxy.** A forwarding proxy for a key
+with no per-user scope is a public, unauthenticated, billed relay for the whole
+Places API. Three upstream calls are reachable; every other path is a 404 before
+the key is read. The autocomplete body is *rebuilt* from validated fields rather
+than forwarded — otherwise a caller could set `includedPrimaryTypes` or another
+SKU's parameters on a key it cannot see — and the field mask is a server-side
+constant for the same reason: the mask decides the SKU. Google's error bodies
+never cross the route; on the Geocoding arm the key is in the query string the
+error quotes back.
+
+**Test traps, each found the expensive way.**
+
+- Writing to a core store reaches the sync layer, which calls `getAuth()`. Every
+  web test therefore needs the Firebase mocks in `jest.setup.ts`, or the first
+  `setState` throws `auth/invalid-api-key`. Wiring that up needs
+  `"^@brelly/core/(.*)$"` in the web Jest `moduleNameMapper` and
+  `"@brelly/core/*"` in its tsconfig paths: the package has no `exports` map, so
+  `@brelly/core/test` otherwise resolves to a nonexistent `packages/core/test`.
+- `updateSlot` re-files a slot into the bucket matching `toDateKey(startTime)`.
+  A fixture whose `date` disagrees with its slots' start times moves them on the
+  first write, and a later revert finds nothing — an undo that silently does
+  nothing. `makePlan` documents it; `useMuteSlotWithUndo.test.tsx` is where it
+  cost an hour.
+- `updateSlot` also **mints a new id** when an update clears `routineId`. That
+  is deliberate — a detached day must not be rewritten or swept by anything
+  holding the materialised id — so the edit page's "this day only" test looks
+  the slot up by position, not by id.
+- `filterPlans` requires every term to appear *somewhere* on the stop. "Stop 1"
+  is two terms and the digit matches the shared postal code, so six fixtures
+  named that way all match and the filter looks broken. Distinct one-word labels.
+- A test file with no static imports is a global script, so two of them can
+  collide on `Cannot redeclare block-scoped variable`. `export {};` fixes it.
+- Route handlers and `placesProxy.ts` need `@jest-environment node`: jsdom has
+  no `Response`.
+- `next-env.d.ts` must stay the stock two lines. `typedRoutes: true` rewrites it
+  to reference a generated `./.next/types/routes.d.ts` that CI has never built.
+
+**`react-hooks` caught two real things, not style.**
+`set-state-in-effect` on `useAuthUser` was right that auth *is* an external
+store — a current value plus a subscription — and `useSyncExternalStore` also
+gives the server an answer (`null`) where `getAuth()` must not be called at all.
+`preserve-manual-memoization` was right that a `useMemo` over `upcoming` never
+hits, because `splitPlansByTime` rebuilds that array every render.
+
+**What web does not do, and why each is hidden rather than half-built:** rain
+notifications, the daily digest and "Check your alerts", calendar import and
+export, the iOS widget, OTA and `UpdateBanner`, haptics, the splash animation,
+`localDataMigration`. Settings therefore shows three of the phone's seven
+sections. That is safe for the shared document because every write goes through
+an individual setter and `writeSettingsFields` merges with `{merge: true}` — a
+client that never renders those cards never writes their fields.
+
+Two things the phone does that the web deliberately does *not* copy.
+`useCurrentLocation` has one geocoder where the phone has two: there is no
+on-device reverse geocoder in a browser, so a failure falls through to
+"Current location" and `formatReverseGeocodedAddress` has no caller here.
+And `account-link`'s `Platform.OS === "ios"` gate on Continue with Apple is
+dropped rather than ported — it exists because `expo-apple-authentication` only
+exists on iOS, and Apple's JS Sign In works in any browser.
+
+### Round 40 — the mobile web navigation, and the utility class that was not there
+
+Two things, and the first is why the second was visible at all.
+
+**`bottom-0` and `inset-x-0` did not exist.** `globals.css` empties Tailwind's
+scales on purpose — `p-4` is a raw value wearing a class name, and this repo's
+answer is that it should not compile. What `--spacing-*: initial` also removes
+is `--spacing` itself, the base every *numeric* spacing utility multiplies, so
+`p-0`, `min-w-0`, `inset-x-0` and `bottom-0` went with it. Those are not raw
+values; zero is a value the design language has.
+
+Tailwind emits nothing for a class it cannot resolve and warns about nothing,
+so the failure was silent and surfaced as a layout bug three levels away: the
+mobile tab bar's `fixed inset-x-0 bottom-0` compiled to `position: fixed` with
+auto insets, and a fixed child of a flex container takes its static position
+from the container's **top-left corner**. The bar rendered at the top of the
+page with its items shrunk to their labels — `flex-1` on the `<li>`s was live,
+but the bar itself was shrink-to-fit, so there was nothing to divide.
+
+Four other places were broken the same way and nobody had noticed: the toast's
+centring, `SlotForm`'s place-search dropdown width, the `<fieldset>` resets in
+`ChipGroup` and `RepeatField`, and `min-w-0` on every truncating row in
+`ItineraryCard`, `routines` and `NearbyForecastPreview`.
+
+The fix is one declaration — `--spacing-0: 0px` — and it is narrow on purpose:
+Tailwind matches a *named* key before it tries the multiply, so the zero
+utilities come back and `p-1` stays nothing. The guard is
+`src/app/globals.test.ts`, which compiles `globals.css` through Tailwind's own
+`compile()` and asserts that every `-0` class the app uses resolves, and that
+`p-4` still does not. Nothing cheaper could have caught it: the class name is a
+valid string to TypeScript and to ESLint, and jsdom has no Tailwind. Two notes
+for anyone extending that test — `next/jest` maps every `.css` specifier to a
+stub module, so `require.resolve("tailwindcss/index.css")` (and `createRequire`,
+which Jest also shims) hands back `styleMock.js`; find the stylesheets through
+the package's *JavaScript* entry instead.
+
+**Then the bottom bar was replaced by a drawer.** With the bar finally at the
+bottom of the screen it was clear what it cost: a phone browser's own chrome
+lives on the bottom edge, and a fixed bar above it spends a permanent strip of
+the smallest screen the app runs on. Below `md` the navigation is now a slim
+sticky top bar holding a hamburger, and the four destinations live in a
+left-hand sheet.
+
+The sheet is a native `<dialog>` opened with `showModal()`, for the same reason
+`DialogHost` is one — the focus trap, Escape, the inert background and the top
+layer all come with it, and a hand-rolled drawer is where each of those gets
+reimplemented badly. Tailwind's preflight has already zeroed the UA centring
+margin, so styling it into a left sheet is a width and a height. A click on the
+backdrop reports the `<dialog>` itself as its target, which is what makes
+tap-outside-to-close two lines rather than an overlay element; the panel fills
+the dialog so no click inside it can be mistaken for one.
+
+Three things that are less obvious than the markup:
+
+- **Choosing a destination closes the drawer even when the unsaved-changes
+  guard cancels the navigation.** The question that guard raises is itself a
+  modal `<dialog>`, and stacking one over another leaves the answer behind two
+  scrims.
+- **Crossing the `md` breakpoint closes it.** Above `md` the hamburger is gone,
+  so a drawer left open is a focus trap whose only exit is a key press. That is
+  the one place the breakpoint is duplicated in JavaScript — `matchMedia` has
+  no way to ask Tailwind.
+- **`onNavigate` needed a `next/link` stand-in that honours it.** The real
+  `Link` fires it only for a navigation its own router handles, and there is no
+  router under `render()`. `src/test/mockNextLink.tsx` now calls it on the click
+  and prevents the default, which is both faithful to what `Link` does and the
+  end of a page of jsdom "Not implemented: navigation" noise.
+
+What this gives up is real and was traded knowingly: a bottom bar is one
+thumb-reachable tap and a drawer is two, the first of them at the top-left
+corner, which is the furthest point on a phone screen from a right thumb.

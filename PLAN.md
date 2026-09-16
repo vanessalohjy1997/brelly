@@ -58,10 +58,26 @@ Read the phase there before starting it; these are the headings only.
       hash. Run the *iOS Release* workflow once per profile. `ota-update.yml`
       already refuses to publish before then, which is the failure being made
       visible rather than one to work around.
-- [ ] **Phase 3 — `apps/web`.** Purely additive, cannot break mobile. See
-      [WEB.md](WEB.md#phase-3--appsweb-purely-additive-cannot-break-mobile).
+- [x] **Phase 3 — `apps/web`.** Purely additive, and it was: `apps/mobile`'s
+      only changes are the two deletions the phase called for. Written up in
+      [round 39](NOTES.md#round-39--phase-3-of-the-web-migration-appsweb).
+      Those deletions move the Expo fingerprint again — `package.json` scripts
+      and `app.json` are both hashed sources — which changes nothing, because
+      OTA is already closed on the task above.
 - [ ] **Phase 4 — deploy.** The `/api/places` abuse control is a gate here, not
-      a follow-up. See [WEB.md](WEB.md#phase-4--deploy).
+      a follow-up. See [WEB.md](WEB.md#phase-4--deploy). Phase 3 built the half
+      that is about *shape*: three outbound calls and nothing else, server-side
+      input validation, a server-side field mask, `Cache-Control: no-store`, and
+      no Google error body crossing the route. What is still open is the half
+      that is about *volume and identity* — a verified Firebase ID token,
+      per-IP and per-uid rate limiting in Firestore or Redis (never in-process:
+      App Hosting is multi-instance Cloud Run), an `Origin` allowlist, App
+      Check, a budget alert and a Places quota cap. Two smaller pieces go with
+      it: the session token becomes a browser-minted UUID, which needs
+      `expo-crypto` behind a new `@brelly/platform/random` seam because
+      `crypto.randomUUID()` does not exist on Hermes; and `reverseGeocode`
+      returning `null` for a *denied key* is a silent failure the proxy should
+      surface as a 5xx.
 
 OTA is closed until the two builds above finish. The tag
 `ota-baseline-pre-monorepo` still makes an emergency hotfix a checkout.

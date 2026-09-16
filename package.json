@@ -21,15 +21,19 @@
     "**/@bacons/xcode/uuid": "11.1.1"
   },
   "scripts": {
-    "typecheck": "yarn typecheck:mobile",
+    "typecheck": "yarn typecheck:mobile && yarn typecheck:web",
     "typecheck:mobile": "tsc --noEmit -p apps/mobile",
+    "typecheck:web": "tsc --noEmit -p apps/web",
     "lint": "eslint . --max-warnings 0",
-    "test": "yarn workspace @brelly/mobile test && yarn test:core",
-    "test:coverage": "yarn workspace @brelly/mobile test:coverage && yarn workspace @brelly/core test:coverage",
+    "test": "yarn workspace @brelly/mobile test && yarn test:core && yarn test:web",
+    "test:coverage": "yarn workspace @brelly/mobile test:coverage && yarn workspace @brelly/core test:coverage && yarn workspace @brelly/web test:coverage",
     "test:core": "yarn workspace @brelly/core test",
+    "test:web": "yarn workspace @brelly/web test",
+    "dev:web": "yarn workspace @brelly/web dev",
     "test:emulator": "firebase emulators:exec --project demo-brelly --only firestore \"jest --config jest.emulator.config.js\"",
     "prepare": "git config core.hooksPath .githooks",
     "verify:fast": "yarn typecheck && yarn lint && yarn test",
-    "verify": "yarn typecheck && yarn lint && yarn test:coverage"
+    "verify": "yarn typecheck && yarn lint && yarn test:coverage",
+    "deploy:rules": "firebase deploy --only firestore"
   }
 }

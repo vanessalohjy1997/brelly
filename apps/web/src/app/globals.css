@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind's own scales are cleared, every one of them, and that is the point
+ * rather than an inconvenience. This repo's rule is that a value with no token
+ * behind it is a stop-and-ask — and `p-4`, `rounded-lg`, `text-sm` and
+ * `bg-slate-200` are each a raw value wearing a class name. Emptying the
+ * namespaces means those utilities do not exist: `p-4` is not "wrong" here, it
+ * is nothing, and the build says so.
+ *
+ * What replaces them is `@theme inline` mapping onto `--brelly-*`, the custom
+ * properties `constants/tokensCss.ts` emits from the TypeScript in
+ * `packages/core/src/constants/theme.ts`. `inline` is load-bearing: it makes
+ * each utility reference the variable rather than copy its value, so a colour
+ * follows the light/dark switch without Tailwind generating a second set of
+ * rules for it.
+ */
+@theme {
+  --color-*: initial;
+  --spacing-*: initial;
+  --radius-*: initial;
+  --text-*: initial;
+  --font-*: initial;
+  --shadow-*: initial;
+
+  /*
+   * Zero is the one number that survives emptying the spacing scale, and it has
+   * to be put back by hand. `--spacing-*: initial` removes `--spacing` itself,
+   * the base every numeric spacing utility multiplies — so `p-4` stops existing
+   * as intended, but so do `p-0`, `inset-x-0`, `bottom-0` and `min-w-0`, which
+   * are not raw values at all. Tailwind emits nothing and reports nothing for a
+   * class it cannot resolve, so the failure is silent: `fixed inset-x-0
+   * bottom-0` on the mobile tab bar left `position: fixed` with auto insets,
+   * which in a flex container resolves to the container's top-left corner, and
+   * the bar rendered at the top of the page with its items shrunk to their
+   * labels. Naming `--spacing-0` restores exactly those four and nothing else —
+   * a named key is matched before the multiply, so `p-1` is still nothing.
+   */
+  --spacing-0: 0px;
+}
+
+@theme inline {
+  /* The palette. Thirteen tokens, the same thirteen the phone has. */
+  --color-text: var(--brelly-text);
+  --color-text-secondary: var(--brelly-text-secondary);
+  --color-background: var(--brelly-background);
+  --color-background-element: var(--brelly-background-element);
+  --color-background-selected: var(--brelly-background-selected);
+  --color-danger: var(--brelly-danger);
+  --color-on-danger: var(--brelly-on-danger);
+  --color-success: var(--brelly-success);
+  --color-primary: var(--brelly-primary);
+  --color-on-primary: var(--brelly-on-primary);
+  --color-border: var(--brelly-border);
+  --color-umbrella-rain: var(--brelly-umbrella-rain);
+  --color-umbrella-sun: var(--brelly-umbrella-sun);
+  /* Not palette entries — CSS keywords that every colour utility needs. */
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-inherit: inherit;
+
+  --spacing-half: var(--brelly-space-half);
+  --spacing-one: var(--brelly-space-one);
+  --spacing-two: var(--brelly-space-two);
+  --spacing-three: var(--brelly-space-three);
+  --spacing-four: var(--brelly-space-four);
+  --spacing-five: var(--brelly-space-five);
+  --spacing-six: var(--brelly-space-six);
+
+  --radius-hairline: var(--brelly-radius-hairline);
+  --radius-control: var(--brelly-radius-control);
+  --radius-card: var(--brelly-radius-card);
+  --radius-full: var(--brelly-radius-full);
+
+  --font-sans: var(--brelly-font-sans);
+  --font-rounded: var(--brelly-font-rounded);
+  --font-serif: var(--brelly-font-serif);
+  --font-mono: var(--brelly-font-mono);
+
+  /*
+   * The text scale is the ten `ThemedText` variants, not a table of sizes —
+   * `text-title`, not `text-34`. Each carries its line height and weight, so a
+   * variant is one class rather than three and cannot be half-applied.
+   */
+  --text-title: var(--brelly-text-title-size);
+  --text-title--line-height: var(--brelly-text-title-line);
+  --text-title--font-weight: var(--brelly-text-title-weight);
+
+  --text-subtitle: var(--brelly-text-subtitle-size);
+  --text-subtitle--line-height: var(--brelly-text-subtitle-line);
+  --text-subtitle--font-weight: var(--brelly-text-subtitle-weight);
+
+  --text-default: var(--brelly-text-default-size);
+  --text-default--line-height: var(--brelly-text-default-line);
+  --text-default--font-weight: var(--brelly-text-default-weight);
+
+  --text-small: var(--brelly-text-small-size);
+  --text-small--line-height: var(--brelly-text-small-line);
+  --text-small--font-weight: var(--brelly-text-small-weight);
+
+  --text-small-bold: var(--brelly-text-small-bold-size);
+  --text-small-bold--line-height: var(--brelly-text-small-bold-line);
+  --text-small-bold--font-weight: var(--brelly-text-small-bold-weight);
+
+  --text-link: var(--brelly-text-link-size);
+  --text-link--line-height: var(--brelly-text-link-line);
+  --text-link--font-weight: var(--brelly-text-link-weight);
+
+  --text-link-primary: var(--brelly-text-link-primary-size);
+  --text-link-primary--line-height: var(--brelly-text-link-primary-line);
+  --text-link-primary--font-weight: var(--brelly-text-link-primary-weight);
+
+  --text-code: var(--brelly-text-code-size);
+  --text-code--font-weight: var(--brelly-text-code-weight);
+
+  --text-eyebrow: var(--brelly-text-eyebrow-size);
+  --text-eyebrow--font-weight: var(--brelly-text-eyebrow-weight);
+  --text-eyebrow--letter-spacing: var(--brelly-text-eyebrow-tracking);
+
+  --text-field-label: var(--brelly-text-field-label-size);
+  --text-field-label--font-weight: var(--brelly-text-field-label-weight);
+
+  /* The one shadow in the app — `SlotForm`'s place-search dropdown. */
+  --shadow-dropdown: var(--brelly-shadow-dropdown);
+}
+
+/*
+ * `--brelly-*` itself is emitted per document by the root layout, from the
+ * TypeScript tokens. It is not declared here, deliberately: a second copy in
+ * CSS is the drift that one palette exists to prevent, and `@theme inline`
+ * only needs the *names*, which is what makes that split possible.
+ */
+
+html {
+  font-family: var(--brelly-font-sans);
+  /* Not `background: inherit`. The page paints its own ground, or the browser's
+     canvas shows through wherever content does not reach — visible on any
+     screen taller than the plan list. */
+  background-color: var(--brelly-background);
+  color: var(--brelly-text);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-size: var(--brelly-text-default-size);
+  line-height: var(--brelly-text-default-line);
+  font-weight: var(--brelly-text-default-weight);
+}
+
+/*
+ * The focus ring is the web's own affordance and the phone has no equivalent,
+ * so it is declared once here rather than per component. `:focus-visible`
+ * rather than `:focus`: a mouse click on a button should not leave a ring
+ * behind, and removing the ring outright is what makes a page unusable by
+ * keyboard.
+ */
+:focus-visible {
+  outline: 2px solid var(--brelly-primary);
+  outline-offset: 2px;
+}
+
+/*
+ * "Reduce Motion" is a request to be left alone rather than a request for
+ * slightly less — the same reading `useReduceMotion` applies on the phone,
+ * where a toast appears outright instead of fading.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * The toast's entrance. One keyframe rather than a library: the phone's version
+ * is a Reanimated `FadeIn` gated on `useReduceMotion`, and the browser's
+ * equivalent of that gate is the `prefers-reduced-motion` block above, which
+ * already reduces this to nothing.
+ */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--brelly-space-two));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

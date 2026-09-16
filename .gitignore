@@ -32,8 +32,12 @@ firestore-debug.log
 .DS_Store
 *.pem
 
-# local env files
+# local env files. `.env` alone does not cover Next's own convention files —
+# `.env.local` and friends are what `apps/web` actually reads, and an
+# unignored one is a real Firebase config waiting to be committed.
 .env
+.env.local
+.env.*.local
 
 # firebase project config (real project identifiers, per-developer/per-project)
 GoogleService-Info.plist
@@ -65,3 +69,7 @@ coverage/
 # Next.js (apps/web, from phase 3)
 .next/
 out/
+
+# firebase CLI deploy cache (hosting hashes, apphosting scratch)
+.firebase/
+.local_build_*
