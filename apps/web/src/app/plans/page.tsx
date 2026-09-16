@@ -16,7 +16,7 @@ import {
   useItineraryStore,
 } from "@brelly/core";
 
-import { Button } from "@/components/Button";
+import { Button, buttonClassName } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { Icon } from "@/components/Icon";
 import { Icons } from "@/components/icons";
@@ -98,7 +98,7 @@ export default function PlansPage() {
             <Link
               href="/routines"
               aria-label="Routines"
-              className="inline-flex min-h-[var(--brelly-hit-target)] items-center rounded-control bg-background-element px-three"
+              className={buttonClassName("quiet")}
             >
               <Icon name={Icons.repeat} size="control" />
             </Link>
@@ -110,11 +110,10 @@ export default function PlansPage() {
               <Icon name={Icons.refresh} size="inline" />
               {isRefreshing ? "Refreshing…" : "Refresh"}
             </Button>
-            <Link
-              href="/plan/new"
-              className="inline-flex min-h-[var(--brelly-hit-target)] items-center rounded-control bg-primary px-three text-small-bold text-on-primary"
-            >
-              + Add
+            <Link href="/plan/new" className={buttonClassName("primary")}>
+              <Text variant="smallBold" color="onPrimary">
+                + Add
+              </Text>
             </Link>
           </>
         }

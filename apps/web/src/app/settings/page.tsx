@@ -9,7 +9,7 @@ import {
   type ThemePreference,
 } from "@brelly/core";
 
-import { Button } from "@/components/Button";
+import { Button, buttonClassName } from "@/components/Button";
 import { ChipGroup } from "@/components/itinerary/ChipGroup";
 import { PageHeader } from "@/components/PageHeader";
 import { Surface } from "@/components/Surface";
@@ -170,11 +170,10 @@ export default function SettingsPage() {
               {/* The label stays a short, fixed action and the address goes in
                   the hint — an email is status, not an action, and a long one
                   inside a centred button reads as a broken button. */}
-              <Link
-                href="/account"
-                className="inline-flex min-h-[var(--brelly-hit-target)] items-center rounded-control bg-background-element px-three text-small-bold text-text"
-              >
-                {linkedAs ? "Your account" : "Back up your data"}
+              <Link href="/account" className={buttonClassName("quiet")}>
+                <Text variant="smallBold">
+                  {linkedAs ? "Your account" : "Back up your data"}
+                </Text>
               </Link>
             </div>
             <Text variant="small" color="textSecondary">

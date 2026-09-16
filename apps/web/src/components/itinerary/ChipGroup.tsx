@@ -44,8 +44,17 @@ export function ChipGroup<T extends string>({
               // latter is 1.26:1 on `backgroundElement` in dark and 1.19:1 in
               // light, so a selected chip and an unselected one looked the same
               // and the bold label was the only cue.
-              className={`flex min-h-[var(--brelly-hit-target)] cursor-pointer items-center rounded-control px-three ${
-                selected ? "bg-primary" : "bg-background-element"
+              //
+              // The unselected chip has the opposite problem, and takes the
+              // same answer as `Button`'s `quiet` tone: its fill *is* the card
+              // it sits on, so without the `border` token it has no edge and
+              // reads as a word rather than a choice. The selected chip keeps
+              // the border box and hides the line, so the row does not shift
+              // by 2px as the selection moves along it.
+              className={`flex min-h-[var(--brelly-hit-target)] cursor-pointer items-center rounded-control border px-three transition-colors duration-[var(--brelly-duration-fade)] ${
+                selected
+                  ? "border-transparent bg-primary"
+                  : "border-border bg-background-element hover:bg-background-selected"
               } has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-primary has-[:focus-visible]:outline-offset-2`}
             >
               <input

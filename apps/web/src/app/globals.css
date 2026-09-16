@@ -22,6 +22,21 @@
   --text-*: initial;
   --font-*: initial;
   --shadow-*: initial;
+
+  /*
+   * Zero is the one number that survives emptying the spacing scale, and it has
+   * to be put back by hand. `--spacing-*: initial` removes `--spacing` itself,
+   * the base every numeric spacing utility multiplies — so `p-4` stops existing
+   * as intended, but so do `p-0`, `inset-x-0`, `bottom-0` and `min-w-0`, which
+   * are not raw values at all. Tailwind emits nothing and reports nothing for a
+   * class it cannot resolve, so the failure is silent: `fixed inset-x-0
+   * bottom-0` on the mobile tab bar left `position: fixed` with auto insets,
+   * which in a flex container resolves to the container's top-left corner, and
+   * the bar rendered at the top of the page with its items shrunk to their
+   * labels. Naming `--spacing-0` restores exactly those four and nothing else —
+   * a named key is matched before the multiply, so `p-1` is still nothing.
+   */
+  --spacing-0: 0px;
 }
 
 @theme inline {

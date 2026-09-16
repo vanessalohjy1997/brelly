@@ -65,6 +65,30 @@ describe("ChipGroup", () => {
     expect(onChange).toHaveBeenCalledWith("indoor");
   });
 
+  it("gives the unselected chip an edge, and the selected one a fill", () => {
+    // An unselected chip is filled with `background-element`, which is what the
+    // card behind it is filled with — so without the `border` token it has no
+    // boundary and reads as a word rather than as a choice.
+    render(
+      <ChipGroup
+        name="kind"
+        legend="Indoor or outdoor"
+        options={options}
+        value="outdoor"
+        onChange={jest.fn()}
+      />,
+    );
+
+    const selected = screen.getByText("Outdoor").closest("label");
+    const unselected = screen.getByText("Indoor").closest("label");
+
+    expect(unselected).toHaveClass("border-border");
+    // The selected chip keeps the border box and hides the line, so the row
+    // does not shift as the selection moves along it.
+    expect(selected).toHaveClass("border-transparent");
+    expect(selected).toHaveClass("bg-primary");
+  });
+
   it("keeps the input focusable, so the group can be reached at all", () => {
     render(
       <ChipGroup

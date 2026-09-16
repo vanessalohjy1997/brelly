@@ -703,6 +703,18 @@ from the "production" environment`. With the variable unset, `app.config.js`
   `px-three`, `rounded-control`, `bg-background-element`, `text-title`. That is
   on purpose: it turns the `ui-implementation` skill's "never write a raw value"
   into something the compiler enforces rather than something to remember.
+- **Clearing the spacing scale takes zero with it, so `--spacing-0` is declared
+  by hand.** `--spacing-*: initial` also removes `--spacing`, the base every
+  numeric spacing utility multiplies — which kills `p-4` as intended and `p-0`,
+  `inset-x-0`, `bottom-0` and `min-w-0` as collateral. Tailwind emits nothing
+  for a class it cannot resolve and warns about nothing, so the failure is
+  silent and looks like a layout bug: `fixed inset-x-0 bottom-0` on the mobile
+  tab bar became `position: fixed` with auto insets, whose static position in a
+  flex container is the container's top-left corner, and the bar appeared at
+  the top of the page with its items shrunk to their labels. `globals.test.ts`
+  compiles `globals.css` and asserts every `-0` class the app uses still
+  resolves, because nothing else can see this — the class name is a valid
+  string to TypeScript and to ESLint, and jsdom has no Tailwind.
 - **The CSS custom properties are emitted at render time**, by `buildTokensCss()`
   in the root layout — there is no generated file to keep in step and no build
   ordering to get wrong. The TypeScript in `packages/core/src/constants/theme.ts`
@@ -731,6 +743,16 @@ from the "production" environment`. With the variable unset, `app.config.js`
   forwarded, and the field mask is a server-side constant because it decides
   which SKU the call is billed at. Anything more general is a public,
   unauthenticated, billed relay for the whole Places API.
+- **The navigation is two shapes of one list, and exactly one is ever live.**
+  `AppShell` renders a sidebar at `md` and up and a `<dialog>` drawer behind a
+  hamburger below it, both from `DESTINATIONS` and both labelled
+  `aria-label="Main"`. Two landmarks with the same name would be a bug if both
+  were reachable; they are not, because `display: none` — which is what a
+  closed `<dialog>` and the `hidden md:block` sidebar each are — takes a
+  subtree out of the accessibility tree and the tab order. The drawer also has
+  to be closed by hand when the window crosses the breakpoint: the hamburger is
+  gone above `md`, so a modal left open there is a focus trap with no exit but
+  Escape.
 - **RN accessibility roles are not ARIA roles.** `role="text"` is WebKit-only,
   `summary` is not a role at all, and claiming `radiogroup` owes arrow keys and
   a roving `tabindex`. Use the real elements — `<fieldset>` with radios or
@@ -3012,3 +3034,75 @@ on-device reverse geocoder in a browser, so a failure falls through to
 And `account-link`'s `Platform.OS === "ios"` gate on Continue with Apple is
 dropped rather than ported — it exists because `expo-apple-authentication` only
 exists on iOS, and Apple's JS Sign In works in any browser.
+
+### Round 40 — the mobile web navigation, and the utility class that was not there
+
+Two things, and the first is why the second was visible at all.
+
+**`bottom-0` and `inset-x-0` did not exist.** `globals.css` empties Tailwind's
+scales on purpose — `p-4` is a raw value wearing a class name, and this repo's
+answer is that it should not compile. What `--spacing-*: initial` also removes
+is `--spacing` itself, the base every *numeric* spacing utility multiplies, so
+`p-0`, `min-w-0`, `inset-x-0` and `bottom-0` went with it. Those are not raw
+values; zero is a value the design language has.
+
+Tailwind emits nothing for a class it cannot resolve and warns about nothing,
+so the failure was silent and surfaced as a layout bug three levels away: the
+mobile tab bar's `fixed inset-x-0 bottom-0` compiled to `position: fixed` with
+auto insets, and a fixed child of a flex container takes its static position
+from the container's **top-left corner**. The bar rendered at the top of the
+page with its items shrunk to their labels — `flex-1` on the `<li>`s was live,
+but the bar itself was shrink-to-fit, so there was nothing to divide.
+
+Four other places were broken the same way and nobody had noticed: the toast's
+centring, `SlotForm`'s place-search dropdown width, the `<fieldset>` resets in
+`ChipGroup` and `RepeatField`, and `min-w-0` on every truncating row in
+`ItineraryCard`, `routines` and `NearbyForecastPreview`.
+
+The fix is one declaration — `--spacing-0: 0px` — and it is narrow on purpose:
+Tailwind matches a *named* key before it tries the multiply, so the zero
+utilities come back and `p-1` stays nothing. The guard is
+`src/app/globals.test.ts`, which compiles `globals.css` through Tailwind's own
+`compile()` and asserts that every `-0` class the app uses resolves, and that
+`p-4` still does not. Nothing cheaper could have caught it: the class name is a
+valid string to TypeScript and to ESLint, and jsdom has no Tailwind. Two notes
+for anyone extending that test — `next/jest` maps every `.css` specifier to a
+stub module, so `require.resolve("tailwindcss/index.css")` (and `createRequire`,
+which Jest also shims) hands back `styleMock.js`; find the stylesheets through
+the package's *JavaScript* entry instead.
+
+**Then the bottom bar was replaced by a drawer.** With the bar finally at the
+bottom of the screen it was clear what it cost: a phone browser's own chrome
+lives on the bottom edge, and a fixed bar above it spends a permanent strip of
+the smallest screen the app runs on. Below `md` the navigation is now a slim
+sticky top bar holding a hamburger, and the four destinations live in a
+left-hand sheet.
+
+The sheet is a native `<dialog>` opened with `showModal()`, for the same reason
+`DialogHost` is one — the focus trap, Escape, the inert background and the top
+layer all come with it, and a hand-rolled drawer is where each of those gets
+reimplemented badly. Tailwind's preflight has already zeroed the UA centring
+margin, so styling it into a left sheet is a width and a height. A click on the
+backdrop reports the `<dialog>` itself as its target, which is what makes
+tap-outside-to-close two lines rather than an overlay element; the panel fills
+the dialog so no click inside it can be mistaken for one.
+
+Three things that are less obvious than the markup:
+
+- **Choosing a destination closes the drawer even when the unsaved-changes
+  guard cancels the navigation.** The question that guard raises is itself a
+  modal `<dialog>`, and stacking one over another leaves the answer behind two
+  scrims.
+- **Crossing the `md` breakpoint closes it.** Above `md` the hamburger is gone,
+  so a drawer left open is a focus trap whose only exit is a key press. That is
+  the one place the breakpoint is duplicated in JavaScript — `matchMedia` has
+  no way to ask Tailwind.
+- **`onNavigate` needed a `next/link` stand-in that honours it.** The real
+  `Link` fires it only for a navigation its own router handles, and there is no
+  router under `render()`. `src/test/mockNextLink.tsx` now calls it on the click
+  and prevents the default, which is both faithful to what `Link` does and the
+  end of a page of jsdom "Not implemented: navigation" noise.
+
+What this gives up is real and was traded knowingly: a bottom bar is one
+thumb-reachable tap and a drawer is two, the first of them at the top-left
+corner, which is the furthest point on a phone screen from a right thumb.
