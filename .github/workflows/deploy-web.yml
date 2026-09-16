@@ -1,0 +1,150 @@
+name: Deploy web
+
+# Fires after CI goes green on main, not on the push itself. `push:` would
+# start this in parallel with the checks, so a commit whose typecheck or tests
+# are about to fail could reach production before anything noticed. There is no
+# cross-workflow `needs:`, so `workflow_run` is the handoff — it costs roughly a
+# CI run's length in latency and buys the guarantee that nothing red deploys.
+#
+# Deliberately unfiltered by path. `packages/core` is shared, so a change with
+# no `apps/web` file in it can still change what the site renders, and a skip
+# list that drifts out of date fails the quiet way: a green merge that silently
+# never shipped. An extra App Hosting build on a mobile-only merge is the
+# cheaper mistake.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  # For redeploying the same commit — a rollout that died halfway, or a change
+  # made in the Firebase console that needs the repo's config put back.
+  workflow_dispatch:
+
+# `id-token: write` is the whole point: it lets the runner mint the short-lived
+# OIDC token that Workload Identity Federation exchanges for Google
+# credentials. Without it the auth step fails and no key exists to fall back
+# on — which is the intent. `contents: read` matches the rest of this
+# directory; nothing here writes to the repo.
+permissions:
+  contents: read
+  id-token: write
+
+# Serialised, and `cancel-in-progress: false` on purpose. Everywhere else in
+# this repo a newer run should kill an older one; here the older run is a
+# half-finished rollout, and cancelling the CLI does not cancel the rollout it
+# already started. Two overlapping deploys would race to decide which build
+# serves traffic.
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # A `workflow_run` run fires for every CI completion, including PR runs and
+    # failures, so the filtering that `on:` cannot express happens here.
+    # `workflow_dispatch` skips all of it — pressing the button is the consent.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push'
+          && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    # App Hosting builds the Next app server-side and then waits out the
+    # rollout; the CLI blocks for both. Ten minutes is not enough on a cold
+    # build cache.
+    timeout-minutes: 30
+    steps:
+      # `workflow_run` checks out the *default branch* by default, not the
+      # commit that was tested. Pinning `head_sha` is what makes this deploy
+      # the exact tree CI verified, rather than whatever main has become since.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # firebase-tools is not a dependency of any workspace — nothing in the
+      # app imports it, and adding it to the root would put a ~100MB CLI in
+      # every developer's install for the sake of one CI job.
+      #
+      # The major is pinned, and the floor matters: 15.22.2 broke ADC entirely
+      # in CI, reporting a valid federated credential as "have you run firebase
+      # login?" (firebase-tools#10726, a swallowed Node 24 fetch bug). Fixed in
+      # 15.22.3. Node 22 above is unaffected either way.
+      - name: Install the Firebase CLI
+        run: npm install -g firebase-tools@15
+
+      # No service account key exists to leak. The runner's OIDC token is
+      # exchanged for a short-lived credential that may only impersonate
+      # brelly-deployer, and only from this repository — the provider's
+      # attribute condition and the workloadIdentityUser binding each enforce
+      # half of that.
+      #
+      # Neither value below is a secret: they name an identity, they do not
+      # authorise one. Same stance as apphosting.yaml's project identifiers.
+      # See the setup commands in the repo's NOTES.md if these need recreating.
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: brelly-50de6
+          workload_identity_provider: projects/87595606048/locations/global/workloadIdentityPools/github/providers/brelly
+          service_account: brelly-deployer@brelly-50de6.iam.gserviceaccount.com
+
+      # Two targets, one command.
+      #
+      # `apphosting` is a *local source* deploy: the CLI archives the repo root
+      # (minus firebase.json's `ignore` list) and hands it to App Hosting's
+      # builder, which is why no GitHub connection is configured on the backend
+      # and why this job runs no `yarn install` — the build happens there, from
+      # the root, with the workspace and packages/core intact.
+      #
+      # `hosting` is the rewrite, and it is here rather than left to a human
+      # because it is the piece that puts the app and `/__/auth/handler` on one
+      # origin. A firebase.json whose `hosting.site` has moved and a live site
+      # that has not is a Safari-only sign-in failure nobody sees on a laptop.
+      #
+      # Firestore rules are deliberately NOT deployed. `firestore.rules` is a
+      # `deploy:rules` script you run by hand, and it should stay one: a
+      # `hasOnly()` tightening starts rejecting writes against legacy
+      # production documents, so that change wants a human between merge and
+      # live. See WEB.md, "Firestore rules and App Check".
+      - name: Deploy
+        run: |
+          firebase deploy \
+            --only apphosting,hosting \
+            --project brelly-50de6 \
+            --non-interactive \
+            --message "${{ github.event.workflow_run.head_sha || github.sha }}"
+
+      # `firebase deploy` has printed "Deploy complete!" over a rollout that
+      # failed (firebase-tools#8866), so the exit code is not on its own proof
+      # that anything is serving. Ask the site.
+      #
+      # The host is read out of firebase.json rather than written here, so it
+      # follows the `hosting.site` the deploy actually used instead of becoming
+      # a second place to remember to update.
+      - name: Check the site is serving
+        run: |
+          set -euo pipefail
+          site=$(jq -er '.hosting.site' firebase.json)
+          url="https://${site}.web.app/"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 "$url")
+          echo "$url -> $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Deploy reported success but $url returned $code." \
+              "Check the rollout in the App Hosting console." >&2
+            exit 1
+          fi
+
+  # Same reusable job the other workflows end on, so a failed deploy reaches a
+  # phone. `always()` because a deploy that failed is exactly when the silence
+  # would be worst — without it this inherits "only if `needs` succeeded".
+  # A skipped `deploy` (a PR's CI finishing, a red main) must not read as a
+  # failure, hence the explicit 'skipped' case.
+  notify:
+    needs: [deploy]
+    if: always() && needs.deploy.result != 'skipped'
+    uses: ./.github/workflows/notify-telegram.yml
+    with:
+      status: ${{ needs.deploy.result }}
+    secrets: inherit

@@ -784,6 +784,70 @@ from the "production" environment`. With the variable unset, `app.config.js`
   `git config core.hooksPath` outside a work tree exits 128, which fails the
   install. Hence the `git rev-parse --git-dir` guard in front of it. The hooks
   still install locally; the deploy no longer depends on them being installable.
+- **The web deploy is a local-source rollout, and the backend has no GitHub
+  connection.** `.github/workflows/deploy-web.yml` runs `firebase deploy --only
+  apphosting,hosting` after CI goes green on main. `--only apphosting` archives
+  the repo root and hands it to App Hosting's builder, which is why the job
+  installs nothing: `firebase.json` already carries the `backendId`/`rootDir`/
+  `ignore` triple that shape requires, and a connected repo would be a second,
+  competing trigger for the same rollout. Two traps the CLI sets and this
+  workflow works around: it has printed `Deploy complete!` over a *failed*
+  rollout (firebase-tools#8866), hence the curl at the end; and
+  `--only apphosting:<id>` is a silent no-op when no such `backendId` is in
+  `firebase.json` (#10161), hence the unscoped target. Firestore rules stay out
+  of it — `yarn deploy:rules` is run by hand so a `hasOnly()` tightening cannot
+  reach production documents without a human.
+- **CI authenticates to Google by Workload Identity Federation; there is no key
+  to rotate.** `firebase-tools` reads the federated credential through ADC, but
+  only from **15.22.3 or newer** — 15.22.2 swallowed a Node 24 fetch bug and
+  reported a perfectly valid credential as `Failed to authenticate, have you
+  run firebase login?` (firebase-tools#10726). The workflow pins the major and
+  says so. The one-time setup, should it ever need recreating:
+
+  ```bash
+  PROJECT_ID=brelly-50de6; PROJECT_NUMBER=87595606048
+  REPO=vanessalohjy1997/brelly
+  SA=brelly-deployer@$PROJECT_ID.iam.gserviceaccount.com
+
+  gcloud iam service-accounts create brelly-deployer --project=$PROJECT_ID \
+    --display-name="GitHub Actions — deploy the web app"
+
+  # `developer`, not `admin`: it may create builds and rollouts and update the
+  # backend, but not delete it. apiKeysViewer is what the *Hosting* half of the
+  # deploy needs; the custom role is the local-source archive upload, for which
+  # no predefined role is a fit (storage.admin is the blunt alternative).
+  for ROLE in roles/firebaseapphosting.developer roles/firebasehosting.admin \
+              roles/serviceusage.apiKeysViewer; do
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+      --member="serviceAccount:$SA" --role="$ROLE"
+  done
+  gcloud iam roles create brellySourceUpload --project=$PROJECT_ID \
+    --title="App Hosting source upload" \
+    --permissions=storage.buckets.list,storage.objects.create
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SA" \
+    --role="projects/$PROJECT_ID/roles/brellySourceUpload"
+
+  gcloud iam workload-identity-pools create github --project=$PROJECT_ID \
+    --location=global --display-name="GitHub Actions"
+  gcloud iam workload-identity-pools providers create-oidc brelly \
+    --project=$PROJECT_ID --location=global --workload-identity-pool=github \
+    --issuer-uri="https://token.actions.githubusercontent.com" \
+    --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+    --attribute-condition="assertion.repository_owner == 'vanessalohjy1997'"
+
+  # The attribute condition above keeps *other people's* repos out of the pool;
+  # this binding is what keeps every other repo of yours out of this service
+  # account. Both halves are needed.
+  gcloud iam service-accounts add-iam-policy-binding $SA --project=$PROJECT_ID \
+    --role=roles/iam.workloadIdentityUser \
+    --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+  ```
+
+  Nothing above goes in a GitHub secret. The provider path and the service
+  account email identify an identity, they do not authorise one, so they sit in
+  the workflow as literals — the same reason `apphosting.yaml` carries the
+  project id and app id in git.
 
 ## Built so far
 
