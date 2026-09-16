@@ -70,6 +70,10 @@ coverage/
 .next/
 out/
 
+# turborepo. Unanchored: turbo writes one of these at the root and one inside
+# every package it runs a task in.
+.turbo/
+
 # firebase CLI deploy cache (hosting hashes, apphosting scratch)
 .firebase/
 .local_build_*
