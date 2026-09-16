@@ -770,6 +770,14 @@ from the "production" environment`. With the variable unset, `app.config.js`
   directly. Deleting it would take the deploy down and the local build would
   never notice. Turbo 2 also requires the root `packageManager` field, which is
   the second half of that change.
+- **`turbo.json` must be strict JSON — no comments, despite Turborepo
+  accepting them.** Turbo parses JSONC; App Hosting reads the same file with
+  Go's `encoding/json` (`ReadTurboJSONIfExists`, `pkg/nodejs/turbo.go`), which
+  does not, and the rollout fails with `unmarshalling /workspace/turbo.json:
+  invalid character '/' looking for beginning of object key string`. A local
+  `turbo build` will not reproduce it, because turbo is the lenient parser of
+  the two. The one comment-shaped thing that survives both is a `"//"` key,
+  which Go ignores as an unknown field and turbo tolerates.
 - **The root `prepare` script has to survive a checkout with no `.git`.** Yarn 1
   runs `prepare` on every `yarn install`, including the one App Hosting runs in
   a container built from an archive that deliberately excludes `.git` — and
