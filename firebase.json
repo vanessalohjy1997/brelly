@@ -17,7 +17,7 @@
     ]
   },
   "hosting": {
-    "site": "brelly-50de6",
+    "site": "brelly",
     "public": "hosting",
     "ignore": ["**/.*"],
     "rewrites": [
