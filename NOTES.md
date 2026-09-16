@@ -757,6 +757,25 @@ from the "production" environment`. With the variable unset, `app.config.js`
   `summary` is not a role at all, and claiming `radiogroup` owes arrow keys and
   a roving `tabindex`. Use the real elements — `<fieldset>` with radios or
   checkboxes — and let the browser supply the keyboard model.
+- **App Hosting detects a monorepo by `turbo.json` or `nx.json`, and by nothing
+  else.** A Yarn workspace is not a signal it reads: `buildDirectoryContext`
+  (`pkg/firebase/util/util.go` in `GoogleCloudPlatform/buildpacks`) walks up from
+  the backend's `rootDir` looking for exactly those two filenames, and finding
+  neither it builds `apps/web` *in isolation* — no root `yarn.lock`, no
+  `packages/core`, no workspace symlinks. The build then dies before it starts,
+  on `fah/missing-lock-file: Missing dependency lock file at path
+  '/workspace/apps/web'`, which reads like a missing file and is really a
+  missing repo. That is why the root `turbo.json` exists. Nothing else in the
+  repo goes through turbo; `yarn verify` still fans out over the workspaces
+  directly. Deleting it would take the deploy down and the local build would
+  never notice. Turbo 2 also requires the root `packageManager` field, which is
+  the second half of that change.
+- **The root `prepare` script has to survive a checkout with no `.git`.** Yarn 1
+  runs `prepare` on every `yarn install`, including the one App Hosting runs in
+  a container built from an archive that deliberately excludes `.git` — and
+  `git config core.hooksPath` outside a work tree exits 128, which fails the
+  install. Hence the `git rev-parse --git-dir` guard in front of it. The hooks
+  still install locally; the deploy no longer depends on them being installable.
 
 ## Built so far
 
