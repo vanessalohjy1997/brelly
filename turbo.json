@@ -1,30 +1,9 @@
 {
-  // Turborepo earns its place here for one reason: Firebase App Hosting only
-  // recognises a monorepo by finding `turbo.json` or `nx.json` at or above the
-  // backend's `rootDir` (`pkg/firebase/util/util.go`, `buildDirectoryContext`).
-  // Without one it builds `apps/web` in isolation — no root `yarn.lock`, no
-  // `packages/core`, and the build dies on
-  // `fah/missing-lock-file: Missing dependency lock file at path
-  // '/workspace/apps/web'`. A Yarn workspace alone is not detected; see
-  // NOTES.md, "App Hosting detects a monorepo by turbo.json, nothing else".
-  //
-  // With this file present the builder runs from the repo root with
-  // `GOOGLE_BUILDABLE=apps/web` and invokes
-  // `turbo build --filter=@brelly/web --env-mode=loose`
-  // (`cmd/nodejs/turborepo/lib/lib.go`). Nothing else in the repo goes through
-  // turbo — `yarn verify` still fans out over the workspaces directly.
   "$schema": "https://turbo.build/schema.json",
+  "//": "This file exists so Firebase App Hosting sees a monorepo; without it the builder builds apps/web in isolation and dies on fah/missing-lock-file. No comments: turbo parses JSONC but App Hosting's buildpack parses it with Go's encoding/json, which rejects them. The why is in NOTES.md, under 'App Hosting detects a monorepo by turbo.json or nx.json'.",
   "tasks": {
     "build": {
-      // `@brelly/core` has no `build` script — its `main` is TypeScript source
-      // that Next transpiles (`apps/web/next.config.ts`). `^build` is here so
-      // that stays true by choice rather than by accident.
       "dependsOn": ["^build"],
-      // Declared so a local `turbo build` works under turbo's default strict
-      // env mode. App Hosting passes `--env-mode=loose`, where this is
-      // redundant; it is the cache key that makes it worth writing down —
-      // `NEXT_PUBLIC_*` is baked into the bundle, so a build with different
-      // values is a different build.
       "env": ["NEXT_PUBLIC_*", "GOOGLE_PLACES_KEY"],
       "outputs": [".next/**", "!.next/cache/**"]
     }

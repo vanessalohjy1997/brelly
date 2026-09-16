@@ -770,12 +770,91 @@ from the "production" environment`. With the variable unset, `app.config.js`
   directly. Deleting it would take the deploy down and the local build would
   never notice. Turbo 2 also requires the root `packageManager` field, which is
   the second half of that change.
+- **`turbo.json` must be strict JSON — no comments, despite Turborepo
+  accepting them.** Turbo parses JSONC; App Hosting reads the same file with
+  Go's `encoding/json` (`ReadTurboJSONIfExists`, `pkg/nodejs/turbo.go`), which
+  does not, and the rollout fails with `unmarshalling /workspace/turbo.json:
+  invalid character '/' looking for beginning of object key string`. A local
+  `turbo build` will not reproduce it, because turbo is the lenient parser of
+  the two. The one comment-shaped thing that survives both is a `"//"` key,
+  which Go ignores as an unknown field and turbo tolerates.
 - **The root `prepare` script has to survive a checkout with no `.git`.** Yarn 1
   runs `prepare` on every `yarn install`, including the one App Hosting runs in
   a container built from an archive that deliberately excludes `.git` — and
   `git config core.hooksPath` outside a work tree exits 128, which fails the
   install. Hence the `git rev-parse --git-dir` guard in front of it. The hooks
   still install locally; the deploy no longer depends on them being installable.
+- **The web deploy is a local-source rollout, and the backend has no GitHub
+  connection.** The `deploy` job in `.github/workflows/ci.yml` runs `firebase
+  deploy --only apphosting,hosting` on a push to main, behind `needs: [verify]`.
+  It sits in CI rather than in a `workflow_run` workflow of its own on purpose:
+  `workflow_run` fires privileged — full secrets, `id-token: write` — over a
+  commit named by the triggering event's payload, which is code a fork controls
+  on a PR. Guards can exclude that, but CodeQL flags the shape and is right to;
+  `needs:` buys the same "only after the checks passed" without any untrusted
+  ref, because the job runs inside the same trusted run and `actions/checkout`
+  takes its default `github.sha`. `--only apphosting` archives
+  the repo root and hands it to App Hosting's builder, which is why the job
+  installs nothing: `firebase.json` already carries the `backendId`/`rootDir`/
+  `ignore` triple that shape requires, and a connected repo would be a second,
+  competing trigger for the same rollout. Two traps the CLI sets and this
+  workflow works around: it has printed `Deploy complete!` over a *failed*
+  rollout (firebase-tools#8866), hence the curl at the end; and
+  `--only apphosting:<id>` is a silent no-op when no such `backendId` is in
+  `firebase.json` (#10161), hence the unscoped target. Firestore rules stay out
+  of it — `yarn deploy:rules` is run by hand so a `hasOnly()` tightening cannot
+  reach production documents without a human.
+- **CI authenticates to Google by Workload Identity Federation; there is no key
+  to rotate.** `firebase-tools` reads the federated credential through ADC, but
+  only from **15.22.3 or newer** — 15.22.2 swallowed a Node 24 fetch bug and
+  reported a perfectly valid credential as `Failed to authenticate, have you
+  run firebase login?` (firebase-tools#10726). The workflow pins the major and
+  says so. The one-time setup, should it ever need recreating:
+
+  ```bash
+  PROJECT_ID=brelly-50de6; PROJECT_NUMBER=87595606048
+  REPO=vanessalohjy1997/brelly
+  SA=brelly-deployer@$PROJECT_ID.iam.gserviceaccount.com
+
+  gcloud iam service-accounts create brelly-deployer --project=$PROJECT_ID \
+    --display-name="GitHub Actions — deploy the web app"
+
+  # `developer`, not `admin`: it may create builds and rollouts and update the
+  # backend, but not delete it. apiKeysViewer is what the *Hosting* half of the
+  # deploy needs; the custom role is the local-source archive upload, for which
+  # no predefined role is a fit (storage.admin is the blunt alternative).
+  for ROLE in roles/firebaseapphosting.developer roles/firebasehosting.admin \
+              roles/serviceusage.apiKeysViewer; do
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+      --member="serviceAccount:$SA" --role="$ROLE"
+  done
+  gcloud iam roles create brellySourceUpload --project=$PROJECT_ID \
+    --title="App Hosting source upload" \
+    --permissions=storage.buckets.list,storage.objects.create
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SA" \
+    --role="projects/$PROJECT_ID/roles/brellySourceUpload"
+
+  gcloud iam workload-identity-pools create github --project=$PROJECT_ID \
+    --location=global --display-name="GitHub Actions"
+  gcloud iam workload-identity-pools providers create-oidc brelly \
+    --project=$PROJECT_ID --location=global --workload-identity-pool=github \
+    --issuer-uri="https://token.actions.githubusercontent.com" \
+    --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+    --attribute-condition="assertion.repository_owner == 'vanessalohjy1997'"
+
+  # The attribute condition above keeps *other people's* repos out of the pool;
+  # this binding is what keeps every other repo of yours out of this service
+  # account. Both halves are needed.
+  gcloud iam service-accounts add-iam-policy-binding $SA --project=$PROJECT_ID \
+    --role=roles/iam.workloadIdentityUser \
+    --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+  ```
+
+  Nothing above goes in a GitHub secret. The provider path and the service
+  account email identify an identity, they do not authorise one, so they sit in
+  the workflow as literals — the same reason `apphosting.yaml` carries the
+  project id and app id in git.
 
 ## Built so far
 

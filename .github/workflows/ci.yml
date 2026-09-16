@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Redeploying main without a dummy commit — a rollout that died halfway, or
+  # a console change that needs the repo's config put back. `verify` runs first
+  # here too, so the button cannot ship something the checks would have caught.
+  workflow_dispatch:
 
 # Least privilege for GITHUB_TOKEN. No job here writes to the repo — they check
 # out, run checks, or hand work to EAS/Telegram over their own secrets — so the
@@ -150,12 +154,126 @@ jobs:
           done < <(git log --format=%s "$base"..HEAD)
           exit $fail
 
+  # The deploy lives here rather than in its own `workflow_run` workflow, and
+  # the reason is security, not tidiness. `workflow_run` fires in a privileged
+  # context — full secrets, `id-token: write` — and the commit it would have to
+  # check out comes from the triggering run, which on a fork's PR is code the
+  # fork controls. Guards can exclude that case; CodeQL flagged the shape
+  # anyway, and it was right to. `needs:` expresses "only after verify passed"
+  # without any of it: this job runs in the same trusted run as the checks, and
+  # `actions/checkout` takes its default `github.sha` — the pushed commit
+  # itself, not a ref named by an untrusted event payload.
+  deploy:
+    needs: [verify]
+    # `github.ref` first, so the dispatch button cannot ship a feature branch
+    # to production by selecting it in the dropdown. On a pull_request this is
+    # false twice over and the job never sees a credential.
+    if: >-
+      github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    # A job-level block replaces the top-level one for this job alone, so
+    # `id-token: write` — the permission that lets the runner mint the OIDC
+    # token WIF exchanges — exists on the deploy and nowhere else in this file.
+    permissions:
+      contents: read
+      id-token: write
+    # Serialised, and `cancel-in-progress: false` on purpose. Everywhere else a
+    # newer run should kill an older one; here the older run is a half-finished
+    # rollout, and cancelling the CLI does not cancel the rollout it already
+    # started. Two overlapping deploys would race over which build serves.
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    # App Hosting builds the Next app server-side and then waits out the
+    # rollout; the CLI blocks for both. Ten minutes is not enough on a cold
+    # build cache.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # firebase-tools is not a dependency of any workspace — nothing in either
+      # app imports it, and adding it to the root would put a ~100MB CLI in
+      # every developer's install for the sake of one CI job.
+      #
+      # The major is pinned, and the floor matters: 15.22.2 broke ADC entirely
+      # in CI, reporting a valid federated credential as "have you run firebase
+      # login?" (firebase-tools#10726, a swallowed Node 24 fetch bug). Fixed in
+      # 15.22.3. Node 22 above is unaffected either way.
+      - name: Install the Firebase CLI
+        run: npm install -g firebase-tools@15
+
+      # No service account key exists to leak. The runner's OIDC token is
+      # exchanged for a short-lived credential that may only impersonate
+      # brelly-deployer, and only from this repository — the provider's
+      # attribute condition and the workloadIdentityUser binding each enforce
+      # half of that.
+      #
+      # Neither value below is a secret: they name an identity, they do not
+      # authorise one. Same stance as apphosting.yaml's project identifiers.
+      # NOTES.md carries the one-time gcloud setup, should it need recreating.
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: brelly-50de6
+          workload_identity_provider: projects/87595606048/locations/global/workloadIdentityPools/github/providers/brelly
+          service_account: brelly-deployer@brelly-50de6.iam.gserviceaccount.com
+
+      # Two targets, one command.
+      #
+      # `apphosting` is a *local source* deploy: the CLI archives the repo root
+      # (minus firebase.json's `ignore` list) and hands it to App Hosting's
+      # builder, which is why the backend needs no GitHub connection and why
+      # this job runs no `yarn install` — the build happens there, from the
+      # root, with the workspace and packages/core intact.
+      #
+      # `hosting` is the rewrite, and it is here rather than left to a human
+      # because it is the piece that puts the app and `/__/auth/handler` on one
+      # origin. A firebase.json whose `hosting.site` has moved and a live site
+      # that has not is a Safari-only sign-in failure nobody sees on a laptop.
+      #
+      # Firestore rules are deliberately NOT deployed. `yarn deploy:rules` is
+      # run by hand and should stay that way: a `hasOnly()` tightening starts
+      # rejecting writes against legacy production documents, so that change
+      # wants a human between merge and live. See WEB.md, "Firestore rules and
+      # App Check".
+      - name: Deploy
+        run: |
+          firebase deploy \
+            --only apphosting,hosting \
+            --project brelly-50de6 \
+            --non-interactive \
+            --message "${{ github.sha }}"
+
+      # `firebase deploy` has printed "Deploy complete!" over a rollout that
+      # failed (firebase-tools#8866), so the exit code is not on its own proof
+      # that anything is serving. Ask the site.
+      #
+      # The host is read out of firebase.json rather than written here, so it
+      # follows the `hosting.site` the deploy actually used instead of becoming
+      # a second place to remember to update.
+      - name: Check the site is serving
+        run: |
+          set -euo pipefail
+          site=$(jq -er '.hosting.site' firebase.json)
+          url="https://${site}.web.app/"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 "$url")
+          echo "$url -> $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Deploy reported success but $url returned $code." \
+              "Check the rollout in the App Hosting console." >&2
+            exit 1
+          fi
+
   # `always()` so a failed verify still reports; without it this job inherits
   # the default "only if the needs succeeded" and stays silent exactly when a
   # notification is most wanted. `conventions` is skipped on a push to main,
   # and a skipped need must not read as a failure.
   notify:
-    needs: [verify, conventions]
+    needs: [verify, conventions, deploy]
     if: always()
     uses: ./.github/workflows/notify-telegram.yml
     with:

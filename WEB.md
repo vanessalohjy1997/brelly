@@ -49,7 +49,7 @@ that `services/firebase.ts`'s *wrapper* functions exist in neither package.
 | Layout | Yarn 1 workspaces: `apps/mobile`, `apps/web`, `packages/core` |
 | Web framework | Next.js 15 App Router, React 19, TypeScript |
 | Styling | Tailwind v4, tokens generated from `src/constants/theme.ts` |
-| Hosting | Firebase **Hosting** on `brelly-50de6.web.app` → rewrite → App Hosting backend. No custom domain |
+| Hosting | Firebase **Hosting** on `brelly.web.app` — a second site named `brelly`, not the project-id default — → rewrite → App Hosting backend. No custom domain |
 | Feature scope | Graceful degradation — see "What web does not do" |
 | Merge order | **Enumerate → persist → delete → switch identity.** Not reordered |
 
@@ -70,7 +70,7 @@ authorized-domains list holds two exact domains, not a wildcard.
 
 ⚠ An earlier draft reached for a **custom domain** to force the same-origin
 condition, and locked it in as a decision. It is not needed, and the project is
-not buying one. Firebase Hosting already serves `brelly-50de6.web.app`, and
+not buying one. A Firebase Hosting site already serves `brelly.web.app`, and
 that site serves `/__/**` itself — so putting the app there makes the handler
 same-origin for free. The custom domain was one way to satisfy the condition,
 never the condition itself.
@@ -83,21 +83,27 @@ configuration, not a setting. The concrete setup, two steps:
    load-bearing piece** — it is what puts the Next app and the auth handler on
    one origin, and it is the piece to be suspicious of anyone simplifying away.
    Deploying straight to the App Hosting domain is the broken case above.
-2. `authDomain` = `brelly-50de6.web.app`, the same origin the app is served
-   from. Nothing to add to Auth's authorized domains — ✔ verified, the list is
-   exactly `localhost`, `brelly-50de6.firebaseapp.com`, `brelly-50de6.web.app`.
-3. **But that is not the list that blocks the sign-in.** Auth's authorized
-   domains and the Google OAuth client's *authorized redirect URIs* are two
-   separate lists, and only the first one has `.web.app` in it by default. The
-   client Firebase auto-creates (`Web client (auto created by Google Service)`,
-   id `87595606048-qfq1c45ssooq7hlaful6l5dveum901q6`) is registered for
-   `https://brelly-50de6.firebaseapp.com/__/auth/handler` and nothing else — so
-   the moment `authDomain` becomes `brelly-50de6.web.app`, every Google sign-in
-   dies at Google with `Error 400: redirect_uri_mismatch`, before Firebase is
-   consulted at all. Add
-   `https://brelly-50de6.web.app/__/auth/handler` to that client's **Authorized
-   redirect URIs** in the Google Cloud console (APIs & Services → Credentials).
-   It is a console change; no code or env value is wrong.
+2. `authDomain` = `brelly.web.app`, the same origin the app is served from.
+   That is `hosting.site` in `firebase.json`, and the two have to move
+   together: `authDomain` is the origin the popup lands on, so a site rename
+   that leaves `authDomain` behind makes the hop cross-site again.
+3. **Two console lists gate this, and neither is code.** Auth's authorized
+   domains and the Google OAuth client's *authorized redirect URIs* are
+   separate, and the default-site domains are what Firebase seeds — ✔ verified
+   at the time: `localhost`, `brelly-50de6.firebaseapp.com`,
+   `brelly-50de6.web.app`. `brelly.web.app` is a *different host*, on a second
+   Hosting site, so check for it in both and add it where it is missing:
+   - Auth → Settings → **Authorized domains**: `brelly.web.app`.
+   - The client Firebase auto-creates (`Web client (auto created by Google
+     Service)`, id `87595606048-qfq1c45ssooq7hlaful6l5dveum901q6`), in the
+     Google Cloud console → Google Auth Platform → Clients: add
+     `https://brelly.web.app/__/auth/handler` to its **Authorized redirect
+     URIs**. It was registered for `.firebaseapp.com`, then
+     `brelly-50de6.web.app`; miss this one and every Google sign-in dies at
+     Google with `Error 400: redirect_uri_mismatch`, before Firebase is
+     consulted at all.
+
+   Both are console changes; no code or env value is wrong when they bite.
 
 Then test in Safari with "Prevent cross-site tracking" **on**. Same-origin
 should make it a non-event, which is exactly why it is worth checking rather
@@ -116,7 +122,7 @@ helped. Adding it now buys a second auth path to maintain and nothing else.
 brelly/
   package.json          workspaces, verify scripts, .githooks prepare
   firebase.json         + a NEW hosting block (rewrites → App Hosting)
-                        on brelly-50de6.web.app; no custom domain
+                        on brelly.web.app; no custom domain
   firestore.rules  jest.emulator.config.js
   PLAN.md  NOTES.md  UX.md  AGENTS.md  .claude/  .github/  .githooks/
   .gitignore            web + repo-wide rules, incl. /apps/mobile/ios etc.
@@ -950,7 +956,7 @@ with notifications.
 ## Phase 4 — deploy
 
 `apphosting.yaml` in `apps/web`, GitHub-triggered, behind the Hosting rewrite
-described at the top — on `brelly-50de6.web.app`, not a custom domain.
+described at the top — on `brelly.web.app`, not a custom domain.
 
 ### `/api/places` is a billed, public endpoint
 
@@ -1383,7 +1389,7 @@ is also what the Stop hook runs, so a red tree blocks the next turn.
   the degraded flag when the persistent cache throws. Then reproduce by hand with
   DevTools offline + reload, and once in Safari private mode.
 - **Web auth** — sign-in tested in Safari with "Prevent cross-site tracking" on,
-  on `brelly-50de6.web.app`, through the Hosting rewrite. Gates Phase 4. Check
+  on `brelly.web.app`, through the Hosting rewrite. Gates Phase 4. Check
   the page's origin and `authDomain` are the same string before blaming
   anything else: that identity is the entire mechanism.
 - **`/api/places`** — an unauthenticated request returns 401; a request with a

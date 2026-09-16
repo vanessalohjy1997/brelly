@@ -45,13 +45,15 @@ env:
   # ⚠ The load-bearing one. `signInWithPopup` bounces through
   # `https://<authDomain>/__/auth/handler`, and Safari's storage partitioning
   # breaks that hop when it is cross-site. Firebase Hosting serves `/__/**` from
-  # `brelly-50de6.web.app` itself, so this value must stay equal to the origin
-  # the app is served from — which is the Hosting site, not the App Hosting
-  # `*.hosted.app` domain. Changing it to `.firebaseapp.com` here silently
-  # reintroduces the Safari bug; changing it to the `hosted.app` domain breaks
-  # sign-in outright. See WEB.md, "Hosting and popup auth".
+  # `brelly.web.app` itself, so this value must stay equal to the origin the app
+  # is served from — which is the Hosting site, not the App Hosting
+  # `*.hosted.app` domain. It therefore tracks `hosting.site` in
+  # `firebase.json`: the two move together or sign-in breaks. Changing it to
+  # `.firebaseapp.com` here silently reintroduces the Safari bug; changing it to
+  # the `hosted.app` domain breaks sign-in outright. See WEB.md, "Hosting and
+  # popup auth".
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: brelly-50de6.web.app
+    value: brelly.web.app
     availability: [ BUILD, RUNTIME ]
 
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
