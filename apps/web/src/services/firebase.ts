@@ -46,8 +46,45 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+/**
+ * The three values without which nothing works. `storageBucket` and
+ * `messagingSenderId` are left out deliberately — this app uploads nothing and
+ * sends no messages, so demanding them would block a working dev setup on two
+ * values it never reads.
+ */
+const REQUIRED_CONFIG = ["apiKey", "authDomain", "projectId"] as const;
+
+/**
+ * Says which variable is missing, rather than letting Firebase say the key is
+ * invalid.
+ *
+ * `NEXT_PUBLIC_*` is a literal text substitution: an unset one is not a
+ * variable that reads as empty, it is the string `undefined` handed to the SDK.
+ * What comes back is `auth/invalid-api-key` thrown from `getAuth()`, four
+ * frames deep in bootstrap, pointing at Firebase — which is the same shape of
+ * failure `configureCore()` exists to prevent, and the same fix: fail at the
+ * seam, naming the thing that is actually absent.
+ */
 function firebaseApp(): FirebaseApp {
-  return getApps().length ? getApp() : initializeApp(firebaseConfig);
+  if (getApps().length) return getApp();
+
+  const missing = REQUIRED_CONFIG.filter((key) => !firebaseConfig[key]);
+  if (missing.length > 0) {
+    throw new Error(
+      `Firebase is not configured: ${missing
+        .map((key) => `NEXT_PUBLIC_FIREBASE_${camelToEnv(key)}`)
+        .join(", ")} ${missing.length === 1 ? "is" : "are"} unset. ` +
+        "Copy apps/web/.env.example to apps/web/.env.local and fill it in from " +
+        "the Firebase console's Web app config (Project settings → Your apps).",
+    );
+  }
+
+  return initializeApp(firebaseConfig);
+}
+
+/** `authDomain` → `AUTH_DOMAIN`, so the message names the variable to set. */
+function camelToEnv(key: string): string {
+  return key.replace(/([A-Z])/g, "_$1").toUpperCase();
 }
 
 let firestore: Firestore | null = null;
