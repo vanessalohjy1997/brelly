@@ -378,6 +378,27 @@ supported`. Static is only reachable via `$RNFirebaseDisableSPM = true` in
   `toCloudSettingsFields` the same way. `firestore.rules` rejects both outright
   as a second line of defence — a client bug that forgot to strip would be
   denied server-side rather than silently syncing the handle.
+- **The OS notification queue is the record of what is scheduled; a slot's
+  `notificationId` is a cache of it.** The handles live only in memory (no
+  MMKV seed — see below), so every cold start forgets them, and until round 41
+  every slots snapshot forgot them too: it arrives without the device-local
+  fields and used to replace `plans` wholesale, and the `updateSlot` that
+  stored a fresh handle was itself a Firestore write, so it triggered the
+  snapshot that wiped it. Each sync then read "rainy, no alert" and queued
+  one more alert per stop — the number of duplicates per stop was the number
+  of syncs since it was created. Three things now hold it together, and all
+  three are needed: `carryNotificationHandles` re-attaches the current
+  store's handles to each incoming snapshot (`cloudListeners`);
+  `itineraryStore.updateSlot` skips the cloud write for a patch that touches
+  only `DEVICE_LOCAL_SLOT_FIELDS`; and `runNotificationSync` starts by reading
+  the queue back (`listScheduledAlerts`) and hands it to
+  `reconcileScheduledAlerts`, which is what survives a cold start — every
+  alert is tagged with `content.data.{kind, slotId, leadMinutes}` when
+  scheduled, duplicates for a stop are cancelled down to one, strays for
+  deleted stops and untagged alerts from older builds are cancelled, and the
+  store is written back to match. **Anything that schedules a notification
+  must tag it**: an untagged alert is cancelled on the next sync. The test
+  alert is tagged `kind: "test"` so the sweep leaves it alone.
 - **A routine-materialised slot's id must be deterministic, or two devices
   double-book every day the routine covers.** `useRoutineSync`'s mount effect
   calls `planRoutineMaterialization` immediately at cold boot, from
@@ -3333,3 +3354,24 @@ Three things that are less obvious than the markup:
 What this gives up is real and was traded knowingly: a bottom bar is one
 thumb-reachable tap and a drawer is two, the first of them at the top-left
 corner, which is the furthest point on a phone screen from a right thumb.
+
+### Round 41 — one plan, many rain alerts
+
+The report: several notifications for a single stop, a different count per
+stop, suspected to come from editing. Editing was a symptom, not the cause. A
+slot's `notificationId` never reaches Firestore, every slots snapshot
+replaced `plans` wholesale, and the write that stored a new handle was enough
+to trigger the snapshot that dropped it — so every foreground sync, and every
+cold start (the handles are memory-only), scheduled one more alert for each
+rainy stop. An edit made it worse only because it cancelled `slot.notificationId`,
+which by then was already gone.
+
+The fix is in the trap above. The shape worth keeping: the store's handle is
+treated as a cache of the OS queue rather than the other way round, because
+the queue is the one store the app cannot forget. The queue read happens
+before the forecast fetches, against the same `plans` the sync was handed, so
+an alert the scheduler hook queues while the sync is in flight is never read
+as a stray — its slot was in `plans` before the hook started. Existing
+duplicates on a device are cleared by the first sync after this build lands:
+they are untagged, so they go, and the same pass schedules one tagged alert
+per rainy stop.

@@ -51,6 +51,45 @@ describe("attachCloudListeners", () => {
     expect(useSettingsStore.getState().themePreference).toBe("dark");
   });
 
+  it("keeps this device's notification handles across a slots snapshot", async () => {
+    // The handles never reach Firestore, so the snapshot arrives without
+    // them; writing it in as-is forgot every scheduled alert, and the next
+    // sync queued a duplicate for each rainy stop.
+    attachCloudListeners(UID);
+    await setDoc(doc(getFirebaseFirestore(), "users", UID, "slots", "s1"), {
+      id: "s1",
+      date: "2026-07-31",
+      label: "Picnic",
+      location: "East Coast Park",
+      neaRegion: "east",
+      latitude: 1.3009,
+      longitude: 103.9124,
+      startTime: "2026-07-31T16:00:00+08:00",
+      endTime: "2026-07-31T18:00:00+08:00",
+    });
+    useItineraryStore.setState((state) => ({
+      plans: state.plans.map((plan) => ({
+        ...plan,
+        slots: plan.slots.map((slot) => ({
+          ...slot,
+          notificationId: "notif-1",
+          notificationLeadMinutes: 45,
+        })),
+      })),
+    }));
+
+    await setDoc(
+      doc(getFirebaseFirestore(), "users", UID, "slots", "s1"),
+      { label: "Picnic at the beach" },
+      { merge: true },
+    );
+
+    const slot = useItineraryStore.getState().plans[0].slots[0];
+    expect(slot.label).toBe("Picnic at the beach");
+    expect(slot.notificationId).toBe("notif-1");
+    expect(slot.notificationLeadMinutes).toBe(45);
+  });
+
   it("tears down the previous uid's listeners when attaching a new one", async () => {
     attachCloudListeners(UID);
     attachCloudListeners("other-uid");

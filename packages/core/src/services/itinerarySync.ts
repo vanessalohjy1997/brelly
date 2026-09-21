@@ -11,6 +11,7 @@ import {
 import { getFirebaseAuth, getFirebaseFirestore } from "@brelly/platform/firebase";
 import { groupSlotsIntoPlans, type CloudSlot } from "../utils/planSelectors";
 import { notifyCloudSyncFailure } from "../utils/saveWithFeedback";
+import { DEVICE_LOCAL_SLOT_FIELDS } from "../utils/stripNotificationHandles";
 import type { DayPlan, ItinerarySlot } from "../types/itinerary";
 
 /**
@@ -20,10 +21,7 @@ import type { DayPlan, ItinerarySlot } from "../types/itinerary";
  * below excludes them unconditionally, rather than relying on each call site
  * to remember to strip.
  */
-const DEVICE_LOCAL_FIELDS = new Set([
-  "notificationId",
-  "notificationLeadMinutes",
-]);
+const DEVICE_LOCAL_FIELDS = DEVICE_LOCAL_SLOT_FIELDS;
 
 /**
  * Payload for a full-doc (non-merge) write. Dropping an `undefined`-valued

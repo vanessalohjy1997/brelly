@@ -1,5 +1,6 @@
 import {
   cancelNotification,
+  listScheduledAlerts,
   scheduleDigestNotification,
   scheduleRainNotification,
 } from "@/services/notifications";
@@ -21,9 +22,11 @@ jest.mock("@/services/notifications", () => ({
   scheduleRainNotification: jest.fn(),
   scheduleDigestNotification: jest.fn(),
   cancelNotification: jest.fn(),
+  listScheduledAlerts: jest.fn(),
 }));
 
 const mockGetForecast = getForecastForSlot as jest.Mock;
+const mockListScheduled = listScheduledAlerts as jest.Mock;
 const mockScheduleRain = scheduleRainNotification as jest.Mock;
 const mockScheduleDigest = scheduleDigestNotification as jest.Mock;
 const mockCancel = cancelNotification as jest.Mock;
@@ -75,6 +78,14 @@ beforeEach(() => {
   mockScheduleDigest.mockResolvedValue("digest-new");
   // The real function returns a promise, and the sync attaches `.catch` to it.
   mockCancel.mockResolvedValue(undefined);
+  mockListScheduled.mockResolvedValue([]);
+});
+
+const queuedRain = (id: string, slotId = "s1", leadMinutes = 45) => ({
+  id,
+  kind: "rain" as const,
+  slotId,
+  leadMinutes,
 });
 
 describe("runNotificationSync — rain alerts", () => {
@@ -97,6 +108,7 @@ describe("runNotificationSync — rain alerts", () => {
   });
 
   it("cancels an alert for rain that cleared", async () => {
+    mockListScheduled.mockResolvedValue([queuedRain("notif-old")]);
     const ctx = context({ plans: plans([slot({ notificationId: "notif-old" })]) });
 
     await runNotificationSync(ctx);
@@ -109,7 +121,12 @@ describe("runNotificationSync — rain alerts", () => {
 
   it("leaves an existing alert alone when rain is still forecast", async () => {
     mockGetForecast.mockResolvedValue({ forecast: "Light Rain", source: "2hr" });
-    const ctx = context({ plans: plans([slot({ notificationId: "notif-old" })]) });
+    mockListScheduled.mockResolvedValue([queuedRain("notif-old")]);
+    const ctx = context({
+      plans: plans([
+        slot({ notificationId: "notif-old", notificationLeadMinutes: 45 }),
+      ]),
+    });
 
     await runNotificationSync(ctx);
 
@@ -123,7 +140,12 @@ describe("runNotificationSync — rain alerts", () => {
       forecast: "Couldn't load forecast",
       source: "error",
     });
-    const ctx = context({ plans: plans([slot({ notificationId: "notif-old" })]) });
+    mockListScheduled.mockResolvedValue([queuedRain("notif-old")]);
+    const ctx = context({
+      plans: plans([
+        slot({ notificationId: "notif-old", notificationLeadMinutes: 45 }),
+      ]),
+    });
 
     await runNotificationSync(ctx);
 
@@ -173,6 +195,7 @@ describe("runNotificationSync — rain alerts", () => {
 
   it("cancels everything when rain alerts are switched off", async () => {
     mockGetForecast.mockResolvedValue({ forecast: "Showers", source: "24hr" });
+    mockListScheduled.mockResolvedValue([queuedRain("notif-old")]);
     const ctx = context({
       plans: plans([slot({ notificationId: "notif-old" })]),
       settings: {
@@ -187,6 +210,131 @@ describe("runNotificationSync — rain alerts", () => {
 
     expect(mockCancel).toHaveBeenCalledWith("notif-old");
     expect(mockScheduleRain).not.toHaveBeenCalled();
+  });
+});
+
+describe("runNotificationSync — the OS queue is the record", () => {
+  const rainy = () =>
+    mockGetForecast.mockResolvedValue({ forecast: "Showers", source: "24hr" });
+
+  it("does not schedule a second alert for a stop that already has one queued, even when the store forgot it", async () => {
+    // The store's handle lives in memory: a cold start (and, before the
+    // carry-over fix, every cloud snapshot) drops it. This is the case that
+    // used to add one more alert per stop on every pass.
+    rainy();
+    mockListScheduled.mockResolvedValue([queuedRain("notif-queued")]);
+    const ctx = context({ plans: plans([slot()]) });
+
+    await runNotificationSync(ctx);
+
+    expect(mockScheduleRain).not.toHaveBeenCalled();
+    expect(mockCancel).not.toHaveBeenCalled();
+    // The store is corrected to point at the alert that really exists, so a
+    // later mute or edit can cancel it.
+    expect(ctx.updateSlot).toHaveBeenCalledWith("2026-07-31", "s1", {
+      notificationId: "notif-queued",
+      notificationLeadMinutes: 45,
+    });
+  });
+
+  it("cancels every duplicate for a stop and keeps the one the store points at", async () => {
+    rainy();
+    mockListScheduled.mockResolvedValue([
+      queuedRain("dup-1"),
+      queuedRain("notif-mine"),
+      queuedRain("dup-2"),
+    ]);
+    const ctx = context({
+      plans: plans([
+        slot({ notificationId: "notif-mine", notificationLeadMinutes: 45 }),
+      ]),
+    });
+
+    await runNotificationSync(ctx);
+
+    expect(mockCancel.mock.calls.map(([id]) => id).sort()).toEqual([
+      "dup-1",
+      "dup-2",
+    ]);
+    expect(mockScheduleRain).not.toHaveBeenCalled();
+    expect(ctx.updateSlot).not.toHaveBeenCalled();
+  });
+
+  it("treats a store handle the OS no longer holds as no alert, and schedules afresh", async () => {
+    rainy();
+    const ctx = context({
+      plans: plans([
+        slot({ notificationId: "notif-gone", notificationLeadMinutes: 45 }),
+      ]),
+    });
+
+    await runNotificationSync(ctx);
+
+    expect(mockCancel).not.toHaveBeenCalled();
+    expect(mockScheduleRain).toHaveBeenCalledTimes(1);
+    expect(ctx.updateSlot).toHaveBeenLastCalledWith("2026-07-31", "s1", {
+      notificationId: "notif-new",
+      notificationLeadMinutes: 45,
+    });
+  });
+
+  it("cancels an alert for a stop that no longer exists", async () => {
+    mockListScheduled.mockResolvedValue([queuedRain("stray", "deleted-slot")]);
+
+    await runNotificationSync(context({ plans: [] }));
+
+    expect(mockCancel).toHaveBeenCalledWith("stray");
+  });
+
+  it("cancels alerts an older build queued without a tag", async () => {
+    // There is no telling which stop they were for. The rainy stop gets a
+    // tagged replacement in the same pass.
+    rainy();
+    mockListScheduled.mockResolvedValue([
+      { id: "old-1", kind: "untagged" },
+      { id: "old-2", kind: "untagged" },
+    ]);
+
+    await runNotificationSync(context());
+
+    expect(mockCancel).toHaveBeenCalledWith("old-1");
+    expect(mockCancel).toHaveBeenCalledWith("old-2");
+    expect(mockScheduleRain).toHaveBeenCalledTimes(1);
+  });
+
+  it("reschedules when the queued alert was made against a different lead time", async () => {
+    rainy();
+    mockListScheduled.mockResolvedValue([queuedRain("notif-30", "s1", 30)]);
+
+    await runNotificationSync(context({ plans: plans([slot()]) }));
+
+    expect(mockCancel).toHaveBeenCalledWith("notif-30");
+    expect(mockScheduleRain).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the store's handles when the queue cannot be read", async () => {
+    mockListScheduled.mockRejectedValue(new Error("native module missing"));
+    mockGetForecast.mockResolvedValue({ forecast: "Light Rain", source: "2hr" });
+    const ctx = context({
+      plans: plans([
+        slot({ notificationId: "notif-old", notificationLeadMinutes: 45 }),
+      ]),
+    });
+
+    await runNotificationSync(ctx);
+
+    expect(mockCancel).not.toHaveBeenCalled();
+    expect(mockScheduleRain).not.toHaveBeenCalled();
+    expect(ctx.updateSlot).not.toHaveBeenCalled();
+  });
+
+  it("keeps going when a sweep cancel fails", async () => {
+    rainy();
+    mockCancel.mockRejectedValueOnce(new Error("gone already"));
+    mockListScheduled.mockResolvedValue([{ id: "old", kind: "untagged" }]);
+
+    await expect(runNotificationSync(context())).resolves.toBeUndefined();
+    expect(mockScheduleRain).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -227,6 +375,20 @@ describe("runNotificationSync — daily digest", () => {
     await runNotificationSync(ctx);
 
     expect(mockCancel).toHaveBeenCalledWith("digest-old");
+  });
+
+  it("cancels every digest the OS holds, including ones the store forgot", async () => {
+    mockListScheduled.mockResolvedValue([
+      { id: "digest-a", kind: "digest" },
+      { id: "digest-b", kind: "digest" },
+    ]);
+    const ctx = context({ digestNotificationId: "digest-a", settings: digestOn() });
+
+    await runNotificationSync(ctx);
+
+    expect(mockCancel).toHaveBeenCalledWith("digest-a");
+    expect(mockCancel).toHaveBeenCalledWith("digest-b");
+    expect(mockCancel).toHaveBeenCalledTimes(2);
   });
 
   it("cancels the existing digest and schedules none when it is switched off", async () => {

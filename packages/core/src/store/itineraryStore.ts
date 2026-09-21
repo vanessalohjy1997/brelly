@@ -3,6 +3,7 @@ import { generateDocId } from "@brelly/platform/firebase";
 import { deleteSlotDoc, writeSlot, writeSlotFields } from "../services/itinerarySync";
 import { DayPlan, ItinerarySlot } from "../types/itinerary";
 import { toDateKey } from "../utils/dateKeys";
+import { DEVICE_LOCAL_SLOT_FIELDS } from "../utils/stripNotificationHandles";
 import { sortSlotsByStart } from "../utils/planSelectors";
 import { deriveWeatherProvider } from "../utils/weatherProvider";
 import { create } from "zustand";
@@ -198,9 +199,14 @@ export const useItineraryStore = create<ItineraryState>()((set, get) => ({
     if (detaching) {
       deleteSlotDoc(slotId);
       writeSlot(finalSlot, targetDate);
-    } else {
+    } else if (
+      Object.keys(updates).some((key) => !DEVICE_LOCAL_SLOT_FIELDS.has(key))
+    ) {
       writeSlotFields(slotId, { ...updates, date: targetDate });
     }
+    // A patch that only stamps or clears this device's notification handles
+    // has nothing the cloud may hold: `writeSlotFields` would strip it to a
+    // bare `{ date }`, a write whose only effect was the snapshot it caused.
 
     return finalSlot;
   },
