@@ -1023,8 +1023,8 @@ from the "production" environment`. With the variable unset, `app.config.js`
   `packages/core`, with real URLs for all eight screens — `/`, `/plans`,
   `/history`, `/plan/new`, `/plan/[id]`, `/routines`, `/settings`, `/account` —
   plus `/api/places`, the proxy that exists so no browser ever holds a Places
-  key. Navigation is a sidebar at `>=768px` and a bottom bar below it, from one
-  `DESTINATIONS` list. The palette is shared rather than copied: the tokens live
+  key. Navigation is a sidebar at `>=768px` and a hamburger drawer below it, from
+  one `DESTINATIONS` list. The palette is shared rather than copied: the tokens live
   in core and the web emits them as CSS custom properties at render time. What
   it deliberately does not have — notifications, the digest, calendar import and
   export, the widget, OTA, haptics — is hidden rather than half-built; see
@@ -3426,6 +3426,20 @@ and the weather badge are `relative` and later in the DOM, so they paint above
 the stretched area and keep their own clicks. The markup is unchanged: one
 named link, two buttons.
 
+**The card's row actions took a row of their own.** "Mute" and "Delete", each
+spelled out beside its icon, sat on a 44px strip under every card — a third of
+the card's height spent on two words, on the one list that gets scrolled by the
+fortnight. They are now icon-only, joined by an Edit link, and sit in the
+header row beside the time and the forecast stamp; the word moved to the
+`aria-label` and the `title`. A negative vertical margin is the browser's
+`hitSlop`: the 44px target is kept but overlaps the card's padding and the gap
+rather than pushing the row to its full height. Below `sm` the stamp drops to
+a line of its own under the actions, so the time is never truncated to make
+room for three buttons. Delete stays last, and it keeps the undo toast rather
+than gaining a confirmation — `useDeleteSlotWithUndo.ts` still carries why,
+and the icon-only bin is the reason to revisit that if accidental deletes are
+ever reported.
+
 **Every tab was titled "Brelly".** The first attempt — `document.title` from
 an effect in the two headers — did not survive: React 19 owns the hoisted
 `<title>` Next renders from `metadata` and re-applies it over the effect's
@@ -3458,17 +3472,17 @@ location button said "Continue"; it and the Today prompt both say "Turn on
 location". Refresh sat at the same weight as Add on two headers; it is an
 icon-only button with a name, and spins while refreshing.
 
-**The bottom bar is back, reversing round 40's trade knowingly.** The drawer
-gave the whole bottom edge to the browser's chrome; what it cost was the app's
-core movement — Today to Plans and back — becoming two taps, the first at the
-top-left corner, the furthest point on a phone screen from a right thumb. Four
-destinations is exactly the case a bottom bar is for. `env(safe-area-inset-bottom)`
-is how the bar and the browser's chrome share the edge rather than fight over
-it; `main` pads its bottom by the bar's height plus that inset, and the toast
-sits above both below `md`. The `matchMedia` duplication of the breakpoint and
-the `<dialog>` drawer went with it. Round 40's `bottom-0`/`inset-x-0` guard in
-`globals.test.ts` is what makes the bar's `fixed inset-x-0 bottom-0` safe to
-write again.
+**The bottom bar came back, and went again.** The review put the bar back on
+the strength of the tap count — Today to Plans in one thumb-reachable tap
+rather than two, the first at the top-left corner — with `main` and the toast
+padded to clear it. It was reversed the same day, and not on ergonomics: the
+bottom tabs are the phone app's shape, and the product decision is that the
+mobile web does not imitate it. Below `md` the navigation is round 40's
+hamburger and `<dialog>` drawer, unchanged; `main` and the toast are back at
+their plain insets. The `matchMedia` duplication of the breakpoint came back
+with it, and the trap note under "read this before writing code here" describes
+the drawer, which is now true again. Anyone reopening this should argue with
+the product decision, not re-measure the taps.
 
 **The tab was a browser globe.** The web app shipped with no icon at all —
 Next emits `<link rel="icon">` only for `app/icon.*` and `app/apple-icon.*`,

@@ -39,8 +39,8 @@ outside a `[ ]` bullet is read, never injected.
   around it.
 
   **Diverged on web (round 39).** The constraint is native-only. `apps/web`
-  navigates from a sidebar at `>=768px` and a bottom bar below it, so there are
-  no tabs to shift, and `HeaderHeight` is a *minimum* there rather than a fixed
+  navigates from a sidebar at `>=768px` and a hamburger drawer below it, so
+  there are no tabs to shift, and `HeaderHeight` is a *minimum* there rather than a fixed
   height — a narrow window is allowed to wrap the title and its actions.
   CSS `position: sticky` is the collapsing mechanism whenever it is wanted. This
   stays open because none of that closes it on the phone.

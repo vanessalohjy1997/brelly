@@ -53,10 +53,19 @@ type Props = {
  * are behind a left swipe (`ReanimatedSwipeable`), with an
  * `accessibilityActions` list mirroring them for VoiceOver's rotor. A swipe has
  * no keyboard equivalent and no pointer equivalent, and hover-reveal is
- * unreachable by both — so here the actions are **always present**: two small
- * buttons in the card's own corner, in the same order the panel put them
+ * unreachable by both — so here the actions are **always present**: icon
+ * buttons in the card's own header row, in the same order the panel put them
  * (mute first, delete last, so the destructive one is not the first thing
- * reached).
+ * reached), with an Edit link ahead of both.
+ *
+ * They share the header row with the time and the forecast stamp rather than
+ * take a row of their own, because that row was the tallest thing on the card:
+ * a fortnight of stops is scrolled, and a 44px strip under every one of them
+ * is a third of the card spent on two words. Icon-only for the same reason —
+ * the word is the `aria-label` and the tooltip, and "Delete" spelled out beside
+ * a bin on every row said nothing the bin did not. Below `sm` the stamp drops
+ * to a line of its own under the actions so the time is never truncated to
+ * make room; above it, everything sits on one line.
  *
  * That has a consequence worth stating: the card cannot be one big link with
  * buttons inside it, because a `<button>` nested in an `<a>` is invalid and
@@ -158,7 +167,7 @@ export function ItineraryCard({
       )}
 
       <div className="flex min-w-0 flex-1 flex-col gap-half p-two pl-three">
-        <div className="flex items-center justify-between gap-two">
+        <div className="flex flex-wrap items-center gap-x-two gap-y-half">
           <div className="flex min-w-0 shrink items-center gap-one">
             {timing.relative && (
               <Text
@@ -196,7 +205,55 @@ export function ItineraryCard({
             )}
           </div>
 
-          {!past && <ForecastTimestamp weather={weather} />}
+          {/* `-my-one` is the browser's `hitSlop`: the 44px target is kept,
+              but it overlaps the card's own padding above and the gap below
+              instead of pushing the row out to its full height. `relative`,
+              so the buttons paint above the title link stretched under them. */}
+          <div className="relative -my-one ml-auto flex sm:order-last sm:ml-0">
+            <Link
+              href={`/plan/${slot.id}`}
+              aria-label={`Edit ${slot.label}`}
+              title="Edit"
+              className={ACTION_CLASS}
+            >
+              <Icon name={Icons.edit} size="control" />
+            </Link>
+            {toggleMute && (
+              <button
+                type="button"
+                onClick={onToggleMute}
+                // Opens with the visible word. A name that does not contain
+                // the label on the control is a Voice Control dead end —
+                // "click Mute" matches nothing.
+                aria-label={
+                  muted
+                    ? `Unmute — turn rain alerts on for ${slot.label}`
+                    : `Mute — turn rain alerts off for ${slot.label}`
+                }
+                title={muted ? "Unmute" : "Mute"}
+                className={ACTION_CLASS}
+              >
+                <Icon name={muted ? Icons.alerts : Icons.alertsOff} size="control" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label={`Delete ${slot.label}`}
+              title="Delete"
+              className={`${ACTION_CLASS} text-danger`}
+            >
+              <Icon name={Icons.delete} size="control" />
+            </button>
+          </div>
+
+          {!past && (
+            // Its own line below `sm`, right-aligned under the actions, so
+            // the time never truncates to make room for it.
+            <div className="flex basis-full justify-end sm:ml-auto sm:basis-auto">
+              <ForecastTimestamp weather={weather} />
+            </div>
+          )}
         </div>
 
         <div className="flex items-start justify-between gap-four">
@@ -228,44 +285,18 @@ export function ItineraryCard({
             </div>
           )}
         </div>
-
-        <div className="relative flex justify-end gap-one">
-          {toggleMute && (
-            <button
-              type="button"
-              onClick={onToggleMute}
-              // Opens with the visible word. A name that does not contain the
-              // label on the control is a Voice Control dead end — "click Mute"
-              // matches nothing.
-              aria-label={
-                muted
-                  ? `Unmute — turn rain alerts on for ${slot.label}`
-                  : `Mute — turn rain alerts off for ${slot.label}`
-              }
-              className="flex min-h-[var(--brelly-hit-target)] items-center gap-one rounded-control px-two text-text-secondary"
-            >
-              <Icon name={muted ? Icons.alerts : Icons.alertsOff} size="inline" />
-              <Text variant="eyebrow" color="inherit">
-                {muted ? "Unmute" : "Mute"}
-              </Text>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onDelete}
-            aria-label={`Delete ${slot.label}`}
-            className="flex min-h-[var(--brelly-hit-target)] items-center gap-one rounded-control px-two text-danger"
-          >
-            <Icon name={Icons.delete} size="inline" />
-            <Text variant="eyebrow" color="inherit">
-              Delete
-            </Text>
-          </button>
-        </div>
       </div>
     </article>
   );
 }
+
+/**
+ * The 44px floor in height only. A full 44px square each put the glyphs 24px
+ * apart, which read as three unrelated controls rather than one group; one
+ * unit of padding a side keeps a 36px-wide target and closes the gap to 16.
+ */
+const ACTION_CLASS =
+  "flex min-h-[var(--brelly-hit-target)] items-center justify-center rounded-control px-one text-text-secondary";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-SG", {

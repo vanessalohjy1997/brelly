@@ -20,7 +20,7 @@ const SENTINEL = { brellyUnsavedGuard: true } as const;
  * The three exits a page has each need their own mechanism, and it is worth
  * being precise about what each one can and cannot do.
  *
- * 1. **In-app links** — the Cancel control, the sidebar, the bottom bar. These
+ * 1. **In-app links** — the Cancel control, the sidebar, the drawer. These
  *    go through `guardNavigation` on `Link`'s `onNavigate`, which is the only
  *    one of the three that can ask *before* anything happens.
  * 2. **Browser Back** — `popstate` is not cancelable. The only way to stay put

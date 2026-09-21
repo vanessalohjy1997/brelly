@@ -72,6 +72,35 @@ describe("ItineraryCard", () => {
     );
   });
 
+  it("offers an Edit link beside the actions, named for the stop", () => {
+    // The title already opens the stop, but a pencil is the affordance that
+    // says editing is possible without having to try it.
+    renderWithQuery(<ItineraryCard slot={makeSlot()} onDelete={jest.fn()} />);
+
+    expect(screen.getByRole("link", { name: "Edit Lunch" })).toHaveAttribute(
+      "href",
+      "/plan/slot-1",
+    );
+  });
+
+  it("keeps the actions in the header row, edit first and delete last", () => {
+    // They share the row with the time rather than take one of their own —
+    // that row was the tallest thing on a card that gets scrolled by the
+    // fortnight. Delete is last so the destructive one is not the first
+    // thing reached.
+    renderWithQuery(
+      <ItineraryCard slot={makeSlot()} onDelete={jest.fn()} onToggleMute={jest.fn()} />,
+    );
+
+    const actions = screen.getByRole("button", { name: /^Delete/ }).parentElement!;
+    expect(actions.parentElement).toContainElement(
+      screen.getByText("08:00 pm – 09:00 pm"),
+    );
+    expect(
+      Array.from(actions.children).map((child) => child.getAttribute("aria-label")),
+    ).toEqual(["Edit Lunch", "Mute — turn rain alerts off for Lunch", "Delete Lunch"]);
+  });
+
   it("puts both row actions on screen, always", async () => {
     // The phone hides them behind a left swipe. A swipe has no keyboard and no
     // pointer equivalent, and hover-reveal is unreachable by both.
