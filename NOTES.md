@@ -749,10 +749,21 @@ from the "production" environment`. With the variable unset, `app.config.js`
 - **Route handlers and anything under `src/server/` need
   `@jest-environment node`.** The web project's Jest environment is jsdom, which
   has no `Response`.
+- **The tab icon is `app/icon.svg` by its filename alone.** Next builds the
+  `<link rel="icon">` from the file convention, so there is no metadata entry
+  to keep in sync — and no error if the file is renamed or deleted. The tab
+  just quietly shows the browser's globe. `app/icon.test.ts` is what notices;
+  it also pins the mark to the phone's `light-hook.svg`.
 - **Leave `apps/web/next-env.d.ts` as the stock two lines.** `typedRoutes: true`
   rewrites it to reference a generated `./.next/types/routes.d.ts`, which a
   fresh CI checkout has never built. It is in the ESLint ignores because its
   triple-slash references trip `@typescript-eslint/triple-slash-reference`.
+- **The verdict umbrella is drawn, not set.** Material Symbols' `umbrella` is
+  a furled one and SF Symbols' open `umbrella.fill` cannot be served to a
+  browser, so `weather/umbrellaMark.tsx` draws the app icon's own canopy and
+  hook as inline SVG. Its paths are copied from
+  `apps/mobile/assets/icon/light-hook.svg` and pinned to it by a test. The
+  drops and the sun around it are still ligatures.
 - **`components/icons.ts` is a closed registry because the font is a subset of
   it.** `iconFontHref()` asks Google Fonts for exactly those `icon_names`, so an
   icon drawn from outside the list has no glyph and renders as its own name in
@@ -3375,3 +3386,138 @@ as a stray — its slot was in `plans` before the hook started. Existing
 duplicates on a device are cleared by the first sync after this build lands:
 they are untagged, so they go, and the same pass schedules one tagged alert
 per rainy stop.
+
+### Round 42 — a UX pass over the web app
+
+Twelve findings from reviewing `apps/web` as a product rather than as a port,
+each rendered at 390px and 1280px before and after. Most were promises the web
+could not keep or controls that did not do what they looked like they did.
+
+**Rain alerts were offered on a platform that never sends one.** The form
+said "Get a heads-up if this stop looks wet" and every card had a Mute button,
+and the web sends no notifications at all. The setting is real — the phone app
+honours it — but only when the phone reads the same account, and an anonymous
+browser session has a uid no phone can share. `useAlertsReachPhone` is that one
+question, asked in one place: the form's copy says "on your phone" once linked
+and "Add an account" until then, the cards offer Mute only once linked, and the
+lead-time note is gated the same way.
+
+**The lead-time note greeted a blank form.** Starts defaults to the next whole
+hour, which is inside a 45-minute lead window for most of every hour, so "This
+starts too soon for a rain alert" opened the add form before anything had been
+typed. It now waits for a time the reader chose — or an existing stop's, on the
+edit page, where it is about a value that is already real.
+
+**The week strip added where it looked like it navigated.** A cell with a "2"
+badge opened the add form, throwing away the very stops the badge had just
+counted. A day with stops now anchors to its own section on the page; an empty
+day, which has nothing to scroll to, still adds. The accessible name says
+which, because the cells look the same.
+
+**"Move this stop" dropped unsaved edits.** The dry-window suggestion wrote the
+new time straight to the store and navigated away, so a label changed in the
+same sitting was gone without a word. It is now a `dryWindow` prop on
+`SlotForm` that edits the time fields and leaves saving to Save, and it stops
+being offered once taken.
+
+**Only the title text of a card was clickable.** The title link is now
+stretched over the card with `after:absolute after:inset-0`; the row actions
+and the weather badge are `relative` and later in the DOM, so they paint above
+the stretched area and keep their own clicks. The markup is unchanged: one
+named link, two buttons.
+
+**Every tab was titled "Brelly".** The first attempt — `document.title` from
+an effect in the two headers — did not survive: React 19 owns the hoisted
+`<title>` Next renders from `metadata` and re-applies it over the effect's
+write, verified over CDP at 1.5s, 3s and 6s. The pages are client components
+and cannot export `metadata`, so each segment has a server `layout.tsx` that
+names itself against a `%s · Brelly` template in the root layout. The root
+segment's own page is the one the template does not reach, so `app/page.tsx`
+became a server file that spells its title out and re-exports the client
+screen from `today.tsx`. `titles.test.tsx` is the list that says no route was
+forgotten.
+
+**Routines was a dead end.** Reached only from an unlabelled repeat glyph, rows
+that were not links, and no delete. The glyph now carries the word where there
+is width for it (`sr-only md:not-sr-only`), each row links to the rule's next
+stop — which is where "this day or the rule?" can be asked with a date in hand
+— and a delete of the whole rule is offered with an undo. That undo is
+`useDeleteRoutineWithUndo`, extracted from the series branch of
+`useDeleteSlotWithUndo` so the two cannot drift.
+
+**The bootstrap error always blamed the connection.** A disabled provider, an
+unauthorised domain and a bad key all fail the same `await` with the network
+up, and "check your connection" sent people to fix the wrong thing.
+`describeBootstrapFailure` keeps that copy for `auth/network-request-failed`
+and `navigator.onLine === false` and says sign-in failed otherwise. (The local
+dev bootstrap failure that surfaced this was the second kind.)
+
+**Smaller:** Settings printed "Appearance" twice, one line apart — the chip
+legend is now `sr-only` behind the section heading (`hideLegend`). The
+location button said "Continue"; it and the Today prompt both say "Turn on
+location". Refresh sat at the same weight as Add on two headers; it is an
+icon-only button with a name, and spins while refreshing.
+
+**The bottom bar is back, reversing round 40's trade knowingly.** The drawer
+gave the whole bottom edge to the browser's chrome; what it cost was the app's
+core movement — Today to Plans and back — becoming two taps, the first at the
+top-left corner, the furthest point on a phone screen from a right thumb. Four
+destinations is exactly the case a bottom bar is for. `env(safe-area-inset-bottom)`
+is how the bar and the browser's chrome share the edge rather than fight over
+it; `main` pads its bottom by the bar's height plus that inset, and the toast
+sits above both below `md`. The `matchMedia` duplication of the breakpoint and
+the `<dialog>` drawer went with it. Round 40's `bottom-0`/`inset-x-0` guard in
+`globals.test.ts` is what makes the bar's `fixed inset-x-0 bottom-0` safe to
+write again.
+
+**The tab was a browser globe.** The web app shipped with no icon at all —
+Next emits `<link rel="icon">` only for `app/icon.*` and `app/apple-icon.*`,
+and neither existed, so every tab, bookmark and history entry fell back to the
+default placeholder next to a title that says "Brelly". `app/icon.svg` is now
+the phone's `light-hook` mark, and `app/apple-icon.png` a 180px render of the
+same file for iOS' Add to Home Screen.
+
+The mark is copied, not redrawn — `icon.test.ts` compares the canopy `d`
+attribute in the two SVGs character for character, so the tab and the home
+screen cannot drift the way the two `forecastToSymbol` copies could. What is
+deliberately different is the framing, because a launcher icon is read at 60px
+and a favicon at 16. The phone's file leaves 18% padding for a launcher that
+adds its own rounding and inset; here that padding is only lost pixels, so the
+mark is scaled 1.23x about its own bounding box — centred at y=545.5, not 512,
+because the handle hangs lower than the ferrule rises. The handle stroke goes
+from 42 to 56 for the same reason: at 42 it lands on 0.8 device pixels at 16px
+and greys out, which reads as a blurry blob rather than an umbrella. The tile
+keeps its own light background rather than going transparent, so it holds
+contrast on a dark tab strip without a `prefers-color-scheme` variant inside
+the SVG that Safari may not honour.
+
+**The rain fell around a closed stick.** The verdict watermark on the live-
+conditions and stop cards is an umbrella with drops scattered over its canopy,
+and on the web there was no canopy: Material Symbols' `umbrella` is a *furled*
+umbrella — a narrow two-panel body tapering to a point, hook at the top — so
+the drops landed beside a stick. The phone reads right because SF Symbols'
+`umbrella.fill` is an open dome, and SF Symbols is Apple's font: licensed to
+Apple's platforms, not servable to a browser. Material's only open canopy is
+`beach_access`, a tilted beach parasol, which is a different object again.
+
+So the umbrella is drawn instead of set. `umbrellaMark.tsx` holds the canopy,
+shaft and ferrule from `assets/icon/light-hook.svg` — the app icon's own mark,
+which has been an open umbrella with a hook all along — painted in
+`currentColor` so it still takes the verdict tint. `umbrellaMark.test.tsx`
+looks for each path string inside the icon file, so the watermark, the browser
+tab and the launcher icon are one drawing that cannot drift. `Icons.umbrella`
+was then the only dead entry in a registry the font is subsetted from, and is
+gone; the request drops from 71 glyphs to 70.
+
+Two numbers moved with it. The umbrella is 0.8 of the frame rather than 0.74,
+because 0.74 was a `font-size` and a glyph is smaller than its em box by the
+font's own padding — an `svg` has none, so the old fraction would have drawn a
+*larger* umbrella and left the drop scatter floating clear of the dome. And
+the watermark's bleed went from `-bottom-four` to `-bottom-two` on both cards:
+24px of a 96px frame cropped the entire hook, which is the half of this mark
+that says "umbrella" once the canopy is at 14% opacity.
+
+**Android still shows the furled glyph.** It draws Material Symbols like the
+web does, and the fix does not reach it — `apps/mobile` has no SVG renderer,
+only `expo-image`, and adding `react-native-svg` for one mark is a dependency
+this has not earned yet. iOS is unaffected and unchanged.

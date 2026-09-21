@@ -31,7 +31,7 @@ describe("NearbyWeatherPrompt", () => {
 
     expect(onRequest).not.toHaveBeenCalled();
     await userEvent.click(
-      screen.getByRole("button", { name: "Show weather near me" }),
+      screen.getByRole("button", { name: "Turn on location" }),
     );
     expect(onRequest).toHaveBeenCalled();
   });

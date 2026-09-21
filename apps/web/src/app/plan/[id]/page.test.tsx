@@ -48,11 +48,13 @@ jest.mock("@/components/itinerary/SlotForm", () => ({
     submitLabel,
     onSubmit,
     onDelete,
+    dryWindow,
     children,
   }: {
     submitLabel: string;
     onSubmit: (values: SlotFormValues) => void;
     onDelete?: () => void;
+    dryWindow?: { start: string };
     children?: React.ReactNode;
   }) => (
     <div>
@@ -64,6 +66,7 @@ jest.mock("@/components/itinerary/SlotForm", () => ({
           Delete plan
         </button>
       )}
+      {dryWindow && <p>dry window {dryWindow.start}</p>}
       {children}
     </div>
   ),
@@ -311,22 +314,26 @@ describe("EditPlanPage", () => {
     expect(screen.queryByText("Pack for this stop")).not.toBeInTheDocument();
   });
 
-  it("offers the dry window next door, and moves the stop onto it", async () => {
+  it("hands the dry window next door to the form, rather than saving it itself", async () => {
     // An NEA-only concept: Open-Meteo has no "upcoming periods" endpoint, which
     // is why this is an explicit scope cut overseas rather than a silent gap.
+    // The form applies it to its own time fields — `SlotForm.test` covers the
+    // move — so nothing is written and nothing else on the form is lost.
     seedSlot();
     seedDryWindowAfter();
     renderRoute(<EditPlanPage />);
 
-    const suggestion = await screen.findByText(/looks dry$/);
-    await userEvent.click(suggestion);
+    expect(await screen.findByText(`dry window ${at(14)}`)).toBeInTheDocument();
+    expect(useItineraryStore.getState().plans[0].slots[0].startTime).toBe(at(12));
+    expect(push).not.toHaveBeenCalled();
+  });
 
-    const moved = useItineraryStore.getState().plans[0].slots[0];
-    expect(moved.startTime).toBe(at(14));
-    // The duration the user chose survives the move.
-    expect(
-      new Date(moved.endTime).getTime() - new Date(moved.startTime).getTime(),
-    ).toBe(60 * 60 * 1000);
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/plans"));
+  it("offers no dry window for a stop overseas", () => {
+    seedSlot({ provider: "openMeteo", countryCode: "JP" });
+    mockUpcoming.mockClear();
+    renderRoute(<EditPlanPage />);
+
+    expect(screen.queryByText(/^dry window/)).not.toBeInTheDocument();
+    expect(mockUpcoming).not.toHaveBeenCalled();
   });
 });

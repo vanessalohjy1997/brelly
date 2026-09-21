@@ -14,6 +14,12 @@ import { Text } from "./Text";
  * The title is the page's `<h1>`. There is no heading hierarchy to port —
  * nothing in `src/app` uses `accessibilityRole="header"` — so it is invented
  * here, and this is the top of it.
+ *
+ * The browser tab's name is *not* set from here. React 19 owns the hoisted
+ * `<title>` Next renders from `metadata` and re-applies it over any
+ * `document.title` an effect writes, so each route segment declares its own
+ * `metadata.title` in a server `layout.tsx` instead, against the template in
+ * the root layout.
  */
 export function PageHeader({
   title,

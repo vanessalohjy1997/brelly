@@ -41,30 +41,32 @@ export function buildWeek(
  * reads as "8, 2" out of context — the name spells the count back out so the
  * compact form costs nothing in speech.
  *
- * The name says what pressing does as well as what the cell is, and that is the
- * fix for a real ambiguity rather than a flourish. These cells look like a date
- * picker and are not one: every one of them **adds a plan** on that day. The
- * phone carried that only in an `accessibilityHint`, which is the one part of
- * an accessible name a user can switch off.
+ * The name says what pressing does as well as what the cell is, because the
+ * two cells do different things. A day with stops goes *to* them; an empty day
+ * has nothing to go to, so it adds one. The phone carried that only in an
+ * `accessibilityHint`, which is the one part of an accessible name a user can
+ * switch off.
  */
 export function describeCell(cell: DayCell): string {
   const day = `${cell.dayLabel} ${cell.dateLabel}`;
-  const stops =
-    cell.planCount === 0
-      ? "no stops"
-      : `${cell.planCount} ${cell.planCount === 1 ? "stop" : "stops"}`;
-  return `Add a plan on ${day}, ${stops}`;
+  if (cell.planCount === 0) return `Add a plan on ${day}`;
+  return `${day}, ${cell.planCount} ${cell.planCount === 1 ? "stop" : "stops"}`;
 }
 
 /**
- * The week ahead, as seven links that each add a plan on their day.
+ * The week ahead, as seven links.
  *
- * **Links, not buttons**, and that settles the add-versus-select ambiguity the
- * plan flagged rather than porting it. Each cell navigates to
- * `/plan/new?date=…`; on the web that is a real destination with a real URL, so
- * it should be the element that goes to one. Seven ordinary tab stops follow
- * from that — a roving `tabindex` composite would be right for a date *picker*,
- * and this is not one.
+ * A cell with a badge on it looks like "show me that day", and it used to open
+ * the add form instead — the badge said there were two stops and the press
+ * threw them away. So the two kinds of day go two places: a day with stops
+ * anchors to its own section further down the page, and an empty day, which
+ * has nothing to scroll to, adds a plan on itself. The accessible name says
+ * which, since the cells look the same.
+ *
+ * **Links, not buttons**, either way: both are real destinations with real
+ * URLs, so the element should be the one that goes to one. Seven ordinary tab
+ * stops follow from that — a roving `tabindex` composite would be right for a
+ * date *picker*, and this is not one.
  *
  * Horizontally scrollable below the width that fits seven cells. The scroller
  * is focusable so it can be reached by keyboard, which a `div` with
@@ -72,11 +74,14 @@ export function describeCell(cell: DayCell): string {
  */
 export function WeekStrip({
   plans,
-  renderHref,
+  addHref,
+  dayHref,
 }: {
   plans: DayPlan[];
-  /** Where a day's cell goes. Passed in so the strip owns no routing. */
-  renderHref: (dateKey: string) => string;
+  /** Where an empty day's cell goes. Passed in so the strip owns no routing. */
+  addHref: (dateKey: string) => string;
+  /** Where a day that has stops goes — the anchor of its section on the page. */
+  dayHref: (dateKey: string) => string;
 }) {
   const cells = buildWeek(plans, todayKey());
 
@@ -86,7 +91,7 @@ export function WeekStrip({
         {cells.map((cell) => (
           <li key={cell.dateKey}>
             <a
-              href={renderHref(cell.dateKey)}
+              href={cell.planCount > 0 ? dayHref(cell.dateKey) : addHref(cell.dateKey)}
               aria-label={describeCell(cell)}
               className={`relative flex min-h-[var(--brelly-hit-target)] min-w-[4rem] flex-col items-center justify-center rounded-control bg-background-element px-two py-one ${
                 cell.isToday ? "border border-primary" : "border border-transparent"

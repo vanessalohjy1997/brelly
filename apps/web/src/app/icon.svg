@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!--
+  The browser tab icon: the phone's `light-hook` mark, re-cut for 16px.
+
+  Next's file convention — `app/icon.svg` becomes the `<link rel="icon">` with
+  no metadata entry to keep in sync. The canopy path is copied verbatim from
+  `apps/mobile/assets/icon/light-hook.svg` and `icon.test.ts` compares the two
+  strings, so the web tab and the home screen cannot drift apart.
+
+  Two things are deliberately *not* verbatim, both because a launcher icon is
+  read at 60px and a favicon at 16:
+
+  1. The mark is scaled 1.23x about its own bounding box, which is centred at
+     y=545.5 rather than 512 (the handle hangs lower than the ferrule rises).
+     The phone icon leaves 18% padding for a launcher that adds its own; here
+     that padding is just lost pixels.
+  2. The handle is stroked 56 rather than 42, and the ferrule widened to match.
+     At 42 the handle lands on 0.8 device pixels and greys out, which reads as
+     a blurry blob rather than an umbrella. This is the usual optical
+     correction for small sizes, not a different mark.
+
+  The tile keeps its own light background rather than going transparent, so it
+  holds contrast on a dark tab strip and a light one without a
+  `prefers-color-scheme` variant that Safari may or may not honour.
+-->
+<defs><linearGradient id="bg-favicon" x1="0" y1="0" x2="0.55" y2="1">
+  <stop offset="0" stop-color="#F6F2FD"/><stop offset="1" stop-color="#E3DAF4"/>
+</linearGradient></defs>
+
+<rect width="1024" height="1024" rx="180" fill="url(#bg-favicon)"/>
+<g transform="translate(512,512) scale(1.23) translate(-512,-545.5)">
+  <g fill="none" stroke="#4A3D7C" stroke-width="56" stroke-linecap="round"><path d="M 512,500 L 512,796 A 78,78 0 0 1 668,796"/></g>
+  <rect x="487" y="196" width="50" height="80" rx="25" fill="#4A3D7C"/>
+  <path d="M 196,540 C 196,363.632 336.62,248 512,248 C 687.38,248 828,363.632 828,540 Q 749,485.98 670,540 Q 591,485.98 512,540 Q 433,485.98 354,540 Q 275,485.98 196,540 Z" fill="#4A3D7C"/>
+</g>
+</svg>

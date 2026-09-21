@@ -1,6 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 import { umbrellaMarks, UmbrellaVerdictIcon } from "./UmbrellaVerdictIcon";
+import {
+  HANDLE_STROKE,
+  HANDLE_STROKE_COMPACT,
+  MARK_VIEW_BOX,
+} from "./umbrellaMark";
+
+/** The drawn canopy, which has no text to find it by. */
+function umbrellaSvg() {
+  return document.querySelector<SVGSVGElement>(
+    `svg[viewBox="${MARK_VIEW_BOX}"]`,
+  );
+}
 
 describe("umbrellaMarks", () => {
   it("carries both marks when a stop trips both triggers", () => {
@@ -34,7 +46,10 @@ describe("UmbrellaVerdictIcon", () => {
     expect(screen.getByTestId("umbrella-verdict-rain")).toBeInTheDocument();
     // Five drops at `lead`, which is above the compact threshold.
     expect(screen.getAllByText("water_drop")).toHaveLength(5);
-    expect(screen.getByText("umbrella")).toBeInTheDocument();
+    // The canopy is drawn, not set: Material's `umbrella` ligature is a furled
+    // umbrella, which read as rain around a closed stick.
+    expect(umbrellaSvg()).not.toBeNull();
+    expect(screen.queryByText("umbrella")).not.toBeInTheDocument();
   });
 
   it("uses fewer, bigger drops where the frame has no room", () => {
@@ -88,6 +103,28 @@ describe("UmbrellaVerdictIcon", () => {
     expect(screen.getByTestId("umbrella-verdict-rain")).toHaveStyle({
       fontSize: "var(--brelly-icon-hero)",
     });
-    expect(screen.getByText("umbrella")).toHaveStyle({ fontSize: "0.74em" });
+    expect(umbrellaSvg()).toHaveStyle({ height: "0.8em" });
+  });
+
+  it("thickens the handle where the frame is too small to render it", () => {
+    // The canopy is a solid fill and survives any size; the shaft and hook are
+    // strokes, and at `controlEmphasis` the mark is 19px tall, which puts the
+    // icon file's 42 on about one device pixel.
+    render(
+      <UmbrellaVerdictIcon
+        reason="rain"
+        size="controlEmphasis"
+        colorClass="text-umbrella-rain"
+      />,
+    );
+    expect(
+      umbrellaSvg()?.querySelector("path[stroke]"),
+    ).toHaveAttribute("stroke-width", String(HANDLE_STROKE_COMPACT));
+
+    cleanup();
+    render(<UmbrellaVerdictIcon reason="rain" colorClass="text-umbrella-rain" />);
+    expect(
+      umbrellaSvg()?.querySelector("path[stroke]"),
+    ).toHaveAttribute("stroke-width", String(HANDLE_STROKE));
   });
 });

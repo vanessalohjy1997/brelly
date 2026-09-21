@@ -108,6 +108,8 @@ export default function SettingsPage() {
           <ChipGroup
             name="appearance"
             legend="Appearance"
+            // The section heading above already says it.
+            hideLegend
             value={themePreference}
             onChange={(value) => {
               const option = APPEARANCE.find((entry) => entry.value === value);
@@ -136,7 +138,7 @@ export default function SettingsPage() {
           {permission === "unprompted" && (
             <div>
               <Button tone="quiet" onClick={() => void request()}>
-                Continue
+                Turn on location
               </Button>
             </div>
           )}

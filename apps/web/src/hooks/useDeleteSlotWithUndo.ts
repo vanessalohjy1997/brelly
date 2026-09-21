@@ -15,7 +15,7 @@ import {
 } from "@brelly/core";
 import { askEditScope } from "@/utils/askEditScope";
 
-import { useRoutineMaterializer } from "./useRoutineMaterializer";
+import { useDeleteRoutineWithUndo } from "./useDeleteRoutineWithUndo";
 
 /**
  * A delete that was asked about and answered, or `null` because the question
@@ -53,11 +53,9 @@ export function useDeleteSlotWithUndo(): (
   const deleteSlot = useItineraryStore((state) => state.deleteSlot);
   const restoreSlot = useItineraryStore((state) => state.restoreSlot);
   const routines = useRoutineStore((state) => state.routines);
-  const deleteRoutine = useRoutineStore((state) => state.deleteRoutine);
-  const restoreRoutine = useRoutineStore((state) => state.restoreRoutine);
   const addException = useRoutineStore((state) => state.addException);
   const removeException = useRoutineStore((state) => state.removeException);
-  const materializeRoutines = useRoutineMaterializer();
+  const deleteRoutineWithUndo = useDeleteRoutineWithUndo();
 
   return useCallback(
     async (date: string, slot: ItinerarySlot): Promise<DeleteResult> => {
@@ -83,30 +81,9 @@ export function useDeleteSlotWithUndo(): (
         if (!scope) return null;
 
         if (scope === "series") {
-          // Only the *rule* is deleted. The days it already produced and that
-          // have been and gone stay in the archive, because they happened.
-          const removed = saveWithFeedback(() => deleteRoutine(routine.id), {
-            success: `Deleted ${slot.label} and its repeats`,
-            failure: "Couldn't delete that routine. Try again.",
-            successAction: {
-              label: "Undo",
-              onPress: () => {
-                const restored = saveWithFeedback(
-                  () => restoreRoutine(routine),
-                  {
-                    success: `Restored ${slot.label} and its repeats`,
-                    failure: "Couldn't restore that routine.",
-                  },
-                );
-                // Refills the days the sweep took away, under the same
-                // deterministic ids.
-                if (restored.ok) materializeRoutines();
-              },
-            },
-          });
-          // The sweep is what takes the upcoming stops off the lists.
-          if (removed.ok) materializeRoutines();
-          return removed;
+          // Only the *rule* is deleted; the sweep and the undo are the same
+          // ones the Routines page uses, so the two cannot drift apart.
+          return deleteRoutineWithUndo(routine, slot.label);
         }
       }
 
@@ -152,11 +129,9 @@ export function useDeleteSlotWithUndo(): (
       deleteSlot,
       restoreSlot,
       routines,
-      deleteRoutine,
-      restoreRoutine,
       addException,
       removeException,
-      materializeRoutines,
+      deleteRoutineWithUndo,
     ],
   );
 }

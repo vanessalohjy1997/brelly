@@ -1,11 +1,29 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
-import { useCloudSyncStore, useRoutineStore } from "@brelly/core";
+import {
+  shiftDays,
+  todayKey,
+  useCloudSyncStore,
+  useItineraryStore,
+  useRoutineStore,
+  useToastStore,
+} from "@brelly/core";
 
-import { makeRoutine } from "@/test/fixtures";
+import { makePlan, makeRoutine, makeSlot } from "@/test/fixtures";
+import { mockNextLink } from "@/test/mockNextLink";
 import { markCloudReady, renderRoute, resetAppState } from "@/test/routeHarness";
 
 import RoutinesPage from "./page";
+
+jest.mock("next/link", () => mockNextLink());
+
+const tomorrow = shiftDays(todayKey(), 1);
+
+function at(day: string, hour: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d, hour).toISOString();
+}
 
 beforeEach(() => {
   resetAppState();
@@ -98,6 +116,53 @@ describe("RoutinesPage", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Routines" }),
     ).toBeInTheDocument();
+  });
+
+  it("links each rule to its next stop, which is where it is edited from", () => {
+    // "This day or the rule?" needs a date in hand, so the rule's row goes to
+    // the stop rather than to a form of its own.
+    useRoutineStore.setState({ routines: [makeRoutine()] });
+    useItineraryStore.setState({
+      plans: [
+        makePlan(tomorrow, [
+          makeSlot({
+            id: "next-run",
+            routineId: "routine-1",
+            startTime: at(tomorrow, 7),
+            endTime: at(tomorrow, 8),
+          }),
+        ]),
+      ],
+    });
+    renderRoute(<RoutinesPage />);
+
+    expect(screen.getByRole("link", { name: "Morning run" })).toHaveAttribute(
+      "href",
+      "/plan/next-run",
+    );
+  });
+
+  it("leaves the title as text until the rule has a stop to go to", () => {
+    useRoutineStore.setState({ routines: [makeRoutine()] });
+    renderRoute(<RoutinesPage />);
+
+    expect(screen.queryByRole("link", { name: "Morning run" })).not.toBeInTheDocument();
+    expect(screen.getByText("Morning run")).toBeInTheDocument();
+  });
+
+  it("deletes a rule with an undo rather than a confirmation", async () => {
+    // The one delete here has no day to name, so it can only mean the whole
+    // series; the undo is what makes offering it safe.
+    useRoutineStore.setState({ routines: [makeRoutine()] });
+    renderRoute(<RoutinesPage />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Delete Morning run and its repeats" }),
+    );
+
+    expect(useRoutineStore.getState().routines).toHaveLength(0);
+    expect(screen.getByText("No routines")).toBeInTheDocument();
+    expect(useToastStore.getState().toast?.action?.label).toBe("Undo");
   });
 
   it("says nothing about a rule with no days at all", () => {

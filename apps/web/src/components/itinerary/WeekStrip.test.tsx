@@ -12,7 +12,12 @@ const plans: DayPlan[] = [
   makePlan(shiftDays(today, 2), [makeSlot({ id: "slot-3" })]),
 ];
 
-const href = (date: string) => `/plan/new?date=${date}`;
+const addHref = (date: string) => `/plan/new?date=${date}`;
+const dayHref = (date: string) => `#day-${date}`;
+
+function strip() {
+  return render(<WeekStrip plans={plans} addHref={addHref} dayHref={dayHref} />);
+}
 
 describe("buildWeek", () => {
   it("covers today and the six days after it", () => {
@@ -39,10 +44,8 @@ describe("buildWeek", () => {
 });
 
 describe("describeCell", () => {
-  it("says what pressing the cell does, not only what day it is", () => {
-    // These look like a date picker and are not one: every cell **adds** a
-    // plan. The phone carried that in an `accessibilityHint`, which is the one
-    // part of an accessible name a user can switch off.
+  it("says a day with stops is one to go to, and spells the count out", () => {
+    // The badge is a bare number, which reads as "8, 2" out of context.
     expect(
       describeCell({
         dateKey: today,
@@ -51,18 +54,31 @@ describe("describeCell", () => {
         planCount: 2,
         isToday: true,
       }),
-    ).toBe("Add a plan on Today 15, 2 stops");
+    ).toBe("Today 15, 2 stops");
+    expect(
+      describeCell({
+        dateKey: today,
+        dayLabel: "Wed",
+        dateLabel: "17",
+        planCount: 1,
+        isToday: false,
+      }),
+    ).toBe("Wed 17, 1 stop");
   });
 
-  it("spells the count back out, since the badge is a bare number", () => {
-    const base = {
-      dateKey: today,
-      dayLabel: "Wed",
-      dateLabel: "17",
-      isToday: false,
-    };
-    expect(describeCell({ ...base, planCount: 0 })).toContain("no stops");
-    expect(describeCell({ ...base, planCount: 1 })).toContain("1 stop");
+  it("says an empty day adds a plan, since pressing it does", () => {
+    // The cells look like a date picker and are not one. The phone carried
+    // this in an `accessibilityHint`, which is the one part of an accessible
+    // name a user can switch off.
+    expect(
+      describeCell({
+        dateKey: today,
+        dayLabel: "Wed",
+        dateLabel: "17",
+        planCount: 0,
+        isToday: false,
+      }),
+    ).toBe("Add a plan on Wed 17");
   });
 });
 
@@ -71,22 +87,33 @@ describe("WeekStrip", () => {
     // Links, not buttons: each cell goes to a real destination with a real URL,
     // so it should be the element that goes to one — and seven ordinary tab
     // stops follow from that rather than a roving-tabindex composite.
-    render(<WeekStrip plans={plans} renderHref={href} />);
+    strip();
 
-    const strip = screen.getByRole("navigation", { name: "Week ahead" });
-    expect(within(strip).getAllByRole("link")).toHaveLength(7);
+    const nav = screen.getByRole("navigation", { name: "Week ahead" });
+    expect(within(nav).getAllByRole("link")).toHaveLength(7);
   });
 
-  it("sends each cell to the add form pre-dated to its own day", () => {
-    render(<WeekStrip plans={plans} renderHref={href} />);
+  it("sends a day that has stops to its own section on the page", () => {
+    // A badged cell looks like "show me that day". Opening the add form there
+    // threw away the very stops the badge had just counted.
+    strip();
 
     expect(
-      screen.getByRole("link", { name: /Add a plan on Today/ }),
-    ).toHaveAttribute("href", `/plan/new?date=${today}`);
+      screen.getByRole("link", { name: /^Today \d+, 2 stops$/ }),
+    ).toHaveAttribute("href", `#day-${today}`);
+  });
+
+  it("sends an empty day to the add form pre-dated to itself", () => {
+    strip();
+    const tomorrow = shiftDays(today, 1);
+
+    expect(
+      screen.getAllByRole("link", { name: /^Add a plan on/ })[0].getAttribute("href"),
+    ).toBe(`/plan/new?date=${tomorrow}`);
   });
 
   it("badges only the days that have stops", () => {
-    render(<WeekStrip plans={plans} renderHref={href} />);
+    strip();
 
     const badged = screen
       .getAllByRole("link")

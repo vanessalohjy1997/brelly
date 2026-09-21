@@ -61,7 +61,7 @@ describe("RootLayout", () => {
   });
 
   it("names the app and says what it is for", () => {
-    expect(metadata.title).toBe("Brelly");
+    expect(metadata.title).toEqual({ default: "Brelly", template: "%s · Brelly" });
     expect(metadata.description).toMatch(/weather/i);
   });
 

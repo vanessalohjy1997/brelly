@@ -77,7 +77,7 @@ describe("SettingsPage", () => {
     // "Ask again" on a refused permission is the button that silently does
     // nothing — the browser will not re-prompt.
     renderRoute(<SettingsPage />);
-    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Turn on location" })).toBeInTheDocument();
   });
 
   it("names the browser's own control for a refusal, with nothing to press", () => {
@@ -86,7 +86,7 @@ describe("SettingsPage", () => {
 
     expect(screen.getByText("Location is off")).toBeInTheDocument();
     expect(screen.getByText(/padlock beside the address bar/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Turn on location" })).not.toBeInTheDocument();
   });
 
   it("offers nothing to press once location is granted", () => {
@@ -94,13 +94,13 @@ describe("SettingsPage", () => {
     renderRoute(<SettingsPage />);
 
     expect(screen.getByText("Location is on")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Turn on location" })).not.toBeInTheDocument();
   });
 
   it("asks for location when the row's own button is pressed", async () => {
     renderRoute(<SettingsPage />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await userEvent.click(screen.getByRole("button", { name: "Turn on location" }));
 
     expect(requestLocation).toHaveBeenCalled();
   });

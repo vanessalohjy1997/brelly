@@ -29,7 +29,6 @@ export const Icons = {
   hazy: "foggy",
   uv: "wb_sunny",
   humidity: "water_drop",
-  umbrella: "umbrella",
 
   // Navigation and structure.
   today: "today",

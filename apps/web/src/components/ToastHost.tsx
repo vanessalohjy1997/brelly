@@ -49,7 +49,9 @@ export function ToastHost() {
       // cutting someone off for. Errors here are the same kind of message.
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 bottom-three z-[var(--brelly-z-overlay)] flex justify-center px-three motion-safe:animate-[toast-in_var(--brelly-duration-fade)_ease-out]"
+      // Above the bottom bar below `md` — the bar's own height plus the
+      // browser's safe area — and at the usual inset once the bar is gone.
+      className="fixed inset-x-0 bottom-[calc(var(--brelly-hit-target)+var(--brelly-space-four)+env(safe-area-inset-bottom))] z-[var(--brelly-z-overlay)] flex justify-center px-three motion-safe:animate-[toast-in_var(--brelly-duration-fade)_ease-out] md:bottom-three"
     >
       <div
         className={`flex max-w-[var(--brelly-max-content-width)] items-center gap-two rounded-control border bg-background-element px-three py-two ${outlineClass(toast.variant)}`}

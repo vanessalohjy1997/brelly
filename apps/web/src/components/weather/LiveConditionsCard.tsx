@@ -52,7 +52,7 @@ export function LiveConditionsCard({ conditions, uvIndex }: Props) {
         <div
           // Decorative on the card, but nothing else here spells the verdict
           // out as a sentence, so the icon carries it.
-          className="pointer-events-none absolute -bottom-four right-two opacity-[var(--brelly-opacity-watermark)]"
+          className="pointer-events-none absolute -bottom-two right-two opacity-[var(--brelly-opacity-watermark)]"
         >
           <UmbrellaVerdictIcon
             reason={verdict.reason}

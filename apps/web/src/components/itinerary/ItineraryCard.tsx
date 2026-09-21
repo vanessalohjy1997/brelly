@@ -63,6 +63,12 @@ type Props = {
  * behaves differently in every browser. So the *title* is the link and the card
  * is its surface — which is also the better document shape, since it gives the
  * link a name instead of making the whole card one enormous anonymous target.
+ *
+ * The link is then *stretched* over the card with a `::after` pseudo-element,
+ * so the location, the time and the empty space all open the stop without the
+ * markup changing shape: the document still has one named link and two
+ * buttons. The buttons are `relative`, which — being later in the DOM — paints
+ * them above the stretched area, so they keep their own clicks.
  */
 export function ItineraryCard({
   slot,
@@ -139,7 +145,7 @@ export function ItineraryCard({
       {verdict && verdict.reason !== "none" && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-four right-two opacity-[var(--brelly-opacity-watermark)]"
+          className="pointer-events-none absolute -bottom-two right-two opacity-[var(--brelly-opacity-watermark)]"
         >
           <UmbrellaVerdictIcon
             reason={verdict.reason}
@@ -196,7 +202,10 @@ export function ItineraryCard({
         <div className="flex items-start justify-between gap-four">
           <div className="flex min-w-0 flex-1 flex-col gap-half">
             <Text as="h3" variant="default" className="truncate font-semibold">
-              <Link href={`/plan/${slot.id}`} className="hover:underline">
+              <Link
+                href={`/plan/${slot.id}`}
+                className="hover:underline after:absolute after:inset-0"
+              >
                 {slot.label}
               </Link>
             </Text>
@@ -209,7 +218,7 @@ export function ItineraryCard({
             // Sized to content and capped rather than left to grow — otherwise
             // a long forecast word ("Thundery Showers") claims width from the
             // label column instead of truncating in its own.
-            <div className="min-w-0 max-w-[40%] shrink">
+            <div className="relative min-w-0 max-w-[40%] shrink">
               <WeatherBadge
                 weather={weather}
                 isLoading={isLoading}
@@ -220,7 +229,7 @@ export function ItineraryCard({
           )}
         </div>
 
-        <div className="flex justify-end gap-one">
+        <div className="relative flex justify-end gap-one">
           {toggleMute && (
             <button
               type="button"

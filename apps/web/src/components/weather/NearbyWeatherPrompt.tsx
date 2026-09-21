@@ -54,7 +54,7 @@ export function NearbyWeatherPrompt({ permission, onRequest }: Props) {
       </Text>
       {!denied && (
         <Button onClick={onRequest} className="mt-one">
-          {unavailable ? "Try again" : "Show weather near me"}
+          {unavailable ? "Try again" : "Turn on location"}
         </Button>
       )}
     </Surface>

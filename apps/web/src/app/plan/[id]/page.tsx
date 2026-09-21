@@ -8,7 +8,6 @@ import {
   derivePackingList,
   describeRoutine,
   findSlotById,
-  formatPeriodLabel,
   getUpcomingForecast,
   resolveSlotProvider,
   retargetSlotDate,
@@ -165,6 +164,11 @@ export default function EditPlanPage() {
       <SlotForm
         submitLabel="Save changes"
         onDirtyChange={setDirty}
+        // Offered as an edit to the time fields, not as a save of its own —
+        // see the prop's note in `SlotForm`.
+        dryWindow={
+          dryWindow ? { start: dryWindow.suggestedPeriod.start } : undefined
+        }
         initialValues={{
           label: slot.label,
           location: slot.location,
@@ -270,35 +274,6 @@ export default function EditPlanPage() {
               ))}
             </ul>
           </div>
-        )}
-
-        {dryWindow && (
-          <button
-            type="button"
-            onClick={() => {
-              const target = new Date(dryWindow.suggestedPeriod.start);
-              const endOffset =
-                new Date(slot.endTime).getTime() -
-                new Date(slot.startTime).getTime();
-              updateSlot(date, slot.id, {
-                startTime: target.toISOString(),
-                endTime: new Date(target.getTime() + endOffset).toISOString(),
-              });
-              setDirty(false);
-              router.push("/plans");
-            }}
-            className="flex items-center gap-two rounded-control border border-umbrella-sun p-three text-left"
-          >
-            <Icon name={Icons.uv} size="inline" className="text-umbrella-sun" />
-            <span className="flex flex-1 flex-col gap-half">
-              <Text variant="smallBold">
-                {formatPeriodLabel(dryWindow.suggestedPeriod.start)} looks dry
-              </Text>
-              <Text variant="small" color="textSecondary">
-                Move this stop
-              </Text>
-            </span>
-          </button>
         )}
 
         <CopyToDateAction onDuplicate={handleDuplicate} />

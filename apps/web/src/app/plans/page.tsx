@@ -31,6 +31,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { Text } from "@/components/Text";
 import { NearbyForecastPreview } from "@/components/weather/NearbyForecastPreview";
 import { NearbyWeatherPrompt } from "@/components/weather/NearbyWeatherPrompt";
+import { useAlertsReachPhone } from "@/hooks/useAlertsReachPhone";
 import { retryCloudBootstrap } from "@/hooks/useCloudBootstrap";
 import { useDeleteSlotWithUndo } from "@/hooks/useDeleteSlotWithUndo";
 import { useMuteSlotWithUndo } from "@/hooks/useMuteSlotWithUndo";
@@ -44,12 +45,21 @@ import { useWeatherRefresh } from "@/hooks/useWeatherRefresh";
  */
 const addOn = (date: string) => `/plan/new?date=${date}`;
 
+/**
+ * Where a day that already has stops goes: its own section, further down this
+ * page. The id is prefixed because a bare `2026-09-21` is a valid id and an
+ * awkward selector, and the anchor needs no selector at all.
+ */
+const dayAnchor = (date: string) => `day-${date}`;
+
 export default function PlansPage() {
   const ready = useCloudReady();
   const bootstrapError = useCloudBootstrapError();
   const plans = useItineraryStore((state) => state.plans);
   const deleteWithUndo = useDeleteSlotWithUndo();
   const toggleMuteWithUndo = useMuteSlotWithUndo();
+  // See Today: mute is offered only once a phone can honour it.
+  const alertsReachPhone = useAlertsReachPhone();
   const { isRefreshing, refresh } = useWeatherRefresh();
   const [query, setQuery] = useState("");
 
@@ -95,20 +105,27 @@ export default function PlansPage() {
         title="Plans"
         actions={
           <>
-            <Link
-              href="/routines"
-              aria-label="Routines"
-              className={buttonClassName("quiet")}
-            >
+            {/* The word is visible where there is room for it. An unlabelled
+                repeat glyph is a guess on a desktop that has the width to
+                say "Routines"; on a phone the header does not, so the label
+                folds into the accessible name and the glyph stands alone. */}
+            <Link href="/routines" className={buttonClassName("quiet")}>
               <Icon name={Icons.repeat} size="control" />
+              <Text variant="smallBold" className="sr-only md:not-sr-only">
+                Routines
+              </Text>
             </Link>
             <Button
               tone="quiet"
+              label={isRefreshing ? "Refreshing…" : "Refresh"}
               onClick={() => void refresh()}
               disabled={isRefreshing}
             >
-              <Icon name={Icons.refresh} size="inline" />
-              {isRefreshing ? "Refreshing…" : "Refresh"}
+              <Icon
+                name={Icons.refresh}
+                size="control"
+                className={isRefreshing ? "motion-safe:animate-spin" : undefined}
+              />
             </Button>
             <Link href="/plan/new" className={buttonClassName("primary")}>
               <Text variant="smallBold" color="onPrimary">
@@ -181,7 +198,11 @@ export default function PlansPage() {
         />
       ) : (
         <div className="flex flex-col gap-three">
-          <WeekStrip plans={upcoming} renderHref={addOn} />
+          <WeekStrip
+            plans={upcoming}
+            addHref={addOn}
+            dayHref={(date) => `#${dayAnchor(date)}`}
+          />
 
           {conflicts.map((conflict, index) => (
             <div
@@ -202,7 +223,13 @@ export default function PlansPage() {
           ))}
 
           {sections.map((section) => (
-            <section key={section.date}>
+            <section
+              key={section.date}
+              id={dayAnchor(section.date)}
+              // The week strip's anchor target. The scroll margin keeps the
+              // heading clear of the top of the viewport when it lands.
+              className="scroll-mt-three"
+            >
               <div className="flex items-center justify-between pt-three pb-two">
                 <Text variant="smallBold" as="h2">
                   {section.title}
@@ -225,8 +252,10 @@ export default function PlansPage() {
                     <ItineraryCard
                       slot={slot}
                       onDelete={() => void deleteWithUndo(section.date, slot)}
-                      onToggleMute={() =>
-                        void toggleMuteWithUndo(section.date, slot)
+                      onToggleMute={
+                        alertsReachPhone
+                          ? () => void toggleMuteWithUndo(section.date, slot)
+                          : undefined
                       }
                     />
                   </li>
