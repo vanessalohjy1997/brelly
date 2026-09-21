@@ -3,7 +3,17 @@ import userEvent from "@testing-library/user-event";
 
 import { useSettingsStore } from "@brelly/core";
 
+import { mockNextLink } from "@/test/mockNextLink";
+
 import { defaultStartTime, placeNameOf, SlotForm } from "./SlotForm";
+
+jest.mock("next/link", () => mockNextLink());
+
+/** Linked by default, so the alert copy and the lead-time note are live. */
+let authUser: { isAnonymous: boolean } | null = { isAnonymous: false };
+jest.mock("@/hooks/useAuthUser", () => ({
+  useAuthUser: () => authUser,
+}));
 
 const search = jest.fn();
 const selectPlace = jest.fn();
@@ -336,6 +346,91 @@ describe("SlotForm", () => {
     );
 
     expect(screen.getByText(/starts too soon for a rain alert/)).toBeInTheDocument();
+  });
+
+  it("does not greet a blank form with the lead-time note", async () => {
+    // Starts defaults to the next whole hour, which is inside the lead window
+    // for most of every hour — the note would otherwise open every add form.
+    useSettingsStore.setState({ rainAlertsEnabled: true, rainLeadMinutes: 60 });
+    const user = userEvent.setup();
+    render(<SlotForm submitLabel="Add plan" onSubmit={jest.fn()} />);
+
+    expect(screen.queryByText(/starts too soon/)).not.toBeInTheDocument();
+
+    // Chosen on purpose, ten minutes out: now the note is about their choice.
+    const soon = new Date(Date.now() + 10 * 60 * 1000);
+    const hh = String(soon.getHours()).padStart(2, "0");
+    const mm = String(soon.getMinutes()).padStart(2, "0");
+    await user.clear(screen.getByLabelText("Starts"));
+    fireEvent.change(screen.getByLabelText("Starts"), { target: { value: `${hh}:${mm}` } });
+
+    expect(screen.getByText(/starts too soon/)).toBeInTheDocument();
+  });
+
+  it("says where alerts go, and asks for an account when they go nowhere", () => {
+    // The web sends no alerts. Under an anonymous session the switch reaches
+    // no phone, and the copy has to say so rather than promise a heads-up.
+    useSettingsStore.setState({ rainAlertsEnabled: true, rainLeadMinutes: 60 });
+    const soon = new Date(Date.now() + 10 * 60 * 1000);
+    const values = {
+      ...EXISTING,
+      startTime: soon.toISOString(),
+      endTime: new Date(soon.getTime() + 3600_000).toISOString(),
+    };
+
+    authUser = { isAnonymous: true };
+    const { unmount } = render(
+      <SlotForm submitLabel="Save changes" initialValues={values} onSubmit={jest.fn()} />,
+    );
+    expect(screen.getByRole("link", { name: "Add an account" })).toHaveAttribute(
+      "href",
+      "/account",
+    );
+    expect(screen.queryByText(/starts too soon/)).not.toBeInTheDocument();
+    unmount();
+
+    authUser = { isAnonymous: false };
+    render(
+      <SlotForm submitLabel="Save changes" initialValues={values} onSubmit={jest.fn()} />,
+    );
+    expect(
+      screen.getByText("Get a heads-up on your phone if this stop looks wet"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/starts too soon/)).toBeInTheDocument();
+  });
+
+  it("moves the time fields onto the dry window, and leaves saving to Save", async () => {
+    // It used to write the new time straight to the store and leave, which
+    // threw away every other edit on the form without a word.
+    const user = userEvent.setup();
+    const onSubmit = jest.fn();
+    const start = new Date(EXISTING.startTime);
+    const dry = new Date(start.getTime() + 2 * 3600_000);
+    render(
+      <SlotForm
+        submitLabel="Save changes"
+        initialValues={EXISTING}
+        dryWindow={{ start: dry.toISOString() }}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Label"), " with Sam");
+    await user.click(screen.getByRole("button", { name: /looks dry/ }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    // Taken, so no longer offered.
+    expect(screen.queryByRole("button", { name: /looks dry/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "Lunch with Sam",
+        startTime: dry.toISOString(),
+        // The duration the user chose survives the move.
+        endTime: new Date(dry.getTime() + 3600_000).toISOString(),
+      }),
+    );
   });
 
   it("says nothing about lead time for a muted stop", () => {

@@ -15,6 +15,11 @@ import TodayPage from "./page";
 
 jest.mock("next/link", () => mockNextLink());
 
+let authUser: { isAnonymous: boolean } | null = null;
+jest.mock("@/hooks/useAuthUser", () => ({
+  useAuthUser: () => authUser,
+}));
+
 // The weather layer is exercised by its own hooks' tests; here it is held
 // still so the page's four-way branch is what is under test.
 jest.mock("@/hooks/useWeatherForSlot", () => ({
@@ -53,6 +58,7 @@ function todayDateKey(): string {
 
 beforeEach(() => {
   resetAppState();
+  authUser = null;
   nearby.isAvailable = false;
   nearby.permission = "unprompted";
   nearby.forecasts = [];
@@ -183,7 +189,7 @@ describe("Today", () => {
     useDeviceLocationStore.setState({ request });
 
     renderRoute(<TodayPage />);
-    screen.getByRole("button", { name: "Show weather near me" }).click();
+    screen.getByRole("button", { name: "Turn on location" }).click();
 
     await waitFor(() => expect(request).toHaveBeenCalled());
   });
@@ -199,5 +205,35 @@ describe("Today", () => {
 
     expect(screen.queryByText(/notification/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/update/i)).not.toBeInTheDocument();
+  });
+
+  it("offers Mute only once a phone can honour it", () => {
+    // The web sends no alerts, so under an anonymous session the control
+    // would toggle nothing.
+    markCloudReady();
+    useItineraryStore.setState({
+      plans: [
+        makePlan(todayDateKey(), [
+          makeSlot({ startTime: todayAt(22), endTime: todayAt(23) }),
+        ]),
+      ],
+    });
+    const { unmount } = renderRoute(<TodayPage />);
+    expect(screen.queryByRole("button", { name: /^Mute/ })).not.toBeInTheDocument();
+    unmount();
+
+    authUser = { isAnonymous: false };
+    renderRoute(<TodayPage />);
+    expect(screen.getByRole("button", { name: /^Mute/ })).toBeInTheDocument();
+  });
+
+  it("keeps Refresh as an icon with a name, a step below Add", () => {
+    markCloudReady();
+    renderRoute(<TodayPage />);
+
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    expect(refresh).toHaveAttribute("aria-label", "Refresh");
+    // The name is the label, not a visible word beside the glyph.
+    expect(screen.queryByText("Refresh")).not.toBeInTheDocument();
   });
 });

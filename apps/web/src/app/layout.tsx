@@ -17,8 +17,16 @@ import {
 
 import "./globals.css";
 
+/**
+ * The tab title is per route, or every tab, history entry and bookmark reads
+ * "Brelly". The pages are client components and cannot export `metadata`
+ * themselves, and an effect writing `document.title` loses to React 19, which
+ * owns the hoisted `<title>` and re-applies it — so each segment has a server
+ * `layout.tsx` (or, for `/`, a server `page.tsx`) that names itself against
+ * this template.
+ */
 export const metadata: Metadata = {
-  title: "Brelly",
+  title: { default: "Brelly", template: "%s · Brelly" },
   description: "The weather for the day you actually planned.",
 };
 

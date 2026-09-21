@@ -3,6 +3,11 @@ import type { UmbrellaReason } from "@brelly/core";
 import { IconSize } from "@/constants/theme";
 
 import { Icons } from "../icons";
+import {
+  HANDLE_STROKE,
+  HANDLE_STROKE_COMPACT,
+  UmbrellaMark,
+} from "./umbrellaMark";
 
 /** The two things an umbrella is carried against, drawn around the canopy. */
 export type UmbrellaMark = "rain" | "sun";
@@ -93,6 +98,11 @@ type Props = {
  * verdict tint, so the icon carries the answer three ways at once — shape,
  * colour and the words beside it — and never by colour alone.
  *
+ * The drops and the sun are ligatures; the umbrella is not. Material's
+ * `umbrella` glyph is a *furled* one, so the composition read as rain falling
+ * around a closed stick where the phone shows it falling on a canopy — see
+ * `umbrellaMark.tsx` for why the app's own mark is drawn instead.
+ *
  * This is the one place that draws ligatures itself rather than going through
  * `Icon`. Every size here is a *fraction of the frame* — the fractions the
  * phone's version arrived at and that make the composition read as weather —
@@ -112,16 +122,23 @@ export function UmbrellaVerdictIcon({
   if (marks.length === 0) return null;
 
   const bothMarks = marks.length === 2;
+  const compact = IconSize[size] < COMPACT_BELOW;
   const drops = bothMarks
     ? RAIN_DROPS_WITH_SUN
-    : IconSize[size] < COMPACT_BELOW
+    : compact
       ? RAIN_DROPS_COMPACT
       : RAIN_DROPS;
 
-  // The umbrella keeps the lower three-quarters of the frame; the marks live in
+  // The umbrella keeps the lower four-fifths of the frame; the marks live in
   // the space above it and lap slightly over the canopy, which is what makes
   // them read as weather falling on it rather than as separate icons.
-  const umbrellaSize = 0.74;
+  //
+  // 0.8 rather than the 0.74 the ligature used: a font sets `font-size`, and
+  // the glyph inside it is smaller than its em box by the font's own padding.
+  // An `svg` has no such padding, so 0.74 here would have drawn a *larger*
+  // umbrella and left the drops floating clear of the canopy. This is the
+  // size at which the scatter laps the dome the way it did on the phone.
+  const umbrellaSize = 0.8;
   const sunSize = 0.32;
 
   return (
@@ -163,16 +180,10 @@ export function UmbrellaVerdictIcon({
         />
       )}
 
-      <span
-        aria-hidden="true"
-        className="material-symbols-rounded absolute bottom-0 leading-none"
-        style={{
-          fontSize: `${umbrellaSize}em`,
-          left: `${(1 - umbrellaSize) / 2}em`,
-        }}
-      >
-        {Icons.umbrella}
-      </span>
+      <UmbrellaMark
+        heightEm={umbrellaSize}
+        strokeWidth={compact ? HANDLE_STROKE_COMPACT : HANDLE_STROKE}
+      />
     </span>
   );
 }

@@ -4,6 +4,7 @@ import { useCloudSyncStore } from "@brelly/core";
 import { useLocalCacheStore } from "@/store/localCacheStore";
 
 import {
+  describeBootstrapFailure,
   describeSilentBootstrap,
   retryCloudBootstrap,
   useCloudBootstrap,
@@ -72,7 +73,7 @@ describe("useCloudBootstrap", () => {
 
     await waitFor(() =>
       expect(useCloudSyncStore.getState().bootstrapError).toMatch(
-        /couldn't load your plans/i,
+        /couldn't sign you in/i,
       ),
     );
     consoleError.mockRestore();
@@ -133,6 +134,30 @@ describe("the silent-hang guard", () => {
     act(() => jest.advanceTimersByTime(8000));
 
     expect(useCloudSyncStore.getState().bootstrapError).toBe("Permission denied");
+  });
+});
+
+describe("describeBootstrapFailure", () => {
+  it("blames the connection only when the failure was one", () => {
+    // A disabled provider, an unauthorised domain and a bad key all fail the
+    // same `await` with the network up. Sending those to "check your
+    // connection" sends them to fix the wrong thing.
+    expect(
+      describeBootstrapFailure({ code: "auth/network-request-failed" }, true),
+    ).toMatch(/check your connection/i);
+    expect(describeBootstrapFailure(new Error("timeout"), false)).toMatch(
+      /check your connection/i,
+    );
+  });
+
+  it("says sign-in failed for everything else", () => {
+    expect(
+      describeBootstrapFailure({ code: "auth/admin-restricted-operation" }, true),
+    ).toMatch(/couldn't sign you in/i);
+    expect(describeBootstrapFailure(new Error("boom"), true)).toMatch(
+      /couldn't sign you in/i,
+    );
+    expect(describeBootstrapFailure(undefined, true)).toMatch(/couldn't sign you in/i);
   });
 });
 

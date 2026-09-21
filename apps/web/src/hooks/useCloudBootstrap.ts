@@ -62,9 +62,34 @@ async function runBootstrap(
     // show it instead of spinning forever with no explanation.
     console.error("[useCloudBootstrap] bootstrap failed", error);
     if (!isCancelled()) {
-      useCloudSyncStore.getState().setBootstrapError(describeCloudSyncError());
+      useCloudSyncStore
+        .getState()
+        .setBootstrapError(describeBootstrapFailure(error));
     }
   }
+}
+
+/**
+ * What the skeleton says when sign-in itself threw.
+ *
+ * "Check your connection" used to be the answer to every failure here, and it
+ * sent people to fix the wrong thing: a disabled provider, an unauthorised
+ * domain or a bad key all fail the same `await` with the network up. Only a
+ * network error — the SDK's own code, or the browser saying it is offline —
+ * is about the connection.
+ */
+export function describeBootstrapFailure(
+  error: unknown,
+  online: boolean = typeof navigator === "undefined" ? true : navigator.onLine,
+): string {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code: unknown }).code)
+      : "";
+  if (!online || code === "auth/network-request-failed") {
+    return describeCloudSyncError();
+  }
+  return "We couldn't sign you in to load your plans. Try again, and if it keeps happening, reload the page.";
 }
 
 /** Re-runs sign-in and listener attachment — the action behind a skeleton's

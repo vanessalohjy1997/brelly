@@ -55,6 +55,23 @@ describe("ItineraryCard", () => {
     );
   });
 
+  it("stretches the title link over the whole card, without swallowing the buttons", () => {
+    // Location, time and empty space all open the stop; the row actions,
+    // being `relative` and later in the DOM, paint above the stretched area
+    // and keep their own clicks.
+    renderWithQuery(
+      <ItineraryCard slot={makeSlot()} onDelete={jest.fn()} onToggleMute={jest.fn()} />,
+    );
+
+    expect(screen.getByRole("link", { name: "Lunch" })).toHaveClass(
+      "after:absolute",
+      "after:inset-0",
+    );
+    expect(screen.getByRole("button", { name: /^Delete/ }).parentElement).toHaveClass(
+      "relative",
+    );
+  });
+
   it("puts both row actions on screen, always", async () => {
     // The phone hides them behind a left swipe. A swipe has no keyboard and no
     // pointer equivalent, and hover-reveal is unreachable by both.

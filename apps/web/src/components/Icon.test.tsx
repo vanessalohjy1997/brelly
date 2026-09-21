@@ -38,8 +38,8 @@ describe("Icon", () => {
   });
 
   it("kebab-cases a two-word size to match the emitted variable", () => {
-    render(<Icon name={Icons.umbrella} size="controlEmphasis" />);
-    expect(screen.getByTestId("icon-umbrella")).toHaveStyle({
+    render(<Icon name={Icons.humidity} size="controlEmphasis" />);
+    expect(screen.getByTestId("icon-water_drop")).toHaveStyle({
       fontSize: "var(--brelly-icon-control-emphasis)",
     });
   });

@@ -18,6 +18,7 @@ import { Text } from "../Text";
 export function ChipGroup<T extends string>({
   name,
   legend,
+  hideLegend = false,
   options,
   value,
   onChange,
@@ -25,13 +26,25 @@ export function ChipGroup<T extends string>({
   /** Unique per group on the page — it is what makes the radios one set. */
   name: string;
   legend: string;
+  /**
+   * Keep the legend for assistive technology only. For a group whose section
+   * already carries the same heading — Settings' "Appearance" — a visible
+   * legend is the word printed twice, one line apart.
+   */
+  hideLegend?: boolean;
   options: { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
 }) {
   return (
     <fieldset className="flex flex-col gap-one border-0 p-0">
-      <legend className="text-field-label text-text-secondary uppercase">
+      <legend
+        className={
+          hideLegend
+            ? "sr-only"
+            : "text-field-label text-text-secondary uppercase"
+        }
+      >
         {legend}
       </legend>
       <div className="flex flex-wrap gap-two">

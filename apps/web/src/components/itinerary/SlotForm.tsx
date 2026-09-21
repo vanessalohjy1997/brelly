@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import Link from "next/link";
+
 import {
   applyDayToRange,
   applyEndTime,
@@ -9,6 +11,7 @@ import {
   computeNotificationTriggerTime,
   endsOnAnotherDay,
   formatLeadTime,
+  formatPeriodLabel,
   resolveFrequency,
   resolveSlotKind,
   SLOT_KIND_HINTS,
@@ -32,6 +35,7 @@ import {
   toTimeInputValue,
 } from "./dateTimeInputs";
 import { RepeatField } from "./RepeatField";
+import { useAlertsReachPhone } from "@/hooks/useAlertsReachPhone";
 import { usePlaceSearch } from "@/hooks/usePlaceSearch";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 
@@ -99,6 +103,13 @@ type Props = {
    * here would be indistinguishable from editing it.
    */
   allowRepeat?: boolean;
+  /**
+   * A dry period the stop could move onto, offered beside the time fields.
+   * Pressing it *edits the fields* rather than saving: it used to write the
+   * new time straight to the store and leave, which threw away every other
+   * edit on the form without a word. Now it is one more change to Save.
+   */
+  dryWindow?: { start: string };
   /** Extra actions rendered between the fields and the submit button. */
   children?: ReactNode;
 };
@@ -111,6 +122,7 @@ export function SlotForm({
   submitLabel,
   onDirtyChange,
   allowRepeat = false,
+  dryWindow,
   children,
 }: Props) {
   const ids = useId();
@@ -131,6 +143,7 @@ export function SlotForm({
   } = useCurrentLocation();
   const rainAlertsEnabled = useSettingsStore((state) => state.rainAlertsEnabled);
   const rainLeadMinutes = useSettingsStore((state) => state.rainLeadMinutes);
+  const alertsReachPhone = useAlertsReachPhone();
 
   const [label, setLabel] = useState(initialValues?.label ?? "");
   // Whether the label is the user's words or ours. A label prefilled from the
@@ -173,6 +186,10 @@ export function SlotForm({
   const [repeat, setRepeat] = useState<RepeatRule | null>(null);
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [errors, setErrors] = useState<FieldErrors>({});
+  // Whether the reader has chosen a time yet. A blank form defaults Starts to
+  // the next whole hour, which is inside the alert lead window for most of
+  // every hour — so the lead-time note would greet a form nobody had touched.
+  const [timeTouched, setTimeTouched] = useState(false);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -309,14 +326,34 @@ export function SlotForm({
   // A longer lead time silently produces *fewer* alerts on near-term plans: the
   // trigger has already passed, so nothing is scheduled and nothing says so.
   // The form is the only place that can tell someone before they rely on it.
-  // Muted stops and a global opt-out are not surprises, so they say nothing.
+  // Muted stops and a global opt-out are not surprises, so they say nothing;
+  // nor does a form whose time is still the default, or a session whose
+  // alerts reach no phone at all.
   const tooSoonToWarn =
+    alertsReachPhone &&
     rainAlertsEnabled &&
     !notificationsMuted &&
+    (timeTouched || !!initialValues) &&
     computeNotificationTriggerTime(
       range.start.toISOString(),
       rainLeadMinutes,
     ) === null;
+
+  // Offered until it is taken: once Starts sits on the suggested period there
+  // is nothing left to move.
+  const dryWindowStart = dryWindow ? new Date(dryWindow.start) : null;
+  const dryWindowOffered =
+    dryWindowStart && dryWindowStart.getTime() !== range.start.getTime();
+
+  const moveToDryWindow = () => {
+    if (!dryWindowStart) return;
+    const duration = range.end.getTime() - range.start.getTime();
+    setRange({
+      start: dryWindowStart,
+      end: new Date(dryWindowStart.getTime() + duration),
+    });
+    setTimeTouched(true);
+  };
 
   // The messages the Location field has to show, in the order they appear.
   const locationMessages = [error, locationError].filter(
@@ -496,6 +533,7 @@ export function SlotForm({
           onChange={(event) => {
             const day = fromDateInputValue(event.target.value);
             if (day) setRange((r) => applyDayToRange(r, day));
+            setTimeTouched(true);
           }}
           className="min-h-[var(--brelly-hit-target)] w-fit rounded-control bg-background-element px-three text-default text-text"
         />
@@ -514,6 +552,7 @@ export function SlotForm({
             onChange={(event) => {
               const time = fromTimeInputValue(event.target.value, range.start);
               if (time) setRange((r) => applyStartTime(r, time));
+              setTimeTouched(true);
             }}
             className="min-h-[var(--brelly-hit-target)] w-fit rounded-control bg-background-element px-three text-default text-text"
           />
@@ -537,11 +576,30 @@ export function SlotForm({
             onChange={(event) => {
               const time = fromTimeInputValue(event.target.value, range.end);
               if (time) setRange((r) => applyEndTime(r, time));
+              setTimeTouched(true);
             }}
             className="min-h-[var(--brelly-hit-target)] w-fit rounded-control bg-background-element px-three text-default text-text"
           />
         </Field>
       </div>
+
+      {dryWindowOffered && (
+        <button
+          type="button"
+          onClick={moveToDryWindow}
+          className="flex items-center gap-two rounded-control border border-umbrella-sun p-three text-left"
+        >
+          <Icon name={Icons.uv} size="inline" className="text-umbrella-sun" />
+          <span className="flex flex-1 flex-col gap-half">
+            <Text variant="smallBold">
+              {formatPeriodLabel(dryWindowStart.toISOString())} looks dry
+            </Text>
+            <Text variant="small" color="textSecondary">
+              Move this stop, then save
+            </Text>
+          </span>
+        </button>
+      )}
 
       {allowRepeat && (
         <div id={field("repeat")} tabIndex={-1}>
@@ -583,8 +641,20 @@ export function SlotForm({
           </label>
           <Text variant="small" color="textSecondary">
             {/* Rain matters for a park and not for a mall — muting per stop is
-                what keeps the alerts worth reading. */}
-            Get a heads-up if this stop looks wet
+                what keeps the alerts worth reading. The web sends none itself:
+                the switch is honoured by the phone app, and only when it reads
+                the same account, so the copy says which of the two is true. */}
+            {alertsReachPhone ? (
+              "Get a heads-up on your phone if this stop looks wet"
+            ) : (
+              <>
+                Sent by the Brelly app on your phone.{" "}
+                <Link href="/account" className="text-primary underline">
+                  Add an account
+                </Link>{" "}
+                to share your plans with it.
+              </>
+            )}
           </Text>
         </div>
         {/* A checkbox, not a switch: CSS has no switch, and an
