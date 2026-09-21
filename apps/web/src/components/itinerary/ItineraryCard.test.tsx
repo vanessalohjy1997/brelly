@@ -93,8 +93,10 @@ describe("ItineraryCard", () => {
     );
 
     const actions = screen.getByRole("button", { name: /^Delete/ }).parentElement!;
+    // The time range, whichever zone the suite runs in — CI is UTC, a
+    // developer's machine is usually not.
     expect(actions.parentElement).toContainElement(
-      screen.getByText("08:00 pm – 09:00 pm"),
+      screen.getByText(/^\d{2}:\d{2} [ap]m – \d{2}:\d{2} [ap]m$/),
     );
     expect(
       Array.from(actions.children).map((child) => child.getAttribute("aria-label")),
