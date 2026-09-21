@@ -5,6 +5,7 @@ import { describeCloudSyncError, useCloudSyncStore } from "../store/cloudSyncSto
 import { useItineraryStore } from "../store/itineraryStore";
 import { useRoutineStore } from "../store/routineStore";
 import { DEFAULT_SETTINGS, useSettingsStore } from "../store/settingsStore";
+import { carryNotificationHandles } from "../utils/carryNotificationHandles";
 
 type Unsubs = {
   settings?: () => void;
@@ -57,7 +58,12 @@ export function attachCloudListeners(uid: string): void {
   unsubs.slots = subscribeToSlotsCollection(
     uid,
     (plans) => {
-      useItineraryStore.setState({ plans });
+      // The snapshot never carries this device's notification handles, and
+      // it replaces the whole array — see `carryNotificationHandles` for what
+      // writing it in as-is did to the alert queue.
+      useItineraryStore.setState((state) => ({
+        plans: carryNotificationHandles(plans, state.plans),
+      }));
       useCloudSyncStore.getState().setSlotsReady(true);
     },
     handleListenerError("slots"),

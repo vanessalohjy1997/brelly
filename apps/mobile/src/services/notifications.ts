@@ -5,6 +5,7 @@ import {
   computeNotificationTriggerTime,
   isWithinQuietHours,
   shouldNotifyForRain,
+  type ScheduledAlert,
   type SlotForecast,
 } from "@brelly/core";
 
@@ -83,7 +84,12 @@ export type ScheduleRainOptions = {
  * in quiet hours, or permission was denied.
  */
 export async function scheduleRainNotification(
-  slot: { label: string; startTime: string; notificationsMuted?: boolean },
+  slot: {
+    id: string;
+    label: string;
+    startTime: string;
+    notificationsMuted?: boolean;
+  },
   forecast: SlotForecast,
   options: ScheduleRainOptions = {},
 ): Promise<string | null> {
@@ -116,6 +122,20 @@ export async function scheduleRainNotification(
     content: {
       title: "Bring an umbrella",
       body: `${forecast.forecast} expected for "${slot.label}".`,
+      // Tagged with the stop it belongs to, so `listScheduledAlerts` can hand
+      // the queue back to the sync as the record of what is scheduled. The
+      // store's handle alone was not one: it lives in memory, and forgetting
+      // it (every cold start, and until recently every cloud snapshot) left
+      // the sync queueing one more alert per stop each pass. `content.data`
+      // per the v57 docs:
+      // https://docs.expo.dev/versions/v57.0.0/sdk/notifications/#notificationcontentinput
+      data: {
+        kind: "rain",
+        slotId: slot.id,
+        ...(options.leadMinutes !== undefined
+          ? { leadMinutes: options.leadMinutes }
+          : {}),
+      },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -145,7 +165,11 @@ export async function scheduleDigestNotification(
   await ensureAndroidChannel(DIGEST_CHANNEL_ID);
 
   return Notifications.scheduleNotificationAsync({
-    content: { title: message.title, body: message.body },
+    content: {
+      title: message.title,
+      body: message.body,
+      data: { kind: "digest" },
+    },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
       date: triggerDate,
@@ -188,6 +212,9 @@ export async function sendTestNotification(): Promise<boolean> {
     content: {
       title: "Brelly alerts are working",
       body: "This is what a rain alert will look like.",
+      // Tagged so the sync's sweep leaves it alone should one run in the
+      // five seconds it is queued for.
+      data: { kind: "test" },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -210,6 +237,41 @@ export async function sendTestNotification(): Promise<boolean> {
 export async function countScheduledNotifications(): Promise<number> {
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   return scheduled.length;
+}
+
+/**
+ * The OS queue, read back as the app tagged it. A rain alert or digest from a
+ * build before the tags existed comes back `untagged`, and the sync cancels
+ * it: there is no telling which stop it was for. The test alert is left out
+ * altogether.
+ *
+ * `getAllScheduledNotificationsAsync` returns `NotificationRequest[]`, each
+ * carrying the `content.data` it was scheduled with (v57 docs:
+ * https://docs.expo.dev/versions/v57.0.0/sdk/notifications/#notificationsgetallschedulednotificationsasync).
+ */
+export async function listScheduledAlerts(): Promise<ScheduledAlert[]> {
+  const requests = await Notifications.getAllScheduledNotificationsAsync();
+  const alerts: ScheduledAlert[] = [];
+  for (const request of requests) {
+    const id = request.identifier;
+    const data = request.content.data ?? {};
+    if (data.kind === "test") continue;
+    if (data.kind === "rain" && typeof data.slotId === "string") {
+      alerts.push({
+        id,
+        kind: "rain",
+        slotId: data.slotId,
+        ...(typeof data.leadMinutes === "number"
+          ? { leadMinutes: data.leadMinutes }
+          : {}),
+      });
+    } else if (data.kind === "digest") {
+      alerts.push({ id, kind: "digest" });
+    } else {
+      alerts.push({ id, kind: "untagged" });
+    }
+  }
+  return alerts;
 }
 
 /**

@@ -30,6 +30,16 @@ import type { ItinerarySlot } from "../types/itinerary";
  * fine, but Firestore's SDK rejects it outright ("Unsupported field value:
  * undefined") the moment a caller writes the result to a doc.
  */
+/**
+ * The same two fields, by name, for code that filters a patch rather than a
+ * slot: `itinerarySync` drops them from every cloud write, and the store skips
+ * the write entirely when nothing else is in the patch.
+ */
+export const DEVICE_LOCAL_SLOT_FIELDS: ReadonlySet<string> = new Set([
+  "notificationId",
+  "notificationLeadMinutes",
+]);
+
 export function stripNotificationHandles(slot: ItinerarySlot): ItinerarySlot {
   const { notificationId, notificationLeadMinutes, ...rest } = slot;
   return rest;

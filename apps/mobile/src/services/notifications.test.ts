@@ -5,6 +5,7 @@ import {
   cancelNotification,
   configureNotificationHandler,
   countScheduledNotifications,
+  listScheduledAlerts,
   scheduleDigestNotification,
   scheduleRainNotification,
   sendTestNotification,
@@ -41,6 +42,7 @@ describe("scheduleRainNotification", () => {
   });
 
   const futureSlot = () => ({
+    id: "slot-lunch",
     label: "Lunch with Sam",
     startTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
   });
@@ -57,6 +59,7 @@ describe("scheduleRainNotification", () => {
 
   it("does not schedule when the lead time has already passed", async () => {
     const soonSlot = {
+      id: "slot-soon",
       label: "Lunch",
       startTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     };
@@ -134,7 +137,7 @@ describe("scheduleRainNotification", () => {
     start.setHours(6, 0, 0, 0);
 
     const result = await scheduleRainNotification(
-      { label: "Sunrise run", startTime: start.toISOString() },
+      { id: "slot-run", label: "Sunrise run", startTime: start.toISOString() },
       { forecast: "Showers", source: "24hr" },
       { quietHours: { enabled: true, start: "22:00", end: "07:00" } },
     );
@@ -151,7 +154,7 @@ describe("scheduleRainNotification", () => {
     start.setHours(14, 0, 0, 0);
 
     const result = await scheduleRainNotification(
-      { label: "Picnic", startTime: start.toISOString() },
+      { id: "slot-picnic", label: "Picnic", startTime: start.toISOString() },
       { forecast: "Showers", source: "24hr" },
       { quietHours: { enabled: true, start: "22:00", end: "07:00" } },
     );
@@ -166,12 +169,47 @@ describe("scheduleRainNotification", () => {
     start.setHours(6, 0, 0, 0);
 
     const result = await scheduleRainNotification(
-      { label: "Sunrise run", startTime: start.toISOString() },
+      { id: "slot-run", label: "Sunrise run", startTime: start.toISOString() },
       { forecast: "Showers", source: "24hr" },
       { quietHours: { enabled: false, start: "22:00", end: "07:00" } },
     );
 
     expect(result).toBe("notif-night");
+  });
+
+  it("tags the alert with its stop and lead time, so the sync can read the queue back", async () => {
+    // The store's handle is forgotten on every cold start; the tag is what
+    // lets the next sync see this alert already exists instead of queueing
+    // a second one.
+    mockSchedule.mockResolvedValue("notif-tagged");
+
+    await scheduleRainNotification(
+      futureSlot(),
+      { forecast: "Showers", source: "24hr" },
+      { leadMinutes: 30 },
+    );
+
+    expect(mockSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.objectContaining({
+          data: { kind: "rain", slotId: "slot-lunch", leadMinutes: 30 },
+        }),
+      }),
+    );
+  });
+
+  it("leaves the lead time off the tag when none was given", async () => {
+    mockSchedule.mockResolvedValue("notif-default-lead");
+
+    await scheduleRainNotification(futureSlot(), {
+      forecast: "Showers",
+      source: "24hr",
+    });
+
+    expect(mockSchedule.mock.calls[0][0].content.data).toEqual({
+      kind: "rain",
+      slotId: "slot-lunch",
+    });
   });
 
   it("honours a custom lead time", async () => {
@@ -181,7 +219,7 @@ describe("scheduleRainNotification", () => {
     // The 45-minute default would already have passed for a slot 20 minutes
     // out; a 10-minute lead is still schedulable.
     const result = await scheduleRainNotification(
-      { label: "Walk", startTime: start.toISOString() },
+      { id: "slot-walk", label: "Walk", startTime: start.toISOString() },
       { forecast: "Showers", source: "24hr" },
       { leadMinutes: 10 },
     );
@@ -206,7 +244,11 @@ describe("scheduleDigestNotification", () => {
     expect(result).toBe("digest-1");
     expect(mockSchedule).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: { title: "Umbrella today", body: "2 stops, rain expected." },
+        content: {
+          title: "Umbrella today",
+          body: "2 stops, rain expected.",
+          data: { kind: "digest" },
+        },
         trigger: expect.objectContaining({ type: "date", date: triggerDate }),
       }),
     );
@@ -276,6 +318,8 @@ describe("sendTestNotification", () => {
     expect(sent).toBe(true);
     expect(mockSchedule).toHaveBeenCalledWith(
       expect.objectContaining({
+        // Tagged so a sync's sweep does not cancel it while it waits.
+        content: expect.objectContaining({ data: { kind: "test" } }),
         trigger: expect.objectContaining({
           type: "timeInterval",
           seconds: TEST_NOTIFICATION_DELAY_SECONDS,
@@ -326,5 +370,55 @@ describe("countScheduledNotifications", () => {
     mockGetAllScheduled.mockResolvedValue([]);
 
     return expect(countScheduledNotifications()).resolves.toBe(0);
+  });
+});
+
+describe("listScheduledAlerts", () => {
+  const request = (identifier: string, data?: Record<string, unknown>) => ({
+    identifier,
+    content: { title: "x", body: "y", data },
+    trigger: { type: "date" },
+  });
+
+  it("reads each rain alert back with the stop and lead time it was tagged with", async () => {
+    mockGetAllScheduled.mockResolvedValue([
+      request("r1", { kind: "rain", slotId: "s1", leadMinutes: 45 }),
+      request("r2", { kind: "rain", slotId: "s2" }),
+    ]);
+
+    await expect(listScheduledAlerts()).resolves.toEqual([
+      { id: "r1", kind: "rain", slotId: "s1", leadMinutes: 45 },
+      { id: "r2", kind: "rain", slotId: "s2" },
+    ]);
+  });
+
+  it("reads a digest back as a digest", async () => {
+    mockGetAllScheduled.mockResolvedValue([request("d1", { kind: "digest" })]);
+
+    await expect(listScheduledAlerts()).resolves.toEqual([
+      { id: "d1", kind: "digest" },
+    ]);
+  });
+
+  it("reports an alert from before the tags existed as untagged", async () => {
+    // Nothing says which stop it was for, so the sync cancels it and lets
+    // the next pass schedule a tagged replacement.
+    mockGetAllScheduled.mockResolvedValue([
+      request("old-1"),
+      request("old-2", { kind: "rain" }),
+      request("old-3", { kind: "rain", slotId: 7 }),
+    ]);
+
+    await expect(listScheduledAlerts()).resolves.toEqual([
+      { id: "old-1", kind: "untagged" },
+      { id: "old-2", kind: "untagged" },
+      { id: "old-3", kind: "untagged" },
+    ]);
+  });
+
+  it("leaves the test alert out", async () => {
+    mockGetAllScheduled.mockResolvedValue([request("t1", { kind: "test" })]);
+
+    await expect(listScheduledAlerts()).resolves.toEqual([]);
   });
 });

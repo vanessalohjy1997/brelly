@@ -197,6 +197,39 @@ describe("cloud sync", () => {
     });
   });
 
+  it("updateSlot skips the cloud write when only this device's notification handles change", () => {
+    // Stripped, that write is a bare `{ date }` whose only effect was the
+    // snapshot it triggered — which used to wipe the very handle just stored.
+    const slot = addSlot("2026-07-31", slotInput());
+
+    updateSlot("2026-07-31", slot.id, {
+      notificationId: "notif-1",
+      notificationLeadMinutes: 45,
+    });
+    updateSlot("2026-07-31", slot.id, {
+      notificationId: undefined,
+      notificationLeadMinutes: undefined,
+    });
+
+    expect(mockWriteSlotFields).not.toHaveBeenCalled();
+    expect(plansOn("2026-07-31")?.slots[0].notificationId).toBeUndefined();
+  });
+
+  it("updateSlot still writes when a handle changes alongside a real field", () => {
+    const slot = addSlot("2026-07-31", slotInput());
+
+    updateSlot("2026-07-31", slot.id, {
+      label: "Dinner",
+      notificationId: undefined,
+    });
+
+    expect(mockWriteSlotFields).toHaveBeenCalledWith(slot.id, {
+      label: "Dinner",
+      notificationId: undefined,
+      date: "2026-07-31",
+    });
+  });
+
   it("updateSlot does not write to the cloud for a slot that no longer exists", () => {
     updateSlot("2026-07-31", "not-a-real-id", { label: "Dinner" });
 
