@@ -40,7 +40,7 @@ async function loadWithEnv(env: Partial<Record<string, string | undefined>>) {
 
 const COMPLETE = {
   NEXT_PUBLIC_FIREBASE_API_KEY: "AIza-test",
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "brelly-50de6.web.app",
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "brelly.web.app",
   NEXT_PUBLIC_FIREBASE_PROJECT_ID: "brelly-50de6",
 };
 

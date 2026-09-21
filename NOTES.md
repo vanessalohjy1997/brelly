@@ -791,12 +791,220 @@ from the "production" environment`. With the variable unset, `app.config.js`
   directly. Deleting it would take the deploy down and the local build would
   never notice. Turbo 2 also requires the root `packageManager` field, which is
   the second half of that change.
+- **`turbo.json` must be strict JSON — no comments, despite Turborepo
+  accepting them.** Turbo parses JSONC; App Hosting reads the same file with
+  Go's `encoding/json` (`ReadTurboJSONIfExists`, `pkg/nodejs/turbo.go`), which
+  does not, and the rollout fails with `unmarshalling /workspace/turbo.json:
+  invalid character '/' looking for beginning of object key string`. A local
+  `turbo build` will not reproduce it, because turbo is the lenient parser of
+  the two. The one comment-shaped thing that survives both is a `"//"` key,
+  which Go ignores as an unknown field and turbo tolerates.
 - **The root `prepare` script has to survive a checkout with no `.git`.** Yarn 1
   runs `prepare` on every `yarn install`, including the one App Hosting runs in
   a container built from an archive that deliberately excludes `.git` — and
   `git config core.hooksPath` outside a work tree exits 128, which fails the
   install. Hence the `git rev-parse --git-dir` guard in front of it. The hooks
   still install locally; the deploy no longer depends on them being installable.
+- **The web deploy is a local-source rollout, and the backend has no GitHub
+  connection.** The `deploy` job in `.github/workflows/ci.yml` runs `firebase
+  deploy --only apphosting,hosting` on a push to main, behind `needs: [verify]`.
+  It sits in CI rather than in a `workflow_run` workflow of its own on purpose:
+  `workflow_run` fires privileged — full secrets, `id-token: write` — over a
+  commit named by the triggering event's payload, which is code a fork controls
+  on a PR. Guards can exclude that, but CodeQL flags the shape and is right to;
+  `needs:` buys the same "only after the checks passed" without any untrusted
+  ref, because the job runs inside the same trusted run and `actions/checkout`
+  takes its default `github.sha`. `--only apphosting` archives
+  the repo root and hands it to App Hosting's builder, which is why the job
+  installs nothing: `firebase.json` already carries the `backendId`/`rootDir`/
+  `ignore` triple that shape requires, and a connected repo would be a second,
+  competing trigger for the same rollout. Two traps the CLI sets and this
+  workflow works around: it has printed `Deploy complete!` over a *failed*
+  rollout (firebase-tools#8866), hence the curl at the end; and
+  `--only apphosting:<id>` is a silent no-op when no such `backendId` is in
+  `firebase.json` (#10161), hence the unscoped target. Firestore rules stay out
+  of it — `yarn deploy:rules` is run by hand so a `hasOnly()` tightening cannot
+  reach production documents without a human.
+- **CI authenticates to Google by Workload Identity Federation; there is no key
+  to rotate.** `firebase-tools` reads the federated credential through ADC, but
+  only from **15.22.3 or newer** — 15.22.2 swallowed a Node 24 fetch bug and
+  reported a perfectly valid credential as `Failed to authenticate, have you
+  run firebase login?` (firebase-tools#10726). The workflow pins the major and
+  says so. The one-time setup, should it ever need recreating:
+
+  ```bash
+  PROJECT_ID=brelly-50de6; PROJECT_NUMBER=87595606048
+  REPO=vanessalohjy1997/brelly
+  SA=brelly-deployer@$PROJECT_ID.iam.gserviceaccount.com
+
+  # `sts` is the one that is easy to miss: `iam` and `iamcredentials` come
+  # enabled with Firebase, `sts` does not, and it is the API that performs the
+  # actual token exchange. Without it every other resource below can exist and
+  # look correct while `auth@v3` still fails.
+  gcloud services enable iam.googleapis.com iamcredentials.googleapis.com \
+    sts.googleapis.com --project=$PROJECT_ID
+
+  gcloud iam service-accounts create brelly-deployer --project=$PROJECT_ID \
+    --display-name="GitHub Actions — deploy the web app"
+
+  # `developer`, not `admin`: it may create builds and rollouts and update the
+  # backend, but not delete it. apiKeysViewer is what the *Hosting* half of the
+  # deploy needs; the custom role is the local-source archive upload, for which
+  # no predefined role is a fit (storage.admin is the blunt alternative).
+  # serviceUsageViewer is not optional and not obvious: before deploying
+  # anything the CLI GETs each API it is about to use to check it is enabled,
+  # and `apiKeysViewer` does *not* include `serviceusage.services.get` despite
+  # the shared prefix. Missing it fails with `403, Permission denied to get
+  # service [firebaseapphosting.googleapis.com]` — a real, legible error, and
+  # the only one in this sequence that says what it wants.
+  for ROLE in roles/firebaseapphosting.developer roles/firebasehosting.admin \
+              roles/serviceusage.apiKeysViewer \
+              roles/serviceusage.serviceUsageViewer; do
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+      --member="serviceAccount:$SA" --role="$ROLE"
+  done
+  gcloud iam roles create brellySourceUpload --project=$PROJECT_ID \
+    --title="App Hosting source upload" \
+    --permissions=storage.buckets.list,storage.objects.create
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SA" \
+    --role="projects/$PROJECT_ID/roles/brellySourceUpload"
+
+  # `firebase deploy --project X` resolves X through the Firebase Management
+  # API before it deploys anything, and none of the four roles above carry
+  # `firebase.projects.get`. Without this the CLI fails in under two seconds
+  # with `Failed to authenticate, have you run firebase login?` — a 403 on the
+  # project lookup, reported as if the credential were missing. See the trap
+  # below. `roles/firebase.viewer` is the predefined role that supplies it and
+  # is the wrong tool: it is read-only but reaches Firestore *data*
+  # (`datastore.entities.get`/`list`), which a deploy bot has no business
+  # holding.
+  # `run.services.get` is here because firebase.json rewrites `**` to the Cloud
+  # Run service behind the App Hosting backend: finalizing a Hosting version
+  # validates that the rewrite target exists, so a Hosting-only role is not
+  # enough. It fails late — after the source archive has already uploaded —
+  # which reads like a deploy bug rather than a missing grant.
+  gcloud iam roles create brellyProjectRead --project=$PROJECT_ID \
+    --title="Resolve what a deploy points at" \
+    --permissions=firebase.projects.get,resourcemanager.projects.get,run.services.get
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SA" \
+    --role="projects/$PROJECT_ID/roles/brellyProjectRead"
+
+  gcloud iam workload-identity-pools create github --project=$PROJECT_ID \
+    --location=global --display-name="GitHub Actions"
+  gcloud iam workload-identity-pools providers create-oidc brelly \
+    --project=$PROJECT_ID --location=global --workload-identity-pool=github \
+    --issuer-uri="https://token.actions.githubusercontent.com" \
+    --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+    --attribute-condition="assertion.repository_owner == 'vanessalohjy1997'"
+
+  # The attribute condition above keeps *other people's* repos out of the pool;
+  # this binding is what keeps every other repo of yours out of this service
+  # account. Both halves are needed.
+  gcloud iam service-accounts add-iam-policy-binding $SA --project=$PROJECT_ID \
+    --role=roles/iam.workloadIdentityUser \
+    --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+
+  # A build runs *as* the App Hosting compute service account, and creating one
+  # therefore needs actAs on it. Note which account this binding is attached to:
+  # it is on the compute account, naming the deployer as the member — the
+  # reverse of every other grant above, and the project-level
+  # `roles/iam.serviceAccountUser` people reach for instead would confer actAs
+  # on every service account in the project.
+  gcloud iam service-accounts add-iam-policy-binding \
+    firebase-app-hosting-compute@$PROJECT_ID.iam.gserviceaccount.com \
+    --project=$PROJECT_ID --role=roles/iam.serviceAccountUser \
+    --member="serviceAccount:$SA"
+  ```
+
+  Nothing above goes in a GitHub secret. The provider path and the service
+  account email identify an identity, they do not authorise one, so they sit in
+  the workflow as literals — the same reason `apphosting.yaml` carries the
+  project id and app id in git.
+
+  This block was written when the deploy job was, and then not run — the first
+  thing to ever ask for the pool was CI itself, which failed with
+  `invalid_target: the pool or provider is disabled or deleted or ... doesn't
+  exist`. That error text lists three causes and omits the fourth, so read it
+  as "the provider path resolves to nothing" and check existence before
+  believing something was deleted:
+
+  ```bash
+  gcloud iam workload-identity-pools list --project=$PROJECT_ID \
+    --location=global --show-deleted
+  ```
+
+  `Listed 0 items.` means never created; a `DELETED` row means the 30-day
+  window where the name is still held and the pool can be undeleted rather
+  than recreated.
+
+- **`Failed to authenticate, have you run firebase login?` is not always about
+  the credential.** The CLI prints it for at least two unrelated causes, and
+  the wording sends you to the wrong one. Time the failure to tell them apart:
+
+  - **Slow (tens of seconds):** firebase-tools#10726, the real auth bug —
+    `autoAuth()` is wrapped in a hardcoded timeout that the WIF exchange can
+    exceed, and the timeout is reported as this message. Broken in 15.22.2,
+    fixed in 15.22.3.
+  - **Fast (about two seconds):** a 403 on the project lookup, not an auth
+    failure at all. `--project X` is resolved through the Firebase Management
+    API first, and the resulting permission error is swallowed into the same
+    string. The fix is `firebase.projects.get`, above — not a version bump.
+
+  Check the version before believing the first: the workflow pins
+  `firebase-tools@15`, which floats well past the fix, so on any recent run the
+  fast case is the likely one.
+
+- **The browser API key's referrer list is a third place `hosting.site` has to
+  be updated.** `apphosting.yaml` already warns that
+  `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` tracks `hosting.site` in `firebase.json`.
+  The "Brelly browser key" restriction is the one it does not mention, and it
+  lives in GCP rather than in git, so moving the site to `brelly.web.app` left
+  it allowing only the `brelly-50de6.*` origins. The app loads fine and then
+  every Firebase call 403s with `API_KEY_HTTP_REFERRER_BLOCKED` —
+  `identitytoolkit` first, since sign-in is the first thing the app does.
+
+  ```bash
+  gcloud services api-keys list --project=brelly-50de6 \
+    --format="value(displayName,restrictions.browserKeyRestrictions.allowedReferrers)"
+  ```
+
+  `--allowed-referrers` *replaces* the list, so pass every origin you intend to
+  keep, not just the new one. Note this is a fourth thing that moves with the
+  site, after `hosting.site`, the `authDomain` value, and Auth's own authorized
+  domains list.
+
+- **`Deploy reported success but ... returned 403` is the Cloud Run service
+  refusing callers, not a broken build.** A Hosting rewrite to Cloud Run does
+  not authenticate on your behalf: the service itself must allow unauthenticated
+  invocation, so it needs `roles/run.invoker` for `allUsers`. Without it both
+  `brelly.web.app` and the `.run.app` URL return Google's frontend 403 page,
+  which looks nothing like an app error — the app is never reached. Check the
+  service before suspecting the rollout:
+
+  ```bash
+  gcloud run services get-iam-policy brelly-web \
+    --project=brelly-50de6 --region=asia-southeast1
+  ```
+
+  An empty policy is the bug. Confirm the service is otherwise fine with
+  `gcloud run services describe` — `Ready: True` and traffic at 100% on the
+  newest revision means the build is good and only the binding is missing. This
+  also means the `.run.app` URL is publicly reachable, bypassing Hosting; that
+  is inherent to the rewrite, not something to tighten with ingress rules,
+  which would cut off Hosting too.
+
+- **The two App Hosting compute service account warnings are noise.** Every
+  deploy prints `Failed to create the default App Hosting compute service
+  account` and `Failed to grant roles to` it, naming
+  `iam.serviceAccounts.create` and `resourcemanager.projects.setIamPolicy`.
+  Both end with "if the service account already exists, this warning can be
+  safely ignored", and it does exist — `firebase-app-hosting-compute@`. The CLI
+  attempts the setup unconditionally rather than checking first. Do not grant
+  either permission to silence them: between them they are create-a-principal
+  and rewrite-the-project-IAM-policy, which is most of what the WIF setup
+  exists to avoid handing a deploy bot.
 
 ## Built so far
 
