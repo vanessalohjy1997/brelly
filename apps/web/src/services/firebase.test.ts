@@ -138,10 +138,23 @@ describe("generateDocId", () => {
 });
 
 describe("ensureAnonymousUser", () => {
+  /** An `Auth` whose persisted session, if any, only appears once
+   * `authStateReady()` has resolved — which is how the web SDK behaves in a
+   * fresh tab. */
+  function authRestoring(user: { uid: string } | null) {
+    const auth: { currentUser: { uid: string } | null; authStateReady: jest.Mock } =
+      {
+        currentUser: null,
+        authStateReady: jest.fn(async () => {
+          auth.currentUser = user;
+        }),
+      };
+    return auth;
+  }
+
   it("signs in when no session survived", async () => {
-    const { getAuth } = jest.requireMock("firebase/auth");
-    const { signInAnonymously } = jest.requireMock("firebase/auth");
-    getAuth.mockReturnValue({ currentUser: null });
+    const { getAuth, signInAnonymously } = jest.requireMock("firebase/auth");
+    getAuth.mockReturnValue(authRestoring(null));
 
     const { ensureAnonymousUser } = await freshModule();
     await ensureAnonymousUser();
@@ -151,11 +164,30 @@ describe("ensureAnonymousUser", () => {
 
   it("resolves from the stored session without a second sign-in", async () => {
     const { getAuth, signInAnonymously } = jest.requireMock("firebase/auth");
-    getAuth.mockReturnValue({ currentUser: { uid: "anon-1" } });
+    getAuth.mockReturnValue({
+      currentUser: { uid: "anon-1" },
+      authStateReady: jest.fn(async () => {}),
+    });
 
     const { ensureAnonymousUser } = await freshModule();
     await ensureAnonymousUser();
 
+    expect(signInAnonymously).not.toHaveBeenCalled();
+  });
+
+  it("waits for the session still being restored instead of replacing it", async () => {
+    // A new tab: `currentUser` is null at the moment of the call and the
+    // linked user only lands once the SDK has read IndexedDB. Signing in
+    // anonymously here would overwrite that user — the "logged out every
+    // new tab" bug.
+    const { getAuth, signInAnonymously } = jest.requireMock("firebase/auth");
+    const auth = authRestoring({ uid: "linked-user" });
+    getAuth.mockReturnValue(auth);
+
+    const { ensureAnonymousUser } = await freshModule();
+    await ensureAnonymousUser();
+
+    expect(auth.authStateReady).toHaveBeenCalled();
     expect(signInAnonymously).not.toHaveBeenCalled();
   });
 });

@@ -740,6 +740,15 @@ from the "production" environment`. With the variable unset, `app.config.js`
   in the root layout — there is no generated file to keep in step and no build
   ordering to get wrong. The TypeScript in `packages/core/src/constants/theme.ts`
   is the only copy of the palette.
+- **`ensureAnonymousUser` must `await auth.authStateReady()` before reading
+  `currentUser`.** The web SDK restores the persisted session from IndexedDB
+  asynchronously after `getAuth()`, so in a fresh tab `currentUser` is `null`
+  for the first few milliseconds whoever was signed in. The mobile file reads
+  it synchronously because `@react-native-firebase` has it populated before JS
+  runs; copying that line to the web signed in a *new* anonymous user over the
+  linked one on every new tab, which the user saw as "I'm logged out again".
+  `firebase.test.ts` has the case where the user only appears once
+  `authStateReady()` resolves.
 - **Any test that writes to a core store needs the Firebase mocks.** The write
   reaches the sync layer, which calls `getAuth()`, so without them the first
   `setState` throws `auth/invalid-api-key`. They are global in
