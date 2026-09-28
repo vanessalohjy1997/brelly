@@ -156,12 +156,24 @@ export function getFirebaseAuth(): Auth {
 }
 
 /**
- * Signs in anonymously if no session survived from a previous visit. Firebase
- * Auth persists to `localStorage` by default on the web, so this resolves from
- * the stored session on a return visit rather than blocking on the network.
+ * Signs in anonymously if no session survived from a previous visit.
+ *
+ * The one line that differs from the mobile file is `authStateReady()`, and it
+ * is the difference between staying signed in and not. `@react-native-firebase`
+ * has `currentUser` populated from the Keychain before JS runs, so the mobile
+ * version can read it synchronously. The web SDK restores the persisted session
+ * from IndexedDB **asynchronously** after `getAuth()`: in a fresh tab
+ * `currentUser` is `null` for the first few milliseconds no matter who was
+ * signed in. Checking it then and calling `signInAnonymously` did not sign the
+ * user in *again*, it signed in a brand-new anonymous user, which replaced the
+ * linked session in storage — every new tab was a sign-out.
+ *
+ * `authStateReady()` resolves once that first restore has settled, from
+ * storage, so a return visit still does not block on the network.
  */
 export async function ensureAnonymousUser(): Promise<void> {
   const auth = getFirebaseAuth();
+  await auth.authStateReady();
   if (auth.currentUser) return;
   await firebaseSignInAnonymously(auth);
 }
